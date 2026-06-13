@@ -60,10 +60,13 @@ void Checkbox::draw(sf::RenderTarget& target) const
         target.draw(mark);
     }
 
-    sf::Text text(m_label, m_theme->font(), 16);
-    text.setFillColor(m_theme->textColor());
-    text.setPosition(m_boxBounds.left + 28.f, m_boxBounds.top + 1.f);
-    target.draw(text);
+    m_theme->drawText(
+        target,
+        m_label,
+        m_boxBounds.left + 28.f,
+        m_boxBounds.top + 1.f,
+        16,
+        m_theme->textColor());
 }
 
 bool Checkbox::isChecked() const

@@ -46,7 +46,7 @@ void ConfigLoader::applyDefaults()
     m_windowWidth   = 1280;
     m_windowHeight  = 720;
     m_logLevel      = "info";
-    m_logToConsole  = true;
+    m_logToConsole  = false;
     m_loginHost     = "127.0.0.1";
     m_loginPort     = 9010;
 }

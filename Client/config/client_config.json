@@ -2,7 +2,7 @@
   "windowWidth": 1280,
   "windowHeight": 720,
   "logLevel": "info",
-  "logToConsole": true,
+  "logToConsole": false,
   "loginHost": "127.0.0.1",
   "loginPort": 9010
 }

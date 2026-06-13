@@ -4,7 +4,7 @@
  *
  * 职责：
  * - 按日滚动写入 ./logs/client_YYYYMMDD.log
- * - 可选同步输出到控制台（INFO 及以上）
+ * - 可选同步输出到 stdout（默认关闭；GUI 子系统下 stdout 不可用，请查看 logs/）
  *
  * 线程：仅主线程调用，非线程安全。
  */

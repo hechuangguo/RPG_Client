@@ -1,9 +1,9 @@
 /**
  * @file    ZoneSelectPanel.h
- * @brief   游戏区服选择面板
+ * @brief   游戏区服下拉选择面板
  *
  * 职责：
- * - 从 ServerListLoader 列出可选游戏区
+ * - 从 ServerListLoader 列出可选游戏区（折叠/展开下拉）
  * - 维护区灰显不可选；必须选中一区后登录才可用
  *
  * 协作：LoginPanel、ServerListLoader。
@@ -17,12 +17,13 @@
 #include <SFML/Window/Event.hpp>
 
 #include <cstdint>
+#include <functional>
 
 class ServerListLoader;
 class UiTheme;
 
 /**
- * @brief 区服列表面板
+ * @brief 区服下拉选择面板
  */
 class ZoneSelectPanel
 {
@@ -36,17 +37,20 @@ public:
      * @param x      左上角 X
      * @param y      左上角 Y
      * @param width  宽度
-     * @param height 高度
+     * @param height 折叠态高度（展开时动态增高）
      */
     void setup(const UiTheme* theme,
                const ServerListLoader* loader,
                float x, float y,
                float width, float height);
 
+    /** @brief 选中变化时回调（用于刷新登录按钮等） */
+    void setOnSelectionChanged(std::function<void()> cb);
+
     /** @brief 处理 SFML 事件 */
     void handleEvent(const sf::Event& event, const sf::RenderWindow& window);
 
-    /** @brief 绘制区服列表 */
+    /** @brief 绘制区服下拉 */
     void draw(sf::RenderTarget& target) const;
 
     /** @brief 当前选中 zoneId（0 表示未选） */
@@ -65,9 +69,22 @@ public:
     void selectZoneId(uint32_t zoneId);
 
 private:
+    void refreshCollapsedHeight();
+    void tryAutoSelectSingleZone();
+    sf::FloatRect comboBoxRect() const;
+    sf::FloatRect listAreaRect() const;
+    sf::FloatRect hitBounds() const;
+    std::string selectedLabel() const;
+    int rowAtPosition(const sf::Vector2f& pos) const;
+
     const UiTheme*          m_theme;
     const ServerListLoader* m_loader;
     sf::FloatRect           m_bounds;
+    float                   m_collapsedHeight;
     int                     m_selectedIndex;
+    bool                    m_dropdownOpen;
+    float                   m_titleHeight;
+    float                   m_comboHeight;
     float                   m_rowHeight;
+    std::function<void()>   m_onSelectionChanged;
 };

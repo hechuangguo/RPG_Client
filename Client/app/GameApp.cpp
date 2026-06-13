@@ -9,6 +9,7 @@
 #include "net/TcpClient.h"
 #include "time/TimeUtil.h"
 #include "util/PathUtil.h"
+#include "util/TextUtil.h"
 
 GameApp::GameApp()
     : m_state(AppState::Login)
@@ -67,12 +68,13 @@ bool GameApp::init()
 
     m_localSettings.load();
 
+    const std::string windowTitle = u8"仙侠世界 - RPG Client";
     m_window.create(sf::VideoMode(m_config.windowWidth(), m_config.windowHeight()),
-                    u8"仙侠世界 - RPG Client",
+                    TextUtil::utf8ToSfString(windowTitle),
                     sf::Style::Close);
     m_window.setFramerateLimit(60);
 
-    m_theme.loadFont(PathUtil::joinPath(exeDir, "assets/fonts/simsun.ttf"));
+    m_theme.loadFont(PathUtil::joinPath(exeDir, "assets/fonts/NotoSansSC-Regular.otf"));
 
     const sf::Vector2u viewSize = m_window.getSize();
     m_loginPanel.setup(&m_theme, &m_serverList, &m_localSettings, viewSize);
@@ -191,6 +193,15 @@ void GameApp::processEvents()
 
 void GameApp::update(float dt)
 {
+    if (m_state == AppState::Login || m_state == AppState::Connecting)
+    {
+        m_loginPanel.update(dt);
+    }
+    else if (m_state == AppState::Register)
+    {
+        m_registerPanel.update(dt);
+    }
+
     if (m_state == AppState::Connecting)
     {
         m_loginSession.update();
@@ -221,10 +232,13 @@ void GameApp::render()
 
         if (m_state == AppState::Connecting && !m_statusMessage.empty())
         {
-            sf::Text status(m_statusMessage, m_theme.font(), 16);
-            status.setFillColor(m_theme.accentColor());
-            status.setPosition(40.f, static_cast<float>(m_window.getSize().y) - 40.f);
-            m_window.draw(status);
+            m_theme.drawText(
+                m_window,
+                m_statusMessage,
+                40.f,
+                static_cast<float>(m_window.getSize().y) - 40.f,
+                16,
+                m_theme.accentColor());
         }
     }
     else if (m_state == AppState::Register)

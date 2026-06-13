@@ -4,7 +4,7 @@
  *
  * 职责：
  * - 定义金色/青色配色方案
- * - loadFont：优先 assets 字体，fallback 到 Arial
+ * - loadFont：优先 assets/fonts/NotoSansSC-Regular.otf，fallback 到 Arial
  * - drawPanel、drawTitle 等通用 UI 绘制辅助
  *
  * 协作：LoginPanel、RegisterPanel、GameScene HUD。
@@ -28,13 +28,16 @@ public:
 
     /**
      * @brief 加载 UI 字体
-     * @param primaryPath 首选字体路径（如 assets/fonts/simsun.ttf）
+     * @param primaryPath 首选字体路径（如 assets/fonts/NotoSansSC-Regular.otf）
      * @return 加载成功返回 true（含 fallback）
      */
     bool loadFont(const std::string& primaryPath);
 
     /** @brief 当前可用字体 */
     const sf::Font& font() const;
+
+    /** @brief 字体是否已成功加载 */
+    bool isFontLoaded() const;
 
     /** @brief 面板背景色 */
     sf::Color panelFill() const;
@@ -77,6 +80,30 @@ public:
                    float centerX,
                    float y,
                    unsigned size) const;
+
+    /**
+     * @brief 安全绘制文字（捕获 std::bad_alloc，字体未加载时跳过）
+     */
+    void drawText(sf::RenderTarget& target,
+                  const std::string& text,
+                  float x,
+                  float y,
+                  unsigned size,
+                  sf::Color color) const;
+
+    /**
+     * @brief 安全绘制居中文字
+     */
+    void drawTextCentered(sf::RenderTarget& target,
+                          const std::string& text,
+                          float centerX,
+                          float centerY,
+                          unsigned size,
+                          sf::Color color,
+                          bool centerVertical = false) const;
+
+    /** @brief 测量 UTF-8 文本渲染宽度（像素）；字体未加载返回 0 */
+    float measureTextWidth(const std::string& utf8, unsigned size) const;
 
     /**
      * @brief 绘制渐变背景（深青到墨绿）

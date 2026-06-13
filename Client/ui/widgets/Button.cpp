@@ -89,13 +89,14 @@ void Button::draw(sf::RenderTarget& target) const
     rect.setOutlineThickness(1.5f);
     target.draw(rect);
 
-    sf::Text text(m_label, m_theme->font(), 18);
-    text.setFillColor(m_enabled ? m_theme->textColor() : sf::Color(150, 150, 150));
-    const sf::FloatRect tb = text.getLocalBounds();
-    text.setOrigin(tb.width / 2.f, tb.height / 2.f);
-    text.setPosition(m_bounds.left + m_bounds.width / 2.f,
-                     m_bounds.top + m_bounds.height / 2.f);
-    target.draw(text);
+    m_theme->drawTextCentered(
+        target,
+        m_label,
+        m_bounds.left + m_bounds.width / 2.f,
+        m_bounds.top + m_bounds.height / 2.f,
+        18,
+        m_enabled ? m_theme->textColor() : sf::Color(150, 150, 150),
+        true);
 }
 
 void Button::setPosition(float x, float y)

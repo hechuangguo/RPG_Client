@@ -29,7 +29,8 @@ void LoginPanel::setup(UiTheme* theme,
     const float px = (static_cast<float>(viewSize.x) - panelW) / 2.f;
     const float py = (static_cast<float>(viewSize.y) - panelH) / 2.f;
 
-    m_zonePanel.setup(theme, loader, px + 20.f, py + 60.f, panelW - 40.f, 140.f);
+    m_zonePanel.setup(theme, loader, px + 20.f, py + 60.f, panelW - 40.f, 72.f);
+    m_zonePanel.setOnSelectionChanged([this]() { refreshLoginButtonState(); });
     m_accountInput.setup(theme, u8"请输入道号", px + 40.f, py + 220.f, panelW - 80.f, 36.f);
     m_passwordInput.setup(theme, u8"请输入密钥", px + 40.f, py + 270.f, panelW - 80.f, 36.f, true);
     m_rememberBox.setup(theme, u8"记住道号", px + 40.f, py + 320.f);
@@ -79,6 +80,12 @@ void LoginPanel::handleEvent(const sf::Event& event, const sf::RenderWindow& win
     refreshLoginButtonState();
 }
 
+void LoginPanel::update(float dt)
+{
+    m_accountInput.update(dt);
+    m_passwordInput.update(dt);
+}
+
 void LoginPanel::draw(sf::RenderTarget& target) const
 {
     if (!m_theme)
@@ -103,10 +110,13 @@ void LoginPanel::draw(sf::RenderTarget& target) const
 
     if (!m_errorMessage.empty())
     {
-        sf::Text err(m_errorMessage, m_theme->font(), 14);
-        err.setFillColor(sf::Color(255, 120, 100));
-        err.setPosition(px + 40.f, py + 420.f);
-        target.draw(err);
+        m_theme->drawText(
+            target,
+            m_errorMessage,
+            px + 40.f,
+            py + 420.f,
+            14,
+            sf::Color(255, 120, 100));
     }
 }
 

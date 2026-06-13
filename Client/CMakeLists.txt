@@ -8,8 +8,8 @@ if(NOT WIN32)
     message(FATAL_ERROR "RPGClient supports Windows PC only")
 endif()
 
-set(REPO_ROOT ${CMAKE_SOURCE_DIR}/..)
-set(THIRD_PARTY_DIR ${REPO_ROOT}/3Party)
+set(THIRD_PARTY_DIR ${CMAKE_SOURCE_DIR}/3Party)
+set(COMMON_DIR ${CMAKE_SOURCE_DIR}/Common)
 
 # --- tinyxml2 ---
 set(TINYXML2_DIR ${THIRD_PARTY_DIR}/_build/tinyxml2-src)
@@ -42,10 +42,10 @@ endif()
 # --- SFML prebuilt ---
 set(SFML_ROOT ${THIRD_PARTY_DIR}/sfml)
 if(NOT EXISTS ${SFML_ROOT}/lib/sfml-graphics.lib)
-    message(FATAL_ERROR "SFML not found. Run 3Party/download_and_build.ps1")
+    message(FATAL_ERROR "SFML not found. Run Client\\3Party\\download_and_build.ps1")
 endif()
 set(SFML_INCLUDE ${SFML_ROOT}/include)
-set(SFML_LIBS sfml-graphics sfml-window sfml-system opengl32 winmm gdi32)
+set(SFML_MODULES graphics window system network audio)
 
 # --- RPGClient ---
 file(GLOB_RECURSE SDK_SRC CONFIGURE_DEPENDS sdk/*.cpp)
@@ -62,7 +62,7 @@ add_executable(RPGClient ${SDK_SRC} ${APP_SRC})
 file(GLOB SDK_INCLUDE_DIRS LIST_DIRECTORIES true ${CMAKE_SOURCE_DIR}/sdk/*)
 
 target_include_directories(RPGClient PRIVATE
-    ${REPO_ROOT}/Common
+    ${COMMON_DIR}
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/sdk
     ${SDK_INCLUDE_DIRS}
@@ -72,17 +72,26 @@ target_include_directories(RPGClient PRIVATE
 target_link_directories(RPGClient PRIVATE ${SFML_ROOT}/lib)
 
 target_link_libraries(RPGClient PRIVATE
-    ${SFML_LIBS}
+    $<$<CONFIG:Debug>:sfml-graphics-d>
+    $<$<CONFIG:Debug>:sfml-window-d>
+    $<$<CONFIG:Debug>:sfml-system-d>
+    $<$<NOT:$<CONFIG:Debug>>:sfml-graphics>
+    $<$<NOT:$<CONFIG:Debug>>:sfml-window>
+    $<$<NOT:$<CONFIG:Debug>>:sfml-system>
+    opengl32 winmm gdi32
     lua54 tinyxml2
     ws2_32
 )
 
 if(MSVC)
     target_compile_options(RPGClient PRIVATE /utf-8)
+    set_target_properties(RPGClient PROPERTIES WIN32_EXECUTABLE TRUE)
+    target_link_options(RPGClient PRIVATE "/ENTRY:mainCRTStartup")
 endif()
 
 set_target_properties(RPGClient PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:RPGClient>"
 )
 
 foreach(dir config script database basefile map assets)
@@ -95,10 +104,15 @@ foreach(dir config script database basefile map assets)
     endif()
 endforeach()
 
-# Copy SFML DLLs
-file(GLOB SFML_DLLS ${SFML_ROOT}/bin/*.dll)
-foreach(dll ${SFML_DLLS})
+foreach(module ${SFML_MODULES})
     add_custom_command(TARGET RPGClient POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${dll} $<TARGET_FILE_DIR:RPGClient>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<IF:$<CONFIG:Debug>,${SFML_ROOT}/bin/sfml-${module}-d-2.dll,${SFML_ROOT}/bin/sfml-${module}-2.dll>"
+            "$<TARGET_FILE_DIR:RPGClient>"
     )
 endforeach()
+add_custom_command(TARGET RPGClient POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${SFML_ROOT}/bin/openal32.dll"
+        "$<TARGET_FILE_DIR:RPGClient>"
+)

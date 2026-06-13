@@ -9,8 +9,15 @@
 #include "math/Random.h"
 #include "util/PathUtil.h"
 
+#include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <sstream>
+
+namespace
+{
+constexpr int kMaxMapTiles = 256;
+}  // namespace
 
 MapRenderer::MapRenderer()
     : m_tileW(32.f)
@@ -26,11 +33,14 @@ bool MapRenderer::load(uint32_t mapId)
     if (parseGroundJson(path))
     {
         ClientLogger::instance().info("MapRenderer: loaded %s", path.c_str());
-        return true;
+    }
+    else
+    {
+        ClientLogger::instance().warn("MapRenderer: fallback default map for %u", mapId);
+        generateDefaultMap();
     }
 
-    ClientLogger::instance().warn("MapRenderer: fallback default map for %u", mapId);
-    generateDefaultMap();
+    rebuildTileShapes();
     return true;
 }
 
@@ -56,21 +66,9 @@ int MapRenderer::mapHeightTiles() const
 
 void MapRenderer::draw(sf::RenderTarget& target) const
 {
-    for (int y = 0; y < m_height; ++y)
+    for (const sf::RectangleShape& tile : m_tileShapes)
     {
-        for (int x = 0; x < m_width; ++x)
-        {
-            const size_t idx = static_cast<size_t>(y * m_width + x);
-            if (idx >= m_tiles.size())
-            {
-                continue;
-            }
-            sf::RectangleShape tile({m_tileW, m_tileH});
-            tile.setPosition(static_cast<float>(x) * m_tileW,
-                             static_cast<float>(y) * m_tileH);
-            tile.setFillColor(colorForTile(m_tiles[idx]));
-            target.draw(tile);
-        }
+        target.draw(tile);
     }
 }
 
@@ -105,6 +103,34 @@ void MapRenderer::generateDefaultMap()
     }
 }
 
+void MapRenderer::rebuildTileShapes()
+{
+    m_tileShapes.clear();
+    if (m_width <= 0 || m_height <= 0)
+    {
+        return;
+    }
+
+    const size_t expected = static_cast<size_t>(m_width * m_height);
+    m_tileShapes.reserve(expected);
+
+    for (int y = 0; y < m_height; ++y)
+    {
+        for (int x = 0; x < m_width; ++x)
+        {
+            const size_t idx = static_cast<size_t>(y * m_width + x);
+            const std::string& tileType =
+                (idx < m_tiles.size()) ? m_tiles[idx] : "bluestone";
+
+            sf::RectangleShape tile({m_tileW, m_tileH});
+            tile.setPosition(static_cast<float>(x) * m_tileW,
+                             static_cast<float>(y) * m_tileH);
+            tile.setFillColor(colorForTile(tileType));
+            m_tileShapes.push_back(std::move(tile));
+        }
+    }
+}
+
 bool MapRenderer::parseGroundJson(const std::string& path)
 {
     std::ifstream file(path);
@@ -128,7 +154,28 @@ bool MapRenderer::parseGroundJson(const std::string& path)
         {
             return false;
         }
-        out = std::stoi(content.substr(colon + 1));
+        size_t end = colon + 1;
+        while (end < content.size() &&
+               (content[end] == ' ' || content[end] == '\t' || content[end] == '\r' ||
+                content[end] == '\n'))
+        {
+            ++end;
+        }
+        size_t numEnd = end;
+        while (numEnd < content.size())
+        {
+            const char ch = content.at(numEnd);
+            if (!std::isdigit(static_cast<unsigned char>(ch)) && ch != '-' && ch != '+')
+            {
+                break;
+            }
+            ++numEnd;
+        }
+        if (numEnd == end)
+        {
+            return false;
+        }
+        out = std::stoi(content.substr(end, numEnd - end));
         return true;
     };
 
@@ -141,31 +188,39 @@ bool MapRenderer::parseGroundJson(const std::string& path)
     m_tileW = static_cast<float>(tileW);
     m_tileH = static_cast<float>(tileH);
 
+    m_width  = std::max(1, std::min(m_width, kMaxMapTiles));
+    m_height = std::max(1, std::min(m_height, kMaxMapTiles));
+
     m_tiles.clear();
     const size_t arrStart = content.find("\"tiles\"");
     if (arrStart == std::string::npos)
     {
         return false;
     }
-    size_t pos = content.find('[', arrStart);
-    while (pos != std::string::npos && pos < content.size())
+
+    const size_t arrOpen = content.find('[', arrStart);
+    const size_t arrClose = content.find(']', arrStart);
+    if (arrOpen == std::string::npos || arrClose == std::string::npos || arrClose <= arrOpen)
     {
-        const size_t q1 = content.find('"', pos);
-        if (q1 == std::string::npos)
+        return false;
+    }
+
+    size_t pos = arrOpen;
+    const size_t maxTiles = static_cast<size_t>(m_width * m_height);
+    while (pos < arrClose && m_tiles.size() < maxTiles)
+    {
+        const size_t q1 = content.find('"', pos + 1);
+        if (q1 == std::string::npos || q1 >= arrClose)
         {
             break;
         }
         const size_t q2 = content.find('"', q1 + 1);
-        if (q2 == std::string::npos)
+        if (q2 == std::string::npos || q2 >= arrClose)
         {
             break;
         }
         m_tiles.push_back(content.substr(q1 + 1, q2 - q1 - 1));
-        pos = content.find('"', q2 + 1);
-        if (content.find(']', q2) < pos)
-        {
-            break;
-        }
+        pos = q2 + 1;
     }
 
     return m_width > 0 && m_height > 0 && !m_tiles.empty();

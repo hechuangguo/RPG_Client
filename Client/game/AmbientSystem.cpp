@@ -7,6 +7,7 @@
 
 #include "math/Random.h"
 #include "util/PathUtil.h"
+#include "util/TextUtil.h"
 
 AmbientSystem::AmbientSystem()
 {
@@ -103,7 +104,7 @@ void AmbientSystem::drawWorld(sf::RenderTarget& target, const sf::Font& font, fl
         body.setFillColor(sf::Color(160, 130, 100));
         target.draw(body);
 
-        sf::Text label(n.label, font, 11);
+        sf::Text label(TextUtil::utf8ToSfString(n.label), font, 11);
         label.setFillColor(sf::Color(230, 220, 200));
         label.setPosition(n.x * tileSize - 20.f, n.z * tileSize - tileSize);
         target.draw(label);

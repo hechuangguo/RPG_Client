@@ -59,6 +59,7 @@ public:
     void setOnBack(std::function<void()> cb);
 
     void handleEvent(const sf::Event& event, const sf::RenderWindow& window);
+    void update(float dt);
     void draw(sf::RenderTarget& target) const;
 
     void setMessage(const std::string& msg, bool isError);

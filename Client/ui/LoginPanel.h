@@ -66,6 +66,9 @@ public:
     /** @brief 处理 SFML 事件 */
     void handleEvent(const sf::Event& event, const sf::RenderWindow& window);
 
+    /** @brief 每帧更新（光标闪烁等） */
+    void update(float dt);
+
     /** @brief 绘制登录界面 */
     void draw(sf::RenderTarget& target) const;
 

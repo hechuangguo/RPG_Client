@@ -5,6 +5,8 @@
 
 #include "game/EntityManager.h"
 
+#include "util/TextUtil.h"
+
 #include <cmath>
 
 EntityManager::EntityManager()
@@ -117,7 +119,7 @@ void EntityManager::draw(sf::RenderTarget& target, const sf::Font& font, float t
         }
         target.draw(body);
 
-        sf::Text name(e.name, font, 12);
+        sf::Text name(TextUtil::utf8ToSfString(e.name), font, 12);
         name.setFillColor(sf::Color::White);
         name.setPosition(screenX - 20.f, screenY - tileSize - 16.f);
         target.draw(name);

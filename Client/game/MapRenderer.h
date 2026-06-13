@@ -56,10 +56,12 @@ private:
     sf::Color colorForTile(const std::string& tileType) const;
     void generateDefaultMap();
     bool parseGroundJson(const std::string& path);
+    void rebuildTileShapes();
 
     float                m_tileW;
     float                m_tileH;
     int                  m_width;
     int                  m_height;
     std::vector<std::string> m_tiles;
+    std::vector<sf::RectangleShape> m_tileShapes;
 };

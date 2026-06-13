@@ -8,6 +8,7 @@
 #include "game/QuestModel.h"
 #include "net/GameSession.h"
 #include "ui/UiTheme.h"
+#include "util/TextUtil.h"
 
 #include <algorithm>
 #include <cmath>
@@ -226,20 +227,20 @@ void GameScene::drawHud(sf::RenderTarget& target) const
     target.draw(bar);
 
     std::string nameLine = std::string(m_playerInfo.name) + "  Lv." + std::to_string(m_playerInfo.level);
-    sf::Text nameText(nameLine, font, 16);
+    sf::Text nameText(TextUtil::utf8ToSfString(nameLine), font, 16);
     nameText.setFillColor(m_theme->titleColor());
     nameText.setPosition(24.f, 20.f);
     target.draw(nameText);
 
     std::string hpLine = "HP " + std::to_string(m_playerInfo.hp) + "/" + std::to_string(m_playerInfo.maxHP);
-    sf::Text hpText(hpLine, font, 14);
+    sf::Text hpText(TextUtil::utf8ToSfString(hpLine), font, 14);
     hpText.setFillColor(m_theme->textColor());
     hpText.setPosition(24.f, 44.f);
     target.draw(hpText);
 
     if (m_quests)
     {
-        sf::Text questText(m_quests->primarySummary(), font, 14);
+        sf::Text questText(TextUtil::utf8ToSfString(m_quests->primarySummary()), font, 14);
         questText.setFillColor(m_theme->accentColor());
         questText.setPosition(24.f, static_cast<float>(m_viewSize.y) - 36.f);
         target.draw(questText);

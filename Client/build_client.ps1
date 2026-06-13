@@ -1,9 +1,10 @@
 # Build RPGClient.exe (Windows x64, MSVC + Ninja)
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
-$clientDir = Join-Path $repoRoot "Client"
+$clientDir = $PSScriptRoot
 $buildDir = Join-Path $clientDir "build"
+
+& (Join-Path $clientDir "assets\fonts\fetch_font.ps1")
 
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) {

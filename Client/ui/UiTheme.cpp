@@ -6,6 +6,32 @@
 #include "ui/UiTheme.h"
 
 #include "log/ClientLogger.h"
+#include "util/TextUtil.h"
+
+#include <exception>
+#include <new>
+#include <string>
+
+namespace
+{
+bool tryLoadFont(sf::Font& font, const std::string& path)
+{
+    try
+    {
+        return font.loadFromFile(path);
+    }
+    catch (const std::bad_alloc&)
+    {
+        ClientLogger::instance().warn("UiTheme: font too large or OOM: %s", path.c_str());
+        return false;
+    }
+    catch (const std::exception& ex)
+    {
+        ClientLogger::instance().warn("UiTheme: font load failed %s: %s", path.c_str(), ex.what());
+        return false;
+    }
+}
+}  // namespace
 
 UiTheme::UiTheme()
     : m_fontLoaded(false)
@@ -14,25 +40,39 @@ UiTheme::UiTheme()
 
 bool UiTheme::loadFont(const std::string& primaryPath)
 {
-    if (m_font.loadFromFile(primaryPath))
-    {
-        m_fontLoaded = true;
-        ClientLogger::instance().info("UiTheme: loaded font %s", primaryPath.c_str());
-        return true;
-    }
+    m_fontLoaded = false;
 
-    if (m_font.loadFromFile("C:/Windows/Fonts/msyh.ttc") ||
-        m_font.loadFromFile("C:/Windows/Fonts/simhei.ttf") ||
-        m_font.loadFromFile("C:/Windows/Fonts/arial.ttf"))
+    const char* candidates[] = {
+        primaryPath.c_str(),
+        "assets/fonts/NotoSansSC-Regular.otf",
+        "C:/Windows/Fonts/arial.ttf",
+    };
+
+    for (const char* path : candidates)
     {
-        m_fontLoaded = true;
-        ClientLogger::instance().warn("UiTheme: fallback system font");
-        return true;
+        if (path == nullptr || path[0] == '\0')
+        {
+            continue;
+        }
+        if (tryLoadFont(m_font, path))
+        {
+            m_fontLoaded = true;
+            ClientLogger::instance().info("UiTheme: loaded font %s", path);
+            return true;
+        }
+        if (path != candidates[2])
+        {
+            ClientLogger::instance().warn("UiTheme: font not found: %s", path);
+        }
     }
 
     ClientLogger::instance().err("UiTheme: no font available");
-    m_fontLoaded = false;
     return false;
+}
+
+bool UiTheme::isFontLoaded() const
+{
+    return m_fontLoaded;
 }
 
 const sf::Font& UiTheme::font() const
@@ -91,17 +131,83 @@ void UiTheme::drawTitle(sf::RenderTarget& target,
                         float y,
                         unsigned size) const
 {
+    drawTextCentered(target, text, centerX, y, size, titleColor(), false);
+}
+
+void UiTheme::drawText(sf::RenderTarget& target,
+                       const std::string& text,
+                       float x,
+                       float y,
+                       unsigned size,
+                       sf::Color color) const
+{
     if (!m_fontLoaded)
     {
         return;
     }
 
-    sf::Text title(text, m_font, size);
-    title.setFillColor(titleColor());
-    const sf::FloatRect bounds = title.getLocalBounds();
-    title.setOrigin(bounds.width / 2.f, 0.f);
-    title.setPosition(centerX, y);
-    target.draw(title);
+    try
+    {
+        sf::Text label(TextUtil::utf8ToSfString(text), m_font, size);
+        label.setFillColor(color);
+        label.setPosition(x, y);
+        target.draw(label);
+    }
+    catch (const std::bad_alloc&)
+    {
+    }
+}
+
+void UiTheme::drawTextCentered(sf::RenderTarget& target,
+                               const std::string& text,
+                               float centerX,
+                               float centerY,
+                               unsigned size,
+                               sf::Color color,
+                               bool centerVertical) const
+{
+    if (!m_fontLoaded)
+    {
+        return;
+    }
+
+    try
+    {
+        sf::Text label(TextUtil::utf8ToSfString(text), m_font, size);
+        label.setFillColor(color);
+        const sf::FloatRect bounds = label.getLocalBounds();
+        if (centerVertical)
+        {
+            label.setOrigin(bounds.width / 2.f, bounds.height / 2.f);
+        }
+        else
+        {
+            label.setOrigin(bounds.width / 2.f, 0.f);
+        }
+        label.setPosition(centerX, centerY);
+        target.draw(label);
+    }
+    catch (const std::bad_alloc&)
+    {
+    }
+}
+
+float UiTheme::measureTextWidth(const std::string& utf8, unsigned size) const
+{
+    if (!m_fontLoaded || utf8.empty())
+    {
+        return 0.f;
+    }
+
+    try
+    {
+        sf::Text probe(TextUtil::utf8ToSfString(utf8), m_font, size);
+        return probe.getLocalBounds().width;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return 0.f;
+    }
 }
 
 void UiTheme::drawBackground(sf::RenderTarget& target, const sf::Vector2u& size) const

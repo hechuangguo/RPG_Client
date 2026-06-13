@@ -1,0 +1,60 @@
+[2026-06-13 18:29:59.754][INFO] RPGClient starting
+[2026-06-13 18:30:00.393][ERR] UiTheme: no font available
+[2026-06-13 18:30:00.405][WARN] LuaManager: OnClientInit not defined
+[2026-06-13 18:30:00.406][INFO] LuaManager: initialized
+[2026-06-13 18:30:00.406][INFO] GameApp: initialized
+[2026-06-13 18:37:23.158][INFO] RPGClient starting
+[2026-06-13 18:37:23.869][ERR] UiTheme: no font available
+[2026-06-13 18:37:23.889][WARN] LuaManager: OnClientInit not defined
+[2026-06-13 18:37:23.889][INFO] LuaManager: initialized
+[2026-06-13 18:37:23.889][INFO] GameApp: initialized
+[2026-06-13 18:40:27.319][INFO] RPGClient starting
+[2026-06-13 18:40:27.993][ERR] UiTheme: no font available
+[2026-06-13 18:40:28.005][WARN] LuaManager: OnClientInit not defined
+[2026-06-13 18:40:28.006][INFO] LuaManager: initialized
+[2026-06-13 18:40:28.006][INFO] GameApp: initialized
+[2026-06-13 18:42:02.367][INFO] RPGClient starting
+[2026-06-13 18:42:03.017][ERR] UiTheme: no font available
+[2026-06-13 18:42:03.019][WARN] LuaManager: OnClientInit not defined
+[2026-06-13 18:42:03.019][INFO] LuaManager: initialized
+[2026-06-13 18:42:03.019][INFO] GameApp: initialized
+[2026-06-13 19:17:14.327][INFO] RPGClient starting
+[2026-06-13 19:17:14.927][ERR] UiTheme: no font available
+[2026-06-13 19:17:14.928][WARN] LuaManager: OnClientInit not defined
+[2026-06-13 19:17:14.929][INFO] LuaManager: initialized
+[2026-06-13 19:17:14.929][INFO] GameApp: initialized
+[2026-06-13 19:20:10.393][INFO] RPGClient starting
+[2026-06-13 19:20:11.100][INFO] UiTheme: loaded font C:/Windows/Fonts/arial.ttf
+[2026-06-13 19:20:11.102][WARN] LuaManager: OnClientInit not defined
+[2026-06-13 19:20:11.102][INFO] LuaManager: initialized
+[2026-06-13 19:20:11.102][INFO] GameApp: initialized
+[2026-06-13 19:20:33.200][INFO] RPGClient starting
+[2026-06-13 19:20:33.787][INFO] UiTheme: loaded font C:/Windows/Fonts/arial.ttf
+[2026-06-13 19:20:33.790][WARN] LuaManager: OnClientInit not defined
+[2026-06-13 19:20:33.790][INFO] LuaManager: initialized
+[2026-06-13 19:20:33.790][INFO] GameApp: initialized
+[2026-06-13 19:21:23.599][INFO] RPGClient starting
+[2026-06-13 19:21:24.109][INFO] UiTheme: loaded font C:/Windows/Fonts/arial.ttf
+[2026-06-13 19:21:24.111][WARN] LuaManager: OnClientInit not defined
+[2026-06-13 19:21:24.111][INFO] LuaManager: initialized
+[2026-06-13 19:21:24.111][INFO] GameApp: initialized
+[2026-06-13 19:31:47.799][INFO] RPGClient starting
+[2026-06-13 19:31:48.478][INFO] UiTheme: loaded font D:/Study/RPG_Client/Client/out/build/x64-Debug/bin/assets/fonts/NotoSansSC-Regular.otf
+[2026-06-13 19:31:48.486][WARN] LuaManager: OnClientInit not defined
+[2026-06-13 19:31:48.486][INFO] LuaManager: initialized
+[2026-06-13 19:31:48.486][INFO] GameApp: initialized
+[2026-06-13 19:31:57.217][INFO] RPGClient exit code=0
+[2026-06-13 19:38:24.187][INFO] RPGClient starting
+[2026-06-13 19:38:24.819][INFO] UiTheme: loaded font D:/Study/RPG_Client/Client/out/build/x64-Debug/bin/assets/fonts/NotoSansSC-Regular.otf
+[2026-06-13 19:38:24.825][WARN] LuaManager: OnClientInit not defined
+[2026-06-13 19:38:24.825][INFO] LuaManager: initialized
+[2026-06-13 19:38:24.825][INFO] GameApp: initialized
+[2026-06-13 19:41:15.272][INFO] RPGClient exit code=0
+[2026-06-13 21:16:43.162][INFO] RPGClient starting
+[2026-06-13 21:16:43.812][INFO] UiTheme: loaded font D:/Study/RPG_Client/Client/out/build/x64-Debug/bin/assets/fonts/NotoSansSC-Regular.otf
+[2026-06-13 21:16:43.818][WARN] LuaManager: OnClientInit not defined
+[2026-06-13 21:16:43.818][INFO] LuaManager: initialized
+[2026-06-13 21:16:43.818][INFO] GameApp: initialized
+[2026-06-13 21:17:14.313][INFO] LoginSession: connect LoginServer 127.0.0.1:9010 zone=2
+[2026-06-13 21:17:19.709][ERR] LoginSession: 连接已断开
+[2026-06-13 21:17:19.709][INFO] RPGClient exit code=0

@@ -82,6 +82,13 @@ void RegisterPanel::handleEvent(const sf::Event& event, const sf::RenderWindow& 
     m_backButton.handleEvent(event, window);
 }
 
+void RegisterPanel::update(float dt)
+{
+    m_accountInput.update(dt);
+    m_passwordInput.update(dt);
+    m_confirmInput.update(dt);
+}
+
 void RegisterPanel::draw(sf::RenderTarget& target) const
 {
     if (!m_theme)
@@ -105,10 +112,13 @@ void RegisterPanel::draw(sf::RenderTarget& target) const
 
     if (!m_message.empty())
     {
-        sf::Text msg(m_message, m_theme->font(), 14);
-        msg.setFillColor(m_messageIsError ? sf::Color(255, 120, 100) : m_theme->accentColor());
-        msg.setPosition(px + 40.f, py + 300.f);
-        target.draw(msg);
+        m_theme->drawText(
+            target,
+            m_message,
+            px + 40.f,
+            py + 300.f,
+            14,
+            m_messageIsError ? sf::Color(255, 120, 100) : m_theme->accentColor());
     }
 }
 

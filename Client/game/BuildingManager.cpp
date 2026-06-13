@@ -6,6 +6,7 @@
 #include "game/BuildingManager.h"
 
 #include "util/PathUtil.h"
+#include "util/TextUtil.h"
 
 #include <fstream>
 #include <sstream>
@@ -45,6 +46,11 @@ bool BuildingManager::load(uint32_t mapId)
         {
             b.label = content.substr(q1 + 1, q2 - q1 - 1);
         }
+        else
+        {
+            pos += 7;
+            continue;
+        }
 
         const size_t xPos = content.rfind("\"x\"", pos);
         if (xPos != std::string::npos && xPos > pos - 80)
@@ -79,7 +85,7 @@ void BuildingManager::draw(sf::RenderTarget& target, const sf::Font& font, float
         rect.setOutlineThickness(2.f);
         target.draw(rect);
 
-        sf::Text sign(b.label, font, 14);
+        sf::Text sign(TextUtil::utf8ToSfString(b.label), font, 14);
         sign.setFillColor(sf::Color(255, 230, 180));
         sign.setPosition(b.x * tileSize + 4.f, b.z * tileSize - 18.f);
         target.draw(sign);

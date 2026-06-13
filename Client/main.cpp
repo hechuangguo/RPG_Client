@@ -10,7 +10,7 @@
 
 int main()
 {
-    if (!ClientLogger::instance().init(true))
+    if (!ClientLogger::instance().init(false))
     {
         return 1;
     }

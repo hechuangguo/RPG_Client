@@ -5,6 +5,7 @@
  * 职责：
  * - 支持 TextEntered 输入、Backspace 删除
  * - 密码模式掩码显示
+ * - 聚焦时闪烁光标
  *
  * 协作：LoginPanel、RegisterPanel。
  *
@@ -47,6 +48,9 @@ public:
     /** @brief 处理 SFML 事件 */
     void handleEvent(const sf::Event& event, const sf::RenderWindow& window);
 
+    /** @brief 更新光标闪烁 */
+    void update(float dt);
+
     /** @brief 绘制输入框 */
     void draw(sf::RenderTarget& target) const;
 
@@ -64,6 +68,7 @@ public:
 
 private:
     std::string displayText() const;
+    void syncCursorPos();
 
     const UiTheme* m_theme;
     sf::FloatRect  m_bounds;
@@ -71,4 +76,7 @@ private:
     std::string    m_placeholder;
     bool           m_password;
     bool           m_focused;
+    std::size_t    m_cursorPos;
+    float          m_blinkElapsed;
+    bool           m_cursorVisible;
 };
