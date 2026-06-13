@@ -1,0 +1,8 @@
+Client/build/
+Client/logs/
+3Party/_build/
+3Party/sfml/
+3Party/lua/
+*.user
+*.suo
+.vs/

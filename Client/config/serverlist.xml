@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 区列表须与 LoginServer MySQL ZoneInfo 表一致 -->
+<ClientServerList>
+    <LoginServer ip="127.0.0.1" port="9010"/>
+    <GameType id="0" name="RPG">
+        <Zone id="1" name="RPG一区" ip="127.0.0.1" superPort="9000" enabled="1"/>
+    </GameType>
+</ClientServerList>
