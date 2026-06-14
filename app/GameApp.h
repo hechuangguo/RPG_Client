@@ -17,6 +17,7 @@
 #include "net/ZoneListSession.h"
 #include "net/ZoneTypes.h"
 #include "ui/AuthLoginPanel.h"
+#include "ui/LoginChrome.h"
 #include "ui/RegisterPanel.h"
 #include "ui/ServerListPanel.h"
 #include "ui/UiTheme.h"
@@ -73,6 +74,7 @@ private:
     ConfigLoader       m_config;
     LocalSettings      m_localSettings;
     UiTheme            m_theme;
+    LoginChrome        m_loginChrome;
     ZoneHomePanel      m_zoneHomePanel;
     ServerListPanel    m_serverListPanel;
     AuthLoginPanel     m_authLoginPanel;

@@ -11,6 +11,25 @@
 #include "util/PathUtil.h"
 #include "util/TextUtil.h"
 
+namespace
+{
+bool isPreGameState(AppState state)
+{
+    switch (state)
+    {
+    case AppState::ZoneHome:
+    case AppState::ServerList:
+    case AppState::LoadingAuth:
+    case AppState::AuthLogin:
+    case AppState::Register:
+    case AppState::Connecting:
+        return true;
+    default:
+        return false;
+    }
+}
+}  // namespace
+
 GameApp::GameApp()
     : m_state(AppState::ZoneHome)
     , m_pendingZoneId(0)
@@ -72,8 +91,11 @@ bool GameApp::init()
     m_window.setFramerateLimit(60);
 
     m_theme.loadFont(PathUtil::joinPath(exeDir, "assets/fonts/NotoSansSC-Regular.otf"));
+    m_theme.loadLoginBackground(PathUtil::joinPath(exeDir, "assets/ui/login_bg.png"), exeDir);
 
     const sf::Vector2u viewSize = m_window.getSize();
+    m_loginChrome.setup(&m_theme, viewSize);
+    m_loginChrome.setOnExit([this]() { m_window.close(); });
     m_zoneHomePanel.setup(&m_theme, viewSize);
     m_serverListPanel.setup(&m_theme, viewSize);
     m_authLoginPanel.setup(&m_theme, &m_localSettings, viewSize);
@@ -296,11 +318,21 @@ void GameApp::processEvents()
         default:
             break;
         }
+
+        if (isPreGameState(m_state))
+        {
+            m_loginChrome.handleEvent(event, m_window);
+        }
     }
 }
 
 void GameApp::update(float dt)
 {
+    if (isPreGameState(m_state))
+    {
+        m_theme.updateLoginBackground(dt);
+    }
+
     if (m_state == AppState::ServerList)
     {
         m_zoneListSession.update();
@@ -393,6 +425,11 @@ void GameApp::render()
         break;
     }
 
+    if (isPreGameState(m_state))
+    {
+        m_loginChrome.draw(m_window);
+    }
+
     m_window.display();
 }
 
@@ -454,6 +491,7 @@ void GameApp::onEnterGame(const Msg_S2C_EnterGame& enter)
 
 void GameApp::onResize(const sf::Vector2u& size)
 {
+    m_loginChrome.onResize(size);
     m_zoneHomePanel.setup(&m_theme, size);
     m_serverListPanel.setup(&m_theme, size);
     m_authLoginPanel.setup(&m_theme, &m_localSettings, size);

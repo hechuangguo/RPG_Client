@@ -76,17 +76,26 @@ void Button::draw(sf::RenderTarget& target) const
 
     sf::RectangleShape rect({m_bounds.width, m_bounds.height});
     rect.setPosition(m_bounds.left, m_bounds.top);
+    const bool glass = m_theme->hasLoginBackground();
     if (!m_enabled)
     {
         rect.setFillColor(sf::Color(50, 50, 50, 180));
         rect.setOutlineColor(sf::Color(100, 100, 100));
+        rect.setOutlineThickness(1.5f);
     }
     else
     {
         rect.setFillColor(m_hovered ? m_theme->buttonHover() : m_theme->buttonNormal());
-        rect.setOutlineColor(m_theme->panelBorder());
+        if (glass)
+        {
+            rect.setOutlineThickness(0.f);
+        }
+        else
+        {
+            rect.setOutlineColor(m_theme->panelBorder());
+            rect.setOutlineThickness(1.5f);
+        }
     }
-    rect.setOutlineThickness(1.5f);
     target.draw(rect);
 
     m_theme->drawTextCentered(

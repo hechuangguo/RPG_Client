@@ -47,9 +47,18 @@ void Checkbox::draw(sf::RenderTarget& target) const
 
     sf::RectangleShape box({m_boxBounds.width, m_boxBounds.height});
     box.setPosition(m_boxBounds.left, m_boxBounds.top);
-    box.setFillColor(sf::Color(10, 25, 28, 200));
-    box.setOutlineColor(m_theme->panelBorder());
-    box.setOutlineThickness(1.f);
+    box.setFillColor(m_theme->inputFill());
+
+    const bool glass = m_theme->hasLoginBackground();
+    if (glass)
+    {
+        box.setOutlineThickness(0.f);
+    }
+    else
+    {
+        box.setOutlineColor(m_theme->panelBorder());
+        box.setOutlineThickness(1.f);
+    }
     target.draw(box);
 
     if (m_checked)

@@ -197,9 +197,16 @@ void ServerListPanel::draw(sf::RenderTarget& target) const
         const sf::FloatRect list = listAreaRect();
         sf::RectangleShape listBg({list.width, list.height});
         listBg.setPosition(list.left, list.top);
-        listBg.setFillColor(sf::Color(10, 25, 28, 180));
-        listBg.setOutlineColor(m_theme->panelBorder());
-        listBg.setOutlineThickness(1.f);
+        listBg.setFillColor(m_theme->inputFill());
+        if (m_theme->hasLoginBackground())
+        {
+            listBg.setOutlineThickness(0.f);
+        }
+        else
+        {
+            listBg.setOutlineColor(m_theme->panelBorder());
+            listBg.setOutlineThickness(1.f);
+        }
         target.draw(listBg);
 
         float y = list.top + 4.f;

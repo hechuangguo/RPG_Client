@@ -63,11 +63,18 @@ If `cl.exe` is missing, open Visual Studio Installer → Modify → check **Desk
 
 ### Visual Studio (Debug / Release)
 
-- **Recommended for daily work:** `.\build_client.ps1` (Ninja + Release).
-- **Opening in VS:** Open the repository root as a CMake project. After changing SFML link/copy logic, delete `build/` (and VS `out/` if present) and re-configure before F5.
-- **Debug vs Release:** CMake links `sfml-*-d` import libs and copies `sfml-*-d-2.dll` for Debug; Release uses `sfml-*` / `sfml-*-2.dll`. Do not mix Debug EXE with Release SFML DLLs.
-- **Fonts:** Run `fetch_font.ps1` before F5 so `out/build/x64-Debug/bin/assets/fonts/` contains `NotoSansSC-Regular.otf`.
-- **No console:** F5 starts the SFML window only; logs go to `./logs/client_YYYYMMDD.log`.
+本机为 **Visual Studio 2026** 时，须使用 **Visual Studio 18 2026** 生成器（勿选 VS 2022 / v143，未安装会报 MSB8020）。
+
+- **推荐日常编译：** `.\build_client.ps1`（Ninja + Release，不依赖 VS IDE）。
+- **在 VS 中打开：** 打开仓库根目录 `RPG_Client`（不是已删除的 `Client\` 子目录）。
+- **配置选择：** 工具栏选 **x64-Debug** 或 **x64-Release**（不要选 x86-Debug）。
+- **首次或迁移后：** 菜单 **项目 → 删除缓存并重新配置**；或删除 `.vs` 与 `out` 后重开 VS。
+- **CMake 配置：** 根目录 [`CMakeSettings.json`](CMakeSettings.json) 已指定 VS 2026 生成器。
+- **Debug 输出：** `out/build/x64-Debug/bin/RPGClient.exe`（与 F5 调试路径一致）。
+- **Release（脚本）：** `build/bin/RPGClient.exe`（Ninja 单配置）。
+- **Debug vs Release：** Debug 链接 `sfml-*-d` 并复制 `sfml-*-d-2.dll`；勿混用 Release DLL。
+- **Fonts：** F5 前运行 `.\assets\fonts\fetch_font.ps1`，确保 `out/build/x64-Debug/bin/assets/fonts/` 有字体。
+- **No console:** F5 仅启动 SFML 窗口；日志在 `./logs/client_YYYYMMDD.log`。
 
 ## Run
 
@@ -100,6 +107,7 @@ Logs: `./logs/client_YYYYMMDD.log`
 
 - 源码字符串为 UTF-8（`u8""` + MSVC `/utf-8`）。
 - UI 须加载 `NotoSansSC-Regular.otf`（见 `assets/fonts/`）；日志中应出现 `UiTheme: loaded font ...NotoSansSC-Regular.otf`。
+- 登录流程背景：`assets/ui/login_bg_sheet.png`（全画面序列帧水墨山水，选区/登录/注册共用）；由 `login_bg_anim.json` 配置帧数与 fps。缺失时回退 `login_bg.png` 静态图。
 - SFML 2.x 不可直接把 UTF-8 `std::string` 传给 `sf::Text`；项目通过 [`sdk/util/TextUtil.h`](sdk/util/TextUtil.h) 的 `TextUtil::utf8ToSfString()`（内部 `sf::String::fromUtf8`）统一转换。
 
 若仍为方框/乱码：先确认字体文件存在；若字体已加载仍乱码，检查是否遗漏 `fromUtf8` 路径。

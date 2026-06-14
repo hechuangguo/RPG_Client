@@ -112,9 +112,28 @@ void TextInput::draw(sf::RenderTarget& target) const
 
     sf::RectangleShape box({m_bounds.width, m_bounds.height});
     box.setPosition(m_bounds.left, m_bounds.top);
-    box.setFillColor(sf::Color(10, 25, 28, 200));
-    box.setOutlineColor(m_focused ? m_theme->accentColor() : m_theme->panelBorder());
-    box.setOutlineThickness(m_focused ? 2.f : 1.f);
+    box.setFillColor(m_theme->inputFill());
+
+    const bool glass = m_theme->hasLoginBackground();
+    if (m_focused)
+    {
+        sf::Color focusOutline = m_theme->accentColor();
+        if (glass)
+        {
+            focusOutline.a = 120;
+        }
+        box.setOutlineColor(focusOutline);
+        box.setOutlineThickness(glass ? 1.f : 2.f);
+    }
+    else if (glass)
+    {
+        box.setOutlineThickness(0.f);
+    }
+    else
+    {
+        box.setOutlineColor(m_theme->panelBorder());
+        box.setOutlineThickness(1.f);
+    }
     target.draw(box);
 
     const std::string shown = displayText();
