@@ -1,8 +1,0 @@
-{
-  "tileWidth": 64,
-  "tileHeight": 32,
-  "width": 40,
-  "height": 30,
-  "defaultTile": "bluestone",
-  "grassRatio": 0.2
-}
