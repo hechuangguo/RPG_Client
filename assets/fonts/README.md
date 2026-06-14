@@ -12,7 +12,7 @@ RPGClient login and HUD text use **Noto Sans SC Regular** for Simplified Chinese
 
 ## Download
 
-From `Client/`:
+From the repository root:
 
 ```powershell
 .\assets\fonts\fetch_font.ps1

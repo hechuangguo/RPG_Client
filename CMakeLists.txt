@@ -24,7 +24,7 @@ endif()
 # --- SFML prebuilt ---
 set(SFML_ROOT ${THIRD_PARTY_DIR}/sfml)
 if(NOT EXISTS ${SFML_ROOT}/lib/sfml-graphics.lib)
-    message(FATAL_ERROR "SFML not found. Run Client\\3Party\\download_and_build.ps1")
+    message(FATAL_ERROR "SFML not found. Run 3Party\\download_and_build.ps1")
 endif()
 set(SFML_INCLUDE ${SFML_ROOT}/include)
 set(SFML_MODULES graphics window system network audio)

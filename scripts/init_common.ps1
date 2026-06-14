@@ -1,4 +1,4 @@
-# Initialize RPG_Common submodule (run from repo root or Client/)
+# Initialize RPG_Common submodule (run from repo root)
 $ErrorActionPreference = "Stop"
 
 $repoRoot = git rev-parse --show-toplevel 2>$null
@@ -9,4 +9,4 @@ if (-not $repoRoot) {
 Set-Location $repoRoot
 Write-Host "Initializing submodules in $repoRoot ..."
 git submodule update --init --recursive
-Write-Host "Done. Common headers: Client/Common/"
+Write-Host "Done. Common headers: Common/"

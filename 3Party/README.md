@@ -12,11 +12,11 @@
 首次使用前先下载/准备依赖：
 
 ```powershell
-cd Client\3Party
+cd 3Party
 .\download_and_build.ps1
 ```
 
-然后回到 `Client/` 编译客户端：
+然后回到仓库根目录编译客户端：
 
 ```powershell
 cd ..
