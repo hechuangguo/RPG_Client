@@ -7,7 +7,7 @@
  * - 注册流程：连 LoginServer → C2S_REGISTER_REQ → S2C_REGISTER_RSP
  * - 每帧 update() 驱动 TcpClient::poll() 并推进状态机
  *
- * 协作：GameApp、ClientMsgHandler、ServerListLoader。
+ * 协作：GameApp、ClientMsgHandler、ConfigLoader。
  *
  * 线程：仅主线程，非线程安全。
  */
@@ -21,7 +21,7 @@
 #include <memory>
 #include <string>
 
-class ServerListLoader;
+class ConfigLoader;
 class TcpClient;
 
 /**
@@ -38,10 +38,10 @@ public:
     ~LoginSession();
 
     /**
-     * @brief 设置区服列表数据源
-     * @param loader 已 load 的 ServerListLoader 指针（生命周期由 GameApp 管理）
+     * @brief 设置客户端配置（LoginServer 地址）
+     * @param config 已 load 的 ConfigLoader 指针（生命周期由 GameApp 管理）
      */
-    void setServerList(const ServerListLoader* loader);
+    void setConfig(const ConfigLoader* config);
 
     /** @brief 进入游戏成功回调 */
     void setOnEnterGame(EnterGameCallback cb);
@@ -125,7 +125,7 @@ private:
     std::string loginHost() const;
     uint16_t loginPort() const;
 
-    const ServerListLoader*       m_serverList;
+    const ConfigLoader*       m_config;
     std::unique_ptr<TcpClient>    m_tcp;
 
     State                   m_state;

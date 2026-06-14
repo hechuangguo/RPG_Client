@@ -12,9 +12,11 @@
 #include "util/TextUtil.h"
 
 GameApp::GameApp()
-    : m_state(AppState::Login)
+    : m_state(AppState::ZoneHome)
     , m_pendingZoneId(0)
     , m_pendingGameType(0)
+    , m_luaInitialized(false)
+    , m_loadingAuthPending(false)
     , m_lastLuaTickMs(0)
 {
 }
@@ -60,13 +62,8 @@ bool GameApp::init()
         ClientLogger::instance().setMinLevel(ClientLogLevel::Err);
     }
 
-    const std::string serverListPath = PathUtil::joinPath(exeDir, "config/serverlist.xml");
-    if (!m_serverList.load(serverListPath))
-    {
-        ClientLogger::instance().warn("GameApp: serverlist load failed: %s", m_serverList.lastError().c_str());
-    }
-
     m_localSettings.load();
+    restoreSelectedZoneFromSettings();
 
     const std::string windowTitle = u8"仙侠世界 - RPG Client";
     m_window.create(sf::VideoMode(m_config.windowWidth(), m_config.windowHeight()),
@@ -77,18 +74,14 @@ bool GameApp::init()
     m_theme.loadFont(PathUtil::joinPath(exeDir, "assets/fonts/NotoSansSC-Regular.otf"));
 
     const sf::Vector2u viewSize = m_window.getSize();
-    m_loginPanel.setup(&m_theme, &m_serverList, &m_localSettings, viewSize);
+    m_zoneHomePanel.setup(&m_theme, viewSize);
+    m_serverListPanel.setup(&m_theme, viewSize);
+    m_authLoginPanel.setup(&m_theme, &m_localSettings, viewSize);
     m_registerPanel.setup(&m_theme, viewSize);
-    m_loginPanel.applyLocalSettings();
+    refreshZoneHomeDisplay();
 
-    if (!m_luaManager.init(exeDir))
-    {
-        ClientLogger::instance().warn("GameApp: Lua init failed");
-    }
-
-    m_scriptHost.setup(&m_luaManager, &m_questModel, &m_itemBagModel, &m_gameSession);
-    m_gameSession.setScriptHost(&m_scriptHost);
-    m_loginSession.setServerList(&m_serverList);
+    m_loginSession.setConfig(&m_config);
+    m_zoneListSession.setConfig(&m_config);
 
     wireCallbacks();
     m_lastLuaTickMs = TimeUtil::nowMs();
@@ -99,9 +92,14 @@ bool GameApp::init()
 
 void GameApp::shutdown()
 {
+    m_zoneListSession.cancel();
     m_loginSession.cancel();
     m_gameSession.disconnect();
-    m_luaManager.shutdown();
+    if (m_luaInitialized)
+    {
+        m_luaManager.shutdown();
+        m_luaInitialized = false;
+    }
     if (m_window.isOpen())
     {
         m_window.close();
@@ -110,12 +108,40 @@ void GameApp::shutdown()
 
 void GameApp::wireCallbacks()
 {
-    m_loginPanel.setOnLogin([this](const LoginPanel::LoginRequest& req) {
+    m_zoneHomePanel.setOnSelectServer([this]() { beginFetchZoneList(); });
+    m_zoneHomePanel.setOnEnterGame([this]() { beginEnterAuth(); });
+
+    m_serverListPanel.setOnConfirm([this](const GameZoneEntry& zone) {
+        applySelectedZone(zone);
+        switchState(AppState::ZoneHome);
+    });
+
+    m_serverListPanel.setOnCancel([this]() {
+        m_zoneListSession.cancel();
+        switchState(AppState::ZoneHome);
+    });
+
+    m_serverListPanel.setOnRetry([this]() { beginFetchZoneList(); });
+
+    m_zoneListSession.setOnSuccess([this](const std::vector<GameZoneEntry>& zones) {
+        if (zones.empty())
+        {
+            m_serverListPanel.setStatus(ServerListPanel::Status::Error, u8"暂无可用游戏区");
+            return;
+        }
+        m_serverListPanel.setZones(zones);
+    });
+
+    m_zoneListSession.setOnError([this](const std::string& err) {
+        m_serverListPanel.setStatus(ServerListPanel::Status::Error, err);
+    });
+
+    m_authLoginPanel.setOnLogin([this](const AuthLoginPanel::LoginRequest& req) {
         beginLogin(req);
     });
 
-    m_loginPanel.setOnRegisterClick([this]() {
-        m_registerPanel.setZone(m_loginPanel.selectedZoneId(), m_loginPanel.selectedGameType());
+    m_authLoginPanel.setOnRegisterClick([this]() {
+        m_registerPanel.setZone(m_selectedZone.zoneId, m_selectedZone.gameType);
         switchState(AppState::Register);
     });
 
@@ -124,7 +150,7 @@ void GameApp::wireCallbacks()
     });
 
     m_registerPanel.setOnBack([this]() {
-        switchState(AppState::Login);
+        switchState(AppState::AuthLogin);
     });
 
     m_loginSession.setOnEnterGame([this](const Msg_S2C_EnterGame& enter) {
@@ -133,14 +159,14 @@ void GameApp::wireCallbacks()
 
     m_loginSession.setOnError([this](const std::string& err) {
         m_statusMessage = err;
-        m_loginPanel.setErrorMessage(err);
+        m_authLoginPanel.setErrorMessage(err);
         m_registerPanel.setMessage(err, true);
-        switchState(AppState::Login);
+        switchState(AppState::AuthLogin);
     });
 
     m_loginSession.setOnRegisterSuccess([this]() {
         m_registerPanel.setMessage(u8"注册成功，请返回登录", false);
-        switchState(AppState::Login);
+        switchState(AppState::AuthLogin);
     });
 
     m_gameSession.setOnSpawn([this](const Msg_S2C_SpawnEntity& spawn) {
@@ -160,9 +186,77 @@ void GameApp::wireCallbacks()
     });
 
     m_gameSession.setOnDisconnected([this]() {
-        switchState(AppState::Login);
-        m_loginPanel.setErrorMessage(u8"与服务器连接已断开");
+        switchState(AppState::ZoneHome);
+        m_authLoginPanel.setErrorMessage(u8"与服务器连接已断开");
     });
+}
+
+void GameApp::restoreSelectedZoneFromSettings()
+{
+    if (m_localSettings.lastZoneId() > 0 && !m_localSettings.lastZoneName().empty())
+    {
+        m_selectedZone.zoneId   = m_localSettings.lastZoneId();
+        m_selectedZone.gameType = m_localSettings.lastGameType();
+        m_selectedZone.name     = m_localSettings.lastZoneName();
+    }
+}
+
+void GameApp::refreshZoneHomeDisplay()
+{
+    m_zoneHomePanel.setCurrentZoneName(m_selectedZone.name);
+    m_zoneHomePanel.setHasValidZone(m_selectedZone.isValid());
+}
+
+void GameApp::beginFetchZoneList()
+{
+    switchState(AppState::ServerList);
+    m_serverListPanel.setStatus(ServerListPanel::Status::Loading, u8"正在连接...");
+    m_zoneListSession.fetchZoneList(0);
+}
+
+void GameApp::applySelectedZone(const GameZoneEntry& zone)
+{
+    m_selectedZone.zoneId   = zone.zoneId;
+    m_selectedZone.gameType = zone.gameType;
+    m_selectedZone.name     = zone.name;
+
+    m_localSettings.setLastZoneId(zone.zoneId);
+    m_localSettings.setLastGameType(zone.gameType);
+    m_localSettings.setLastZoneName(zone.name);
+    m_localSettings.save();
+
+    refreshZoneHomeDisplay();
+}
+
+void GameApp::beginEnterAuth()
+{
+    if (!m_selectedZone.isValid())
+    {
+        return;
+    }
+    m_loadingMessage       = u8"正在加载资源...";
+    m_loadingAuthPending   = true;
+    switchState(AppState::LoadingAuth);
+}
+
+void GameApp::finishLoadingAuth()
+{
+    const std::string exeDir = PathUtil::getExeDir();
+    if (!m_luaInitialized)
+    {
+        if (!m_luaManager.init(exeDir))
+        {
+            ClientLogger::instance().warn("GameApp: Lua init failed");
+        }
+        m_luaInitialized = true;
+    }
+
+    m_scriptHost.setup(&m_luaManager, &m_questModel, &m_itemBagModel, &m_gameSession);
+    m_gameSession.setScriptHost(&m_scriptHost);
+
+    m_authLoginPanel.setErrorMessage("");
+    m_authLoginPanel.applyLocalSettings();
+    switchState(AppState::AuthLogin);
 }
 
 void GameApp::processEvents()
@@ -176,26 +270,51 @@ void GameApp::processEvents()
             return;
         }
 
-        if (m_state == AppState::Login)
+        if (event.type == sf::Event::Resized)
         {
-            m_loginPanel.handleEvent(event, m_window);
+            onResize(sf::Vector2u(event.size.width, event.size.height));
         }
-        else if (m_state == AppState::Register)
+
+        switch (m_state)
         {
+        case AppState::ZoneHome:
+            m_zoneHomePanel.handleEvent(event, m_window);
+            break;
+        case AppState::ServerList:
+            m_serverListPanel.handleEvent(event, m_window);
+            break;
+        case AppState::AuthLogin:
+        case AppState::Connecting:
+            m_authLoginPanel.handleEvent(event, m_window);
+            break;
+        case AppState::Register:
             m_registerPanel.handleEvent(event, m_window);
-        }
-        else if (m_state == AppState::Game)
-        {
+            break;
+        case AppState::Game:
             m_gameScene.handleEvent(event);
+            break;
+        default:
+            break;
         }
     }
 }
 
 void GameApp::update(float dt)
 {
-    if (m_state == AppState::Login || m_state == AppState::Connecting)
+    if (m_state == AppState::ServerList)
     {
-        m_loginPanel.update(dt);
+        m_zoneListSession.update();
+    }
+
+    if (m_state == AppState::LoadingAuth && m_loadingAuthPending)
+    {
+        m_loadingAuthPending = false;
+        finishLoadingAuth();
+    }
+
+    if (m_state == AppState::AuthLogin || m_state == AppState::Connecting)
+    {
+        m_authLoginPanel.update(dt);
     }
     else if (m_state == AppState::Register)
     {
@@ -225,11 +344,33 @@ void GameApp::render()
 {
     m_window.clear();
 
-    if (m_state == AppState::Login || m_state == AppState::Connecting)
+    switch (m_state)
     {
+    case AppState::ZoneHome:
         m_theme.drawBackground(m_window, m_window.getSize());
-        m_loginPanel.draw(m_window);
+        m_zoneHomePanel.draw(m_window);
+        break;
 
+    case AppState::ServerList:
+        m_theme.drawBackground(m_window, m_window.getSize());
+        m_serverListPanel.draw(m_window);
+        break;
+
+    case AppState::LoadingAuth:
+        m_theme.drawBackground(m_window, m_window.getSize());
+        m_theme.drawText(
+            m_window,
+            m_loadingMessage,
+            static_cast<float>(m_window.getSize().x) / 2.f - 80.f,
+            static_cast<float>(m_window.getSize().y) / 2.f,
+            20,
+            m_theme.accentColor());
+        break;
+
+    case AppState::AuthLogin:
+    case AppState::Connecting:
+        m_theme.drawBackground(m_window, m_window.getSize());
+        m_authLoginPanel.draw(m_window);
         if (m_state == AppState::Connecting && !m_statusMessage.empty())
         {
             m_theme.drawText(
@@ -240,15 +381,16 @@ void GameApp::render()
                 16,
                 m_theme.accentColor());
         }
-    }
-    else if (m_state == AppState::Register)
-    {
+        break;
+
+    case AppState::Register:
         m_theme.drawBackground(m_window, m_window.getSize());
         m_registerPanel.draw(m_window);
-    }
-    else if (m_state == AppState::Game)
-    {
+        break;
+
+    case AppState::Game:
         m_gameScene.draw(m_window);
+        break;
     }
 
     m_window.display();
@@ -259,16 +401,21 @@ void GameApp::switchState(AppState state)
     m_state = state;
     if (state == AppState::Connecting)
     {
-        m_statusMessage = u8"正在连接仙界...";
+        m_statusMessage = u8"正在连接...";
     }
 }
 
-void GameApp::beginLogin(const LoginPanel::LoginRequest& req)
+void GameApp::beginLogin(const AuthLoginPanel::LoginRequest& req)
 {
-    m_pendingZoneId   = req.zoneId;
-    m_pendingGameType = req.gameType;
+    if (!m_selectedZone.isValid())
+    {
+        m_authLoginPanel.setErrorMessage(u8"请先选择游戏区");
+        return;
+    }
 
-    m_localSettings.setLastZoneId(req.zoneId);
+    m_pendingZoneId   = m_selectedZone.zoneId;
+    m_pendingGameType = m_selectedZone.gameType;
+
     m_localSettings.setRememberAccount(req.rememberAccount);
     if (req.rememberAccount)
     {
@@ -276,9 +423,9 @@ void GameApp::beginLogin(const LoginPanel::LoginRequest& req)
     }
     m_localSettings.save();
 
-    m_loginPanel.setErrorMessage("");
+    m_authLoginPanel.setErrorMessage("");
     switchState(AppState::Connecting);
-    m_loginSession.startLogin(req.account, req.password, req.zoneId, req.gameType);
+    m_loginSession.startLogin(req.account, req.password, m_pendingZoneId, m_pendingGameType);
 }
 
 void GameApp::beginRegister(const RegisterPanel::RegisterRequest& req)
@@ -303,4 +450,14 @@ void GameApp::onEnterGame(const Msg_S2C_EnterGame& enter)
 
     switchState(AppState::Game);
     ClientLogger::instance().info("GameApp: entered game map=%u", enter.mapID);
+}
+
+void GameApp::onResize(const sf::Vector2u& size)
+{
+    m_zoneHomePanel.setup(&m_theme, size);
+    m_serverListPanel.setup(&m_theme, size);
+    m_authLoginPanel.setup(&m_theme, &m_localSettings, size);
+    m_registerPanel.setup(&m_theme, size);
+    refreshZoneHomeDisplay();
+    m_gameScene.setViewSize(size);
 }

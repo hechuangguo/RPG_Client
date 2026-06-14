@@ -63,6 +63,8 @@ enum class ClientMsgID : uint16_t
     S2C_CREATE_USER_RSP  = 0x0008,  /**< S→C: 创建用户响应 */
     S2C_ENTER_GAME       = 0x0009,  /**< S→C: 通知客户端进入游戏世界 */
     S2C_GATEWAY_INFO     = 0x000A,  /**< S→C: LoginServer 下发可用网关地址 */
+    C2S_ZONE_LIST_REQ    = 0x000B,  /**< C→S: 请求游戏区列表 */
+    S2C_ZONE_LIST        = 0x000C,  /**< S→C: 游戏区列表（变长） */
 
     // ============================================================
     //  场景/移动 (0x0101 ~ 0x0107)
@@ -204,6 +206,38 @@ struct Msg_S2C_GatewayInfo
     char     gatewayIP[32];  /**< 网关 IP */
     uint16_t gatewayPort;    /**< 网关 clientPort */
     char     msg[64];        /**< 可读说明 */
+};
+
+/**
+ * @brief C→S: 请求游戏区列表
+ */
+struct Msg_C2S_ZoneListReq
+{
+    uint8_t gameType;   /**< 0=全部类型 */
+    uint8_t reserved[3];
+};
+
+/**
+ * @brief 游戏区列表单条目
+ */
+struct Msg_ZoneListEntry
+{
+    uint32_t zoneId;
+    uint8_t  gameType;
+    uint8_t  enabled;   /**< 1=可登录 0=维护 */
+    uint8_t  reserved[2];
+    char     name[32];  /**< UTF-8 区服名 */
+};
+
+/**
+ * @brief S→C: 游戏区列表响应（变长，后跟 count 个 Msg_ZoneListEntry）
+ */
+struct Msg_S2C_ZoneList
+{
+    int32_t  code;
+    char     msg[64];
+    uint16_t count;
+    uint8_t  reserved[2];
 };
 
 /**

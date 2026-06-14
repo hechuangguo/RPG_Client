@@ -33,43 +33,43 @@
 			{
 				"command" : 0,
 				"file" : 0,
-				"line" : 60,
+				"line" : 42,
 				"parent" : 0
 			},
 			{
 				"command" : 1,
 				"file" : 0,
-				"line" : 89,
+				"line" : 71,
 				"parent" : 0
 			},
 			{
 				"command" : 2,
 				"file" : 0,
-				"line" : 72,
+				"line" : 54,
 				"parent" : 0
 			},
 			{
 				"command" : 3,
 				"file" : 0,
-				"line" : 74,
+				"line" : 56,
 				"parent" : 0
 			},
 			{
 				"command" : 4,
 				"file" : 0,
-				"line" : 99,
+				"line" : 81,
 				"parent" : 0
 			},
 			{
 				"command" : 5,
 				"file" : 0,
-				"line" : 87,
+				"line" : 69,
 				"parent" : 0
 			},
 			{
 				"command" : 6,
 				"file" : 0,
-				"line" : 64,
+				"line" : 46,
 				"parent" : 0
 			}
 		]
@@ -84,10 +84,6 @@
 		{
 			"backtrace" : 4,
 			"id" : "lua54::@6890427a1f51a3e7e1df"
-		},
-		{
-			"backtrace" : 4,
-			"id" : "tinyxml2::@6890427a1f51a3e7e1df"
 		}
 	],
 	"compileGroups" : 
@@ -144,10 +140,6 @@
 				{
 					"backtrace" : 4,
 					"path" : "D:/Study/RPG_Client/Client/3Party/lua"
-				},
-				{
-					"backtrace" : 4,
-					"path" : "D:/Study/RPG_Client/Client/3Party/_build/tinyxml2-src"
 				}
 			],
 			"language" : "CXX",
@@ -192,16 +184,13 @@
 				28,
 				29,
 				30,
-				31
+				31,
+				32
 			]
 		}
 	],
 	"dependencies" : 
 	[
-		{
-			"backtrace" : 4,
-			"id" : "tinyxml2::@6890427a1f51a3e7e1df"
-		},
 		{
 			"backtrace" : 4,
 			"id" : "lua54::@6890427a1f51a3e7e1df"
@@ -271,11 +260,6 @@
 			},
 			{
 				"backtrace" : 4,
-				"fragment" : "tinyxml2.lib",
-				"role" : "libraries"
-			},
-			{
-				"backtrace" : 4,
 				"fragment" : "ws2_32.lib",
 				"role" : "libraries"
 			},
@@ -315,10 +299,6 @@
 		{
 			"backtrace" : 4,
 			"id" : "lua54::@6890427a1f51a3e7e1df"
-		},
-		{
-			"backtrace" : 4,
-			"id" : "tinyxml2::@6890427a1f51a3e7e1df"
 		},
 		{
 			"backtrace" : 4,
@@ -376,7 +356,8 @@
 				28,
 				29,
 				30,
-				31
+				31,
+				32
 			]
 		}
 	],
@@ -422,12 +403,6 @@
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
 			"path" : "sdk/util/PathUtil.cpp",
-			"sourceGroupIndex" : 0
-		},
-		{
-			"backtrace" : 1,
-			"compileGroupIndex" : 0,
-			"path" : "sdk/util/ServerListLoader.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
@@ -523,7 +498,13 @@
 		{
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
-			"path" : "ui/LoginPanel.cpp",
+			"path" : "net/ZoneListSession.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
+			"path" : "ui/AuthLoginPanel.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
@@ -535,13 +516,19 @@
 		{
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
+			"path" : "ui/ServerListPanel.cpp",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 1,
+			"compileGroupIndex" : 0,
 			"path" : "ui/UiTheme.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{
 			"backtrace" : 1,
 			"compileGroupIndex" : 0,
-			"path" : "ui/ZoneSelectPanel.cpp",
+			"path" : "ui/ZoneHomePanel.cpp",
 			"sourceGroupIndex" : 0
 		},
 		{

@@ -8,7 +8,7 @@
 #include "net/ClientMsgHandler.h"
 #include "log/ClientLogger.h"
 #include "net/TcpClient.h"
-#include "util/ServerListLoader.h"
+#include "util/ConfigLoader.h"
 
 #include <cstring>
 
@@ -28,7 +28,7 @@ bool parseRegisterRsp(const char* data, uint16_t len, Msg_S2C_RegisterRsp& out)
 }  // namespace
 
 LoginSession::LoginSession()
-    : m_serverList(nullptr)
+    : m_config(nullptr)
     , m_tcp(std::make_unique<TcpClient>())
     , m_state(State::Idle)
     , m_isRegisterFlow(false)
@@ -47,9 +47,9 @@ LoginSession::LoginSession()
 
 LoginSession::~LoginSession() = default;
 
-void LoginSession::setServerList(const ServerListLoader* loader)
+void LoginSession::setConfig(const ConfigLoader* config)
 {
-    m_serverList = loader;
+    m_config = config;
 }
 
 void LoginSession::setOnEnterGame(EnterGameCallback cb)
@@ -234,18 +234,18 @@ void LoginSession::sendRegisterReq()
 
 std::string LoginSession::loginHost() const
 {
-    if (m_serverList && !m_serverList->loginHost().empty())
+    if (m_config && !m_config->loginHost().empty())
     {
-        return m_serverList->loginHost();
+        return m_config->loginHost();
     }
     return "127.0.0.1";
 }
 
 uint16_t LoginSession::loginPort() const
 {
-    if (m_serverList && m_serverList->loginPort() != 0)
+    if (m_config && m_config->loginPort() != 0)
     {
-        return m_serverList->loginPort();
+        return m_config->loginPort();
     }
     return 9010;
 }

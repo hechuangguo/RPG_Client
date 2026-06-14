@@ -17,8 +17,7 @@
 					"targetIndexes" : 
 					[
 						0,
-						1,
-						2
+						1
 					]
 				}
 			],
@@ -34,8 +33,7 @@
 					"targetIndexes" : 
 					[
 						0,
-						1,
-						2
+						1
 					]
 				}
 			],
@@ -44,22 +42,15 @@
 				{
 					"directoryIndex" : 0,
 					"id" : "RPGClient::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-RPGClient-Debug-06a802fb13b27249be60.json",
+					"jsonFile" : "target-RPGClient-Debug-6f6ff0e92756d73465c5.json",
 					"name" : "RPGClient",
 					"projectIndex" : 0
 				},
 				{
 					"directoryIndex" : 0,
 					"id" : "lua54::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-lua54-Debug-5946492eed6c0bccceed.json",
+					"jsonFile" : "target-lua54-Debug-a40e1d6e386e8907be16.json",
 					"name" : "lua54",
-					"projectIndex" : 0
-				},
-				{
-					"directoryIndex" : 0,
-					"id" : "tinyxml2::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-tinyxml2-Debug-6eaf10717a3571edfe9b.json",
-					"name" : "tinyxml2",
 					"projectIndex" : 0
 				}
 			]

@@ -6,7 +6,6 @@
 |----|------|
 | SFML 2.6+ | 2D 渲染、窗口、输入 |
 | Lua 5.4 | 脚本运行时 |
-| tinyxml2 | 解析 serverlist.xml |
 
 ## 构建
 

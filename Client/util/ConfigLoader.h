@@ -4,7 +4,7 @@
  *
  * 职责：
  * - 从 config/client_config.json 读取窗口尺寸、日志级别等简单键值
- * - 提供 loginHost/loginPort 作为 serverlist.xml 不可用时的 fallback
+ * - 提供 loginHost/loginPort（LoginServer 连接地址）
  *
  * 协作：GameApp 启动时 load()；ClientLogger 读取 logToConsole。
  *

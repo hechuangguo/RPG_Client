@@ -6,7 +6,7 @@
  * - 保存/加载 lastAccount、lastZoneId 到 Windows %APPDATA%/RPGClient/settings.json
  * - 支持「记住账号」登录体验
  *
- * 协作：LoginPanel 读写；GameApp 启动时 load()。
+ * 协作：AuthLoginPanel 读写；GameApp 启动时 load()。
  *
  * 线程：仅主线程，非线程安全。
  */
@@ -54,6 +54,18 @@ public:
      */
     void setLastZoneId(uint32_t zoneId);
 
+    /** @brief 上次选择的游戏类型 */
+    uint8_t lastGameType() const;
+
+    /** @brief 设置上次选择的游戏类型 */
+    void setLastGameType(uint8_t gameType);
+
+    /** @brief 上次选择的区服显示名 */
+    const std::string& lastZoneName() const;
+
+    /** @brief 设置上次选择的区服显示名 */
+    void setLastZoneName(const std::string& name);
+
     /** @brief 是否记住账号 */
     bool rememberAccount() const;
 
@@ -71,5 +83,7 @@ private:
 
     std::string m_lastAccount;
     uint32_t    m_lastZoneId;
+    uint8_t     m_lastGameType;
+    std::string m_lastZoneName;
     bool        m_rememberAccount;
 };

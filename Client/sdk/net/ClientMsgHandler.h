@@ -17,6 +17,8 @@
 #include <string>
 #include <vector>
 
+struct GameZoneEntry;
+
 /**
  * @brief 客户端消息辅助类（静态方法）
  */
@@ -48,6 +50,20 @@ public:
                                               const std::string& password,
                                               uint32_t zoneId,
                                               uint8_t gameType);
+
+    /**
+     * @brief 构造 C2S_ZONE_LIST_REQ 完整帧
+     * @param gameType 0=全部类型
+     */
+    static std::vector<char> buildZoneListReq(uint8_t gameType = 0);
+
+    /**
+     * @brief 解析 S2C_ZONE_LIST 消息体（含变长 entries）
+     */
+    static bool parseZoneListRsp(const char* data,
+                                 uint16_t len,
+                                 std::vector<GameZoneEntry>& out,
+                                 std::string& errMsg);
 
     /**
      * @brief 构造 C2S_HEARTBEAT 完整帧

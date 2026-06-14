@@ -11,24 +11,6 @@ endif()
 set(THIRD_PARTY_DIR ${CMAKE_SOURCE_DIR}/3Party)
 set(COMMON_DIR ${CMAKE_SOURCE_DIR}/Common)
 
-# --- tinyxml2 ---
-set(TINYXML2_DIR ${THIRD_PARTY_DIR}/_build/tinyxml2-src)
-if(NOT EXISTS ${TINYXML2_DIR}/tinyxml2.cpp)
-    include(FetchContent)
-    FetchContent_Declare(tinyxml2
-        GIT_REPOSITORY https://github.com/leethomason/tinyxml2.git
-        GIT_TAG        10.0.0
-        SOURCE_DIR     ${TINYXML2_DIR}
-        BINARY_DIR     ${THIRD_PARTY_DIR}/_build/tinyxml2-build
-    )
-    set(tinyxml2_BUILD_TESTING OFF CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(tinyxml2)
-endif()
-if(NOT TARGET tinyxml2)
-    add_library(tinyxml2 STATIC ${TINYXML2_DIR}/tinyxml2.cpp)
-    target_include_directories(tinyxml2 PUBLIC ${TINYXML2_DIR})
-endif()
-
 # --- Lua 5.4 ---
 set(LUA_DIR ${THIRD_PARTY_DIR}/lua)
 file(GLOB LUA_SOURCES ${LUA_DIR}/*.c)
@@ -79,7 +61,7 @@ target_link_libraries(RPGClient PRIVATE
     $<$<NOT:$<CONFIG:Debug>>:sfml-window>
     $<$<NOT:$<CONFIG:Debug>>:sfml-system>
     opengl32 winmm gdi32
-    lua54 tinyxml2
+    lua54
     ws2_32
 )
 

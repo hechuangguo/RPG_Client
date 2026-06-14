@@ -22,6 +22,7 @@ namespace fs = std::filesystem;
 
 LocalSettings::LocalSettings()
     : m_lastZoneId(0)
+    , m_lastGameType(0)
     , m_rememberAccount(false)
 {
 }
@@ -55,6 +56,8 @@ bool LocalSettings::load()
 {
     m_lastAccount.clear();
     m_lastZoneId = 0;
+    m_lastGameType = 0;
+    m_lastZoneName.clear();
     m_rememberAccount = false;
 
     std::ifstream file(settingsPath());
@@ -98,6 +101,14 @@ bool LocalSettings::load()
         {
             m_lastZoneId = static_cast<uint32_t>(std::stoul(value));
         }
+        else if (key.find("lastGameType") != std::string::npos)
+        {
+            m_lastGameType = static_cast<uint8_t>(std::stoul(value));
+        }
+        else if (key.find("lastZoneName") != std::string::npos)
+        {
+            m_lastZoneName = value;
+        }
         else if (key.find("rememberAccount") != std::string::npos)
         {
             m_rememberAccount = (value == "true" || value == "1");
@@ -122,6 +133,8 @@ bool LocalSettings::save() const
     file << "{\n";
     file << "  \"lastAccount\": \"" << (m_rememberAccount ? m_lastAccount : "") << "\",\n";
     file << "  \"lastZoneId\": " << m_lastZoneId << ",\n";
+    file << "  \"lastGameType\": " << static_cast<unsigned>(m_lastGameType) << ",\n";
+    file << "  \"lastZoneName\": \"" << m_lastZoneName << "\",\n";
     file << "  \"rememberAccount\": " << (m_rememberAccount ? "true" : "false") << "\n";
     file << "}\n";
     return true;
@@ -145,6 +158,26 @@ uint32_t LocalSettings::lastZoneId() const
 void LocalSettings::setLastZoneId(uint32_t zoneId)
 {
     m_lastZoneId = zoneId;
+}
+
+uint8_t LocalSettings::lastGameType() const
+{
+    return m_lastGameType;
+}
+
+void LocalSettings::setLastGameType(uint8_t gameType)
+{
+    m_lastGameType = gameType;
+}
+
+const std::string& LocalSettings::lastZoneName() const
+{
+    return m_lastZoneName;
+}
+
+void LocalSettings::setLastZoneName(const std::string& name)
+{
+    m_lastZoneName = name;
 }
 
 bool LocalSettings::rememberAccount() const

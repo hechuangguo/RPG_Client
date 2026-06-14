@@ -6,6 +6,7 @@
 #include "ClientMsgHandler.h"
 
 #include "ProtocolCodec.h"
+#include "net/ZoneTypes.h"
 
 #include <cstring>
 
@@ -17,6 +18,7 @@ constexpr uint8_t kSystemModule = static_cast<uint8_t>(ClientModule::SYSTEM);
 
 constexpr uint8_t kLoginReqSub     = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_LOGIN_REQ));
 constexpr uint8_t kRegisterReqSub  = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_REGISTER_REQ));
+constexpr uint8_t kZoneListReqSub  = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_ZONE_LIST_REQ));
 constexpr uint8_t kMoveReqSub      = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_MOVE_REQ));
 constexpr uint8_t kHeartbeatSub    = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_HEARTBEAT));
 }  // namespace
@@ -77,6 +79,66 @@ std::vector<char> ClientMsgHandler::buildRegisterReq(const std::string& account,
     return ProtocolCodec::encode(kLoginModule, kRegisterReqSub,
                                  reinterpret_cast<const char*>(&body),
                                  static_cast<uint16_t>(sizeof(body)));
+}
+
+std::vector<char> ClientMsgHandler::buildZoneListReq(uint8_t gameType)
+{
+    Msg_C2S_ZoneListReq body{};
+    body.gameType = gameType;
+    std::memset(body.reserved, 0, sizeof(body.reserved));
+
+    return ProtocolCodec::encode(kLoginModule, kZoneListReqSub,
+                                 reinterpret_cast<const char*>(&body),
+                                 static_cast<uint16_t>(sizeof(body)));
+}
+
+bool ClientMsgHandler::parseZoneListRsp(const char* data,
+                                        uint16_t len,
+                                        std::vector<GameZoneEntry>& out,
+                                        std::string& errMsg)
+{
+    out.clear();
+    errMsg.clear();
+
+    if (!data || len < sizeof(Msg_S2C_ZoneList))
+    {
+        errMsg = u8"区列表响应过短";
+        return false;
+    }
+
+    Msg_S2C_ZoneList hdr{};
+    std::memcpy(&hdr, data, sizeof(hdr));
+
+    if (hdr.code != 0)
+    {
+        errMsg = hdr.msg[0] != '\0' ? std::string(hdr.msg) : u8"获取区列表失败";
+        return false;
+    }
+
+    const uint16_t expectedLen =
+        static_cast<uint16_t>(sizeof(Msg_S2C_ZoneList) +
+                              static_cast<size_t>(hdr.count) * sizeof(Msg_ZoneListEntry));
+    if (len < expectedLen)
+    {
+        errMsg = u8"区列表数据不完整";
+        return false;
+    }
+
+    const char* p = data + sizeof(Msg_S2C_ZoneList);
+    for (uint16_t i = 0; i < hdr.count; ++i)
+    {
+        Msg_ZoneListEntry entry{};
+        std::memcpy(&entry, p, sizeof(entry));
+        p += sizeof(entry);
+
+        GameZoneEntry zone{};
+        zone.zoneId   = entry.zoneId;
+        zone.gameType = entry.gameType;
+        zone.enabled  = entry.enabled != 0;
+        zone.name     = entry.name;
+        out.push_back(zone);
+    }
+    return true;
 }
 
 std::vector<char> ClientMsgHandler::buildHeartbeat(uint32_t seq)
