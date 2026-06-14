@@ -2,6 +2,15 @@
 $ErrorActionPreference = "Stop"
 
 $clientDir = $PSScriptRoot
+$repoRoot = (git -C $clientDir rev-parse --show-toplevel 2>$null)
+if ($repoRoot -and -not (Test-Path (Join-Path $clientDir "Common\ClientMsg.h"))) {
+    Write-Host "Common submodule missing; initializing ..."
+    git -C $repoRoot submodule update --init Client/Common
+    if (-not (Test-Path (Join-Path $clientDir "Common\ClientMsg.h"))) {
+        throw "Client/Common/ClientMsg.h not found. Run: git submodule update --init --recursive"
+    }
+}
+
 $buildDir = Join-Path $clientDir "build"
 
 & (Join-Path $clientDir "assets\fonts\fetch_font.ps1")

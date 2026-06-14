@@ -7,7 +7,8 @@ Windows PC MMORPG 2D client (C++17 + SFML). Runs as a **GUI application** (no co
 ```
 Client/
   3Party/      # SFML、Lua 等第三方库
-  Common/      # 与 Server 对齐的 wire 协议头（ClientMsg.h 等）
+  Common/      # Git Submodule → RPG_Common（ClientMsg.h 等 wire 协议）
+  scripts/     # init_common.ps1、sync_common.ps1
   sdk/         # 底层封装（net/log/time/math/util）
   app/ game/ lua/ net/ ui/ util/   # 应用层
   config/ script/ database/ basefile/ map/ assets/
@@ -21,16 +22,19 @@ Client/
 
 Prerequisites: Visual Studio 2022/2026 with **Desktop development with C++** workload, CMake, Ninja.
 
-首次构建前先准备第三方库与中文字体：
+首次构建前先克隆 submodule 并准备第三方库与中文字体：
 
 ```powershell
+# 在 RPG_Client 仓库根目录
+git submodule update --init --recursive
+
 cd Client
 .\3Party\download_and_build.ps1
 .\assets\fonts\fetch_font.ps1
 .\build_client.ps1
 ```
 
-`build_client.ps1` 会自动调用 `fetch_font.ps1`。字体未下载时登录界面中文会显示为方框/乱码。
+`build_client.ps1` 会在 Common 缺失时尝试 `git submodule update --init Client/Common`，并自动调用 `fetch_font.ps1`。
 
 Or manually (Developer Command Prompt for VS):
 
@@ -88,11 +92,32 @@ Logs: `./logs/client_YYYYMMDD.log`
 
 若仍为方框/乱码：先确认字体文件存在；若字体已加载仍乱码，检查是否遗漏 `fromUtf8` 路径。
 
+## 共享协议（RPG_Common Submodule）
+
+[`Client/Common/`](Common/) 指向 GitHub 仓库 [RPG_Common](https://github.com/hechuangguo/RPG_Common)，与 Server 侧 `common/` 为**同一源码**。无需再手动 copy 到 RPG_Server。
+
+| 脚本 | 说明 |
+|------|------|
+| [`scripts/init_common.ps1`](scripts/init_common.ps1) | `git submodule update --init --recursive` |
+| [`scripts/sync_common.ps1`](scripts/sync_common.ps1) | 拉取 RPG_Common 最新 main 到 `Client/Common` |
+
+**修改协议：**
+
+1. 在 `Client/Common/` 内编辑并提交、push 到 RPG_Common。
+2. 回到 RPG_Client 根目录：`git add Client/Common && git commit -m "chore: bump Common submodule"`。
+
+**拉取 Server 方更新：**
+
+```powershell
+git pull
+git submodule update --init --recursive
+```
+
 ## Server 联调
 
-协议头位于 `Client/Common/`。变更 `ClientMsg.h` 等文件后，需手动同步到外部 `RPG_Server/common/`（Server 不在本仓库）。
+协议头位于 `Client/Common/`（submodule）。Server 使用相同 RPG_Common 仓库，挂载路径为 `common/`。
 
-区列表协议（需在 LoginServer 实现）：
+区列表协议（LoginServer ClientListen）：
 
-- `C2S_ZONE_LIST_REQ` (0x000B) — 客户端请求区列表
-- `S2C_ZONE_LIST` (0x000C) — 返回变长区列表（见 `ClientMsg.h` 中 `Msg_S2C_ZoneList` / `Msg_ZoneListEntry`）
+- `C2S_ZONE_LIST_REQ` (0x000B)
+- `S2C_ZONE_LIST_RSP` (0x000C) — 变长 body：`Msg_S2C_ZoneListRspHeader` + N×`Msg_S2C_ZoneEntryWire`
