@@ -211,7 +211,7 @@ void GameApp::beginFetchZoneList()
 {
     switchState(AppState::ServerList);
     m_serverListPanel.setStatus(ServerListPanel::Status::Loading, u8"正在连接...");
-    m_zoneListSession.fetchZoneList(0);
+    m_zoneListSession.fetchZoneList(0xFF);
 }
 
 void GameApp::applySelectedZone(const GameZoneEntry& zone)

@@ -58,7 +58,7 @@ public:
     static std::vector<char> buildZoneListReq(uint8_t gameType = 0);
 
     /**
-     * @brief 解析 S2C_ZONE_LIST 消息体（含变长 entries）
+     * @brief 解析 S2C_ZONE_LIST_RSP 消息体（含变长 entries）
      */
     static bool parseZoneListRsp(const char* data,
                                  uint16_t len,

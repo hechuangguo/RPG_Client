@@ -85,7 +85,6 @@ std::vector<char> ClientMsgHandler::buildZoneListReq(uint8_t gameType)
 {
     Msg_C2S_ZoneListReq body{};
     body.gameType = gameType;
-    std::memset(body.reserved, 0, sizeof(body.reserved));
 
     return ProtocolCodec::encode(kLoginModule, kZoneListReqSub,
                                  reinterpret_cast<const char*>(&body),
@@ -100,34 +99,34 @@ bool ClientMsgHandler::parseZoneListRsp(const char* data,
     out.clear();
     errMsg.clear();
 
-    if (!data || len < sizeof(Msg_S2C_ZoneList))
+    if (!data || len < sizeof(Msg_S2C_ZoneListRspHeader))
     {
         errMsg = u8"区列表响应过短";
         return false;
     }
 
-    Msg_S2C_ZoneList hdr{};
+    Msg_S2C_ZoneListRspHeader hdr{};
     std::memcpy(&hdr, data, sizeof(hdr));
 
     if (hdr.code != 0)
     {
-        errMsg = hdr.msg[0] != '\0' ? std::string(hdr.msg) : u8"获取区列表失败";
+        errMsg = u8"获取区列表失败";
         return false;
     }
 
     const uint16_t expectedLen =
-        static_cast<uint16_t>(sizeof(Msg_S2C_ZoneList) +
-                              static_cast<size_t>(hdr.count) * sizeof(Msg_ZoneListEntry));
+        static_cast<uint16_t>(sizeof(Msg_S2C_ZoneListRspHeader) +
+                              static_cast<size_t>(hdr.count) * sizeof(Msg_S2C_ZoneEntryWire));
     if (len < expectedLen)
     {
         errMsg = u8"区列表数据不完整";
         return false;
     }
 
-    const char* p = data + sizeof(Msg_S2C_ZoneList);
+    const char* p = data + sizeof(Msg_S2C_ZoneListRspHeader);
     for (uint16_t i = 0; i < hdr.count; ++i)
     {
-        Msg_ZoneListEntry entry{};
+        Msg_S2C_ZoneEntryWire entry{};
         std::memcpy(&entry, p, sizeof(entry));
         p += sizeof(entry);
 

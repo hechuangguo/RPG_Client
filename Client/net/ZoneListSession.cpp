@@ -162,7 +162,7 @@ void ZoneListSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data
     }
 
     const uint16_t flatId = makeMsgId(module, sub);
-    if (flatId != static_cast<uint16_t>(ClientMsgID::S2C_ZONE_LIST))
+    if (flatId != static_cast<uint16_t>(ClientMsgID::S2C_ZONE_LIST_RSP))
     {
         return;
     }
