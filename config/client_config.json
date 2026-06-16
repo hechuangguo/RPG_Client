@@ -3,6 +3,6 @@
   "windowHeight": 720,
   "logLevel": "info",
   "logToConsole": false,
-  "loginHost": "192.168.45.128",
+  "loginHost": "192.168.65.128",
   "loginPort": 9010
 }
