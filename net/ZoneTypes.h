@@ -9,7 +9,7 @@
 #include <string>
 
 /**
- * @brief 区服负载状态（与 Msg_S2C_ZoneEntryWire.loadStatus 对齐）
+ * @brief 区服负载状态（与 Common/ClientMsg.h ZoneLoadLevel 数值对齐）
  */
 enum class ZoneLoadStatus : uint8_t
 {
@@ -29,6 +29,6 @@ struct GameZoneEntry
     std::string    name;
     bool           enabled      = false;
     ZoneLoadStatus loadStatus   = ZoneLoadStatus::Smooth;
-    uint16_t       onlineCount  = 0;
+    uint32_t       onlineCount  = 0;
     uint8_t        gatewayCount = 0;
 };

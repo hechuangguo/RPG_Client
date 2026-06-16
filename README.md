@@ -143,12 +143,12 @@ git submodule update --init --recursive
 - `C2S_ZONE_LIST_REQ` (0x000B)
 - `S2C_ZONE_LIST_RSP` (0x000C) — 变长 body：`Msg_S2C_ZoneListRspHeader` + N×`Msg_S2C_ZoneEntryWire`
 
-`Msg_S2C_ZoneEntryWire` 扩展字段（v2，单条 109 字节；旧版 v1 为 104 字节，客户端自动兼容）：
+`Msg_S2C_ZoneEntryWire` 扩展字段（v2，单条 112 字节；旧版 v1 为 104 字节，客户端自动兼容）：
 
 | 字段 | 说明 |
 |------|------|
-| `loadStatus` | 0=畅通 1=繁忙 2=爆满 3=维护 |
-| `onlineCount` | 当前在线人数 |
+| `loadLevel` | `ZoneLoadLevel`：0=畅通 1=繁忙 2=爆满 3=维护 |
+| `onlineCount` | 当前在线人数（uint32） |
 | `gatewayCount` | 可用网关数量 |
 
 服务端 LoginServer 需升级 RPG_Common 并填充上述字段后，客户端才显示真实繁忙度；SuperServer 上报在线数据后由 LoginServer 合并下发（见 Server 侧实现）。

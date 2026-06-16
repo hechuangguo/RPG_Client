@@ -21,6 +21,22 @@ constexpr uint8_t kRegisterReqSub  = msgSub(static_cast<uint16_t>(ClientMsgID::C
 constexpr uint8_t kZoneListReqSub  = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_ZONE_LIST_REQ));
 constexpr uint8_t kMoveReqSub      = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_MOVE_REQ));
 constexpr uint8_t kHeartbeatSub    = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_HEARTBEAT));
+
+/** @brief 区列表 wire v1 单条大小（无 onlineCount/loadLevel 扩展字段） */
+constexpr size_t kZoneEntryWireV1Size = 104;
+
+ZoneLoadStatus loadStatusFromWire(uint8_t enabled, uint8_t loadLevel)
+{
+    if (enabled == 0)
+    {
+        return ZoneLoadStatus::Maintenance;
+    }
+    if (loadLevel <= static_cast<uint8_t>(ZoneLoadLevel::MAINTENANCE))
+    {
+        return static_cast<ZoneLoadStatus>(loadLevel);
+    }
+    return ZoneLoadStatus::Smooth;
+}
 }  // namespace
 
 void ClientMsgHandler::copyFixedString(char* dest, size_t destSize, const std::string& src)
@@ -128,7 +144,7 @@ bool ClientMsgHandler::parseZoneListRsp(const char* data,
 
     const size_t entrySize = bodyLen / hdr.count;
     const bool wireV2 = entrySize == sizeof(Msg_S2C_ZoneEntryWire);
-    const bool wireV1 = entrySize == ZONE_ENTRY_WIRE_V1_SIZE;
+    const bool wireV1 = entrySize == kZoneEntryWireV1Size;
     if (!wireV1 && !wireV2)
     {
         errMsg = u8"区列表条目格式未知";
@@ -151,19 +167,7 @@ bool ClientMsgHandler::parseZoneListRsp(const char* data,
             zone.name         = entry.name;
             zone.onlineCount  = entry.onlineCount;
             zone.gatewayCount = entry.gatewayCount;
-
-            if (!zone.enabled)
-            {
-                zone.loadStatus = ZoneLoadStatus::Maintenance;
-            }
-            else if (entry.loadStatus <= static_cast<uint8_t>(ZoneLoadStatus::Maintenance))
-            {
-                zone.loadStatus = static_cast<ZoneLoadStatus>(entry.loadStatus);
-            }
-            else
-            {
-                zone.loadStatus = ZoneLoadStatus::Smooth;
-            }
+            zone.loadStatus   = loadStatusFromWire(entry.enabled, entry.loadLevel);
         }
         else
         {
