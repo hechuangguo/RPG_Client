@@ -158,6 +158,13 @@ void GameApp::wireCallbacks()
         m_serverListPanel.setStatus(ServerListPanel::Status::Error, err);
     });
 
+    m_zoneListSession.setOnStatus([this](const std::string& msg) {
+        if (m_state == AppState::ServerList)
+        {
+            m_serverListPanel.setStatus(ServerListPanel::Status::Loading, msg);
+        }
+    });
+
     m_authLoginPanel.setOnLogin([this](const AuthLoginPanel::LoginRequest& req) {
         beginLogin(req);
     });
@@ -240,7 +247,7 @@ void GameApp::refreshZoneHomeDisplay()
 void GameApp::beginFetchZoneList()
 {
     switchState(AppState::ServerList);
-    m_serverListPanel.setStatus(ServerListPanel::Status::Loading, u8"正在连接...");
+    m_serverListPanel.setStatus(ServerListPanel::Status::Loading, u8"正在连接 LoginServer...");
     m_zoneListSession.fetchZoneList(0xFF);
 }
 

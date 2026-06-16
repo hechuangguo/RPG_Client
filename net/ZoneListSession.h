@@ -33,6 +33,9 @@ public:
     void setOnSuccess(SuccessCallback cb);
     void setOnError(ErrorCallback cb);
 
+    /** @brief 拉取过程中的状态文案（如“正在获取区列表...”） */
+    void setOnStatus(std::function<void(const std::string&)> cb);
+
     /** @brief 发起拉取（异步，主线程 poll update） */
     void fetchZoneList(uint8_t gameType = 0);
 
@@ -61,8 +64,13 @@ private:
 
     const ConfigLoader*        m_config;
     std::unique_ptr<TcpClient> m_tcp;
+    void notifyStatus(const std::string& message);
+
     State                      m_state;
     uint8_t                    m_gameType;
+    int64_t                    m_connectStartMs;
+    int64_t                    m_waitResponseStartMs;
     SuccessCallback            m_onSuccess;
     ErrorCallback              m_onError;
+    std::function<void(const std::string&)> m_onStatus;
 };
