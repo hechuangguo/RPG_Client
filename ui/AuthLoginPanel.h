@@ -38,6 +38,7 @@ public:
 
     void setOnLogin(std::function<void(const LoginRequest&)> cb);
     void setOnRegisterClick(std::function<void()> cb);
+    void setOnBackToZoneHome(std::function<void()> cb);
 
     void handleEvent(const sf::Event& event, const sf::RenderWindow& window);
     void update(float dt);
@@ -48,16 +49,21 @@ public:
 
 private:
     void refreshLoginButtonState();
+    void focusInputByIndex(std::size_t idx);
 
     UiTheme*                m_theme;
     LocalSettings*          m_settings;
     TextInput               m_accountInput;
     TextInput               m_passwordInput;
     Checkbox                m_rememberBox;
+    Checkbox                m_showPasswordBox;
     Button                  m_loginButton;
     Button                  m_registerButton;
+    Button                  m_backToZoneButton;
     std::function<void(const LoginRequest&)> m_onLogin;
     std::function<void()>   m_onRegisterClick;
+    std::function<void()>   m_onBackToZoneHome;
     std::string             m_errorMessage;
     sf::Vector2u            m_viewSize;
+    std::size_t             m_focusedInputIndex;
 };

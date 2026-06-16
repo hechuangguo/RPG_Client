@@ -48,6 +48,7 @@ public:
      */
     static std::vector<char> buildRegisterReq(const std::string& account,
                                               const std::string& password,
+                                              const std::string& confirmPassword,
                                               uint32_t zoneId,
                                               uint8_t gameType);
 

@@ -82,12 +82,14 @@ std::vector<char> ClientMsgHandler::buildLoginReq(const std::string& account,
 
 std::vector<char> ClientMsgHandler::buildRegisterReq(const std::string& account,
                                                      const std::string& password,
+                                                     const std::string& confirmPassword,
                                                      uint32_t zoneId,
                                                      uint8_t gameType)
 {
     Msg_C2S_RegisterReq body{};
     copyFixedString(body.account, sizeof(body.account), account);
     copyFixedString(body.password, sizeof(body.password), password);
+    copyFixedString(body.confirmPassword, sizeof(body.confirmPassword), confirmPassword);
     body.zoneId   = zoneId;
     body.gameType = gameType;
     std::memset(body.reserved, 0, sizeof(body.reserved));

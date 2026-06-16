@@ -15,12 +15,12 @@ int main()
         return 1;
     }
 
-    ClientLogger::instance().info("RPGClient starting");
+    ClientLogger::instance().info("RPGClient 启动");
 
     GameApp app;
     const int code = app.run();
 
-    ClientLogger::instance().info("RPGClient exit code=%d", code);
+    ClientLogger::instance().info("RPGClient 退出，返回码=%d", code);
     ClientLogger::instance().flush();
     return code;
 }

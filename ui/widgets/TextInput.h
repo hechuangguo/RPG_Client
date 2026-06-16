@@ -66,6 +66,18 @@ public:
     /** @brief 是否聚焦 */
     bool isFocused() const;
 
+    /** @brief 设置聚焦状态（供父面板切换焦点） */
+    void setFocused(bool focused);
+
+    /** @brief 是否为密码输入框 */
+    bool isPasswordField() const;
+
+    /** @brief 设置是否掩码显示（true=掩码，false=明文） */
+    void setPasswordMasked(bool masked);
+
+    /** @brief 当前是否掩码显示 */
+    bool isPasswordMasked() const;
+
 private:
     std::string displayText() const;
     void syncCursorPos();

@@ -44,21 +44,21 @@ void ScriptBindings::setUserId(uint64_t userId)
 int ScriptBindings::luaLogInfo(lua_State* L)
 {
     const char* msg = luaL_checkstring(L, 1);
-    ClientLogger::instance().info("[Lua] %s", msg);
+    ClientLogger::instance().info("【Lua】%s", msg);
     return 0;
 }
 
 int ScriptBindings::luaLogWarn(lua_State* L)
 {
     const char* msg = luaL_checkstring(L, 1);
-    ClientLogger::instance().warn("[Lua] %s", msg);
+    ClientLogger::instance().warn("【Lua】%s", msg);
     return 0;
 }
 
 int ScriptBindings::luaLogErr(lua_State* L)
 {
     const char* msg = luaL_checkstring(L, 1);
-    ClientLogger::instance().err("[Lua] %s", msg);
+    ClientLogger::instance().err("【Lua】%s", msg);
     return 0;
 }
 
@@ -78,13 +78,13 @@ int ScriptBindings::luaSendPacket(lua_State* L)
     if (s_session && s_session->isConnected())
     {
         // Stub: real send would use TcpClient via GameSession friend API
-        ClientLogger::instance().info("[Lua] send_packet module=%d sub=%d len=%zu",
+        ClientLogger::instance().info("【Lua】发送数据包 module=%d sub=%d len=%zu",
                                       module, sub, len);
         (void)bytes;
     }
     else
     {
-        ClientLogger::instance().warn("[Lua] send_packet stub (not connected)");
+        ClientLogger::instance().warn("【Lua】send_packet 为桩实现（未连接）");
     }
     return 0;
 }

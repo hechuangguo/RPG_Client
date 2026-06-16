@@ -90,14 +90,14 @@ void GameSession::start(std::unique_ptr<TcpClient> tcp, const Msg_S2C_EnterGame&
         onTcpMessage(module, sub, data, len);
     });
     m_tcp->setOnDisconnected([this]() {
-        ClientLogger::instance().warn("GameSession: disconnected");
+        ClientLogger::instance().warn("GameSession：连接已断开");
         if (m_onDisconnected)
         {
             m_onDisconnected();
         }
     });
 
-    ClientLogger::instance().info("GameSession: started user=%llu map=%u",
+    ClientLogger::instance().info("GameSession：启动完成 user=%llu map=%u",
                                   static_cast<unsigned long long>(m_localUserId), enter.mapID);
 }
 

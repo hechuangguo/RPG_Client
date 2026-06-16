@@ -61,7 +61,7 @@ void ZoneListSession::fetchZoneList(uint8_t gameType)
     m_gameType = gameType;
     m_state    = State::Connecting;
 
-    ClientLogger::instance().info("ZoneListSession: connect %s:%u",
+    ClientLogger::instance().info("ZoneListSession：连接 %s:%u",
                                   loginHost().c_str(), loginPort());
     m_tcp->connect(loginHost(), loginPort());
 }
@@ -96,7 +96,7 @@ void ZoneListSession::resetToIdle()
 
 void ZoneListSession::fail(const std::string& msg)
 {
-    ClientLogger::instance().err("ZoneListSession: %s", msg.c_str());
+    ClientLogger::instance().err("ZoneListSession：%s", msg.c_str());
     if (m_tcp)
     {
         m_tcp->disconnect();
@@ -181,7 +181,7 @@ void ZoneListSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data
     }
     resetToIdle();
 
-    ClientLogger::instance().info("ZoneListSession: received %zu zones", zones.size());
+    ClientLogger::instance().info("ZoneListSession：收到 %zu 个区服", zones.size());
     if (m_onSuccess)
     {
         m_onSuccess(zones);

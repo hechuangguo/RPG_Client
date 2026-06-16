@@ -86,7 +86,7 @@ void ClientScriptHost::onQuestInfo(const char* data, uint16_t len)
             lua_pushboolean(L, 0);
             if (lua_pcall(L, 5, 0, 0) != LUA_OK)
             {
-                ClientLogger::instance().warn("ClientScriptHost: OnQuestInfo error");
+                ClientLogger::instance().warn("ClientScriptHost：调用 OnQuestInfo 失败");
                 lua_pop(L, 1);
             }
         }

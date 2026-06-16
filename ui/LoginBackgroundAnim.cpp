@@ -104,7 +104,7 @@ bool tryLoadTexture(sf::Texture& texture, const std::string& path)
     }
     catch (const std::exception& ex)
     {
-        ClientLogger::instance().warn("LoginBackgroundAnim: texture load failed %s: %s",
+        ClientLogger::instance().warn("LoginBackgroundAnim：纹理加载失败 %s：%s",
                                       path.c_str(), ex.what());
         return false;
     }
@@ -148,26 +148,26 @@ bool LoginBackgroundAnim::load(const std::string& exeDir)
     }
     else
     {
-        ClientLogger::instance().warn("LoginBackgroundAnim: config not found: %s", jsonPath.c_str());
+        ClientLogger::instance().warn("LoginBackgroundAnim：未找到配置文件：%s", jsonPath.c_str());
     }
 
     const std::string sheetPath = PathUtil::joinPath(uiDir, sheetName);
     if (!tryLoadTexture(m_texture, sheetPath))
     {
-        ClientLogger::instance().warn("LoginBackgroundAnim: sheet not found: %s", sheetPath.c_str());
+        ClientLogger::instance().warn("LoginBackgroundAnim：未找到图集：%s", sheetPath.c_str());
         return false;
     }
 
     const sf::Vector2u texSize = m_texture.getSize();
     if (texSize.x == 0 || texSize.y == 0 || m_frames <= 0)
     {
-        ClientLogger::instance().warn("LoginBackgroundAnim: invalid sheet size or frames");
+        ClientLogger::instance().warn("LoginBackgroundAnim：图集尺寸或帧数无效");
         return false;
     }
 
     if (texSize.x / static_cast<unsigned>(m_frames) == 0)
     {
-        ClientLogger::instance().warn("LoginBackgroundAnim: invalid sheet size or frames");
+        ClientLogger::instance().warn("LoginBackgroundAnim：图集尺寸或帧数无效");
         return false;
     }
 
@@ -176,13 +176,13 @@ bool LoginBackgroundAnim::load(const std::string& exeDir)
     if (aspect < 1.4f || aspect > 2.1f)
     {
         ClientLogger::instance().warn(
-            "LoginBackgroundAnim: sheet layout invalid (frame aspect %.2f), use static fallback",
+            "LoginBackgroundAnim：图集布局无效（帧宽高比 %.2f），回退静态背景",
             aspect);
         return false;
     }
 
     m_loaded = true;
-    ClientLogger::instance().info("LoginBackgroundAnim: loaded %s (%d frames @ %.1f fps)",
+    ClientLogger::instance().info("LoginBackgroundAnim：已加载 %s（%d 帧，%.1f fps）",
                                   sheetPath.c_str(),
                                   m_frames,
                                   m_fps);

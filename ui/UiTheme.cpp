@@ -23,12 +23,12 @@ bool tryLoadFont(sf::Font& font, const std::string& path)
     }
     catch (const std::bad_alloc&)
     {
-        ClientLogger::instance().warn("UiTheme: font too large or OOM: %s", path.c_str());
+        ClientLogger::instance().warn("UiTheme：字体过大或内存不足：%s", path.c_str());
         return false;
     }
     catch (const std::exception& ex)
     {
-        ClientLogger::instance().warn("UiTheme: font load failed %s: %s", path.c_str(), ex.what());
+        ClientLogger::instance().warn("UiTheme：字体加载失败 %s：%s", path.c_str(), ex.what());
         return false;
     }
 }
@@ -59,16 +59,16 @@ bool UiTheme::loadFont(const std::string& primaryPath)
         if (tryLoadFont(m_font, path))
         {
             m_fontLoaded = true;
-            ClientLogger::instance().info("UiTheme: loaded font %s", path);
+            ClientLogger::instance().info("UiTheme：已加载字体 %s", path);
             return true;
         }
         if (path != candidates[2])
         {
-            ClientLogger::instance().warn("UiTheme: font not found: %s", path);
+            ClientLogger::instance().warn("UiTheme：未找到字体：%s", path);
         }
     }
 
-    ClientLogger::instance().err("UiTheme: no font available");
+    ClientLogger::instance().err("UiTheme：没有可用字体");
     return false;
 }
 
@@ -79,7 +79,7 @@ bool UiTheme::loadLoginBackground(const std::string& fallbackStaticPath, const s
     if (!exeDir.empty() && m_loginAnim.load(exeDir))
     {
         m_loginBgLoaded = true;
-        ClientLogger::instance().info("UiTheme: using animated login background sheet");
+        ClientLogger::instance().info("UiTheme：使用登录动态背景图集");
         return true;
     }
 
@@ -93,19 +93,19 @@ bool UiTheme::loadLoginBackground(const std::string& fallbackStaticPath, const s
         if (m_loginBg.loadFromFile(fallbackStaticPath))
         {
             m_loginBgLoaded = true;
-            ClientLogger::instance().info("UiTheme: loaded static login background %s",
+            ClientLogger::instance().info("UiTheme：已加载静态登录背景 %s",
                                           fallbackStaticPath.c_str());
             return true;
         }
     }
     catch (const std::exception& ex)
     {
-        ClientLogger::instance().warn("UiTheme: login background load failed %s: %s",
+        ClientLogger::instance().warn("UiTheme：登录背景加载失败 %s：%s",
                                       fallbackStaticPath.c_str(), ex.what());
         return false;
     }
 
-    ClientLogger::instance().warn("UiTheme: login background not found: %s",
+    ClientLogger::instance().warn("UiTheme：未找到登录背景：%s",
                                   fallbackStaticPath.c_str());
     return false;
 }

@@ -14,6 +14,7 @@
 #pragma once
 
 #include "ui/widgets/Button.h"
+#include "ui/widgets/Checkbox.h"
 #include "ui/widgets/TextInput.h"
 
 #include <SFML/Graphics.hpp>
@@ -35,6 +36,7 @@ public:
     {
         std::string account;
         std::string password;
+        std::string confirmPassword;
         uint32_t    zoneId;
         uint8_t     gameType;
     };
@@ -57,6 +59,7 @@ public:
 
     void setOnRegister(std::function<void(const RegisterRequest&)> cb);
     void setOnBack(std::function<void()> cb);
+    void setOnBackToZoneHome(std::function<void()> cb);
 
     void handleEvent(const sf::Event& event, const sf::RenderWindow& window);
     void update(float dt);
@@ -66,18 +69,23 @@ public:
 
 private:
     bool validate(std::string& err) const;
+    void focusInputByIndex(std::size_t idx);
 
     UiTheme*     m_theme;
     TextInput    m_accountInput;
     TextInput    m_passwordInput;
     TextInput    m_confirmInput;
+    Checkbox     m_showPasswordBox;
     Button       m_registerButton;
     Button       m_backButton;
+    Button       m_backToZoneButton;
     std::function<void(const RegisterRequest&)> m_onRegister;
     std::function<void()> m_onBack;
+    std::function<void()> m_onBackToZoneHome;
     std::string  m_message;
     bool         m_messageIsError;
     uint32_t     m_zoneId;
     uint8_t      m_gameType;
     sf::Vector2u m_viewSize;
+    std::size_t  m_focusedInputIndex;
 };

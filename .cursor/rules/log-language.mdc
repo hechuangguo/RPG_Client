@@ -1,0 +1,15 @@
+---
+description: 客户端日志文案中文规范
+alwaysApply: true
+---
+
+# 日志语言规范
+
+- 对 `ClientLogger::info/warn/err` 的固定文案，必须使用中文。
+- 禁止新增英文固定日志文案（缩写或专有名词可保留，如 Lua、LoginServer）。
+- 修改日志文案时，必须保持格式占位符与参数顺序一致。
+
+示例：
+
+- 不推荐：`ClientLogger::instance().info("LoginSession: connect %s:%u", host, port);`
+- 推荐：`ClientLogger::instance().info("LoginSession：连接 %s:%u", host, port);`

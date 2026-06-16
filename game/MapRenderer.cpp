@@ -32,11 +32,11 @@ bool MapRenderer::load(uint32_t mapId)
     const std::string path = PathUtil::joinPath(PathUtil::mapPath(mapId), "ground.json");
     if (parseGroundJson(path))
     {
-        ClientLogger::instance().info("MapRenderer: loaded %s", path.c_str());
+        ClientLogger::instance().info("MapRenderer：已加载地图 %s", path.c_str());
     }
     else
     {
-        ClientLogger::instance().warn("MapRenderer: fallback default map for %u", mapId);
+        ClientLogger::instance().warn("MapRenderer：地图 %u 加载失败，回退默认地图", mapId);
         generateDefaultMap();
     }
 

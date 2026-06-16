@@ -91,13 +91,14 @@ void LoginSession::startLogin(const std::string& account,
     m_gotGatewayInfo = false;
     m_state          = State::ConnectLogin;
 
-    ClientLogger::instance().info("LoginSession: connect LoginServer %s:%u zone=%u",
+    ClientLogger::instance().info("LoginSession：连接 LoginServer %s:%u，区服=%u",
                                   loginHost().c_str(), loginPort(), zoneId);
     m_tcp->connect(loginHost(), loginPort());
 }
 
 void LoginSession::startRegister(const std::string& account,
                                  const std::string& password,
+                                 const std::string& confirmPassword,
                                  uint32_t zoneId,
                                  uint8_t gameType)
 {
@@ -114,11 +115,12 @@ void LoginSession::startRegister(const std::string& account,
     m_isRegisterFlow = true;
     m_account        = account;
     m_password       = password;
+    m_confirmPassword = confirmPassword;
     m_zoneId         = zoneId;
     m_gameType       = gameType;
     m_state          = State::RegisterConnect;
 
-    ClientLogger::instance().info("LoginSession: register connect %s:%u", loginHost().c_str(), loginPort());
+    ClientLogger::instance().info("LoginSession：注册流程连接 %s:%u", loginHost().c_str(), loginPort());
     m_tcp->connect(loginHost(), loginPort());
 }
 
@@ -169,7 +171,7 @@ void LoginSession::resetToIdle()
 
 void LoginSession::fail(const std::string& msg)
 {
-    ClientLogger::instance().err("LoginSession: %s", msg.c_str());
+    ClientLogger::instance().err("LoginSession：%s", msg.c_str());
     if (m_tcp)
     {
         m_tcp->disconnect();
@@ -228,7 +230,8 @@ void LoginSession::sendRegisterReq()
     {
         return;
     }
-    const auto packet = ClientMsgHandler::buildRegisterReq(m_account, m_password, m_zoneId, m_gameType);
+    const auto packet = ClientMsgHandler::buildRegisterReq(
+        m_account, m_password, m_confirmPassword, m_zoneId, m_gameType);
     m_tcp->sendRaw(packet);
 }
 
@@ -306,7 +309,7 @@ void LoginSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, u
             m_state = State::SwitchingGateway;
             m_tcp->disconnect();
             m_state = State::ConnectGateway;
-            ClientLogger::instance().info("LoginSession: connect Gateway %s:%u",
+            ClientLogger::instance().info("LoginSession：连接 Gateway %s:%u",
                                           m_gatewayHost.c_str(), m_gatewayPort);
             m_tcp->connect(m_gatewayHost, m_gatewayPort);
         }
@@ -320,7 +323,7 @@ void LoginSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, u
             return;
         }
 
-        ClientLogger::instance().info("LoginSession: enter game user=%llu map=%u",
+        ClientLogger::instance().info("LoginSession：进入游戏 user=%llu map=%u",
                                       static_cast<unsigned long long>(enter.userID), enter.mapID);
         resetToIdle();
         if (m_onEnterGame)
@@ -346,7 +349,7 @@ void LoginSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, u
             return;
         }
 
-        ClientLogger::instance().info("LoginSession: register success");
+        ClientLogger::instance().info("LoginSession：注册成功");
         if (m_onRegisterSuccess)
         {
             m_onRegisterSuccess();

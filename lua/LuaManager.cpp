@@ -45,7 +45,7 @@ bool LuaManager::init(const std::string& exeDir)
     }
 
     m_ready = true;
-    ClientLogger::instance().info("LuaManager: initialized");
+    ClientLogger::instance().info("LuaManager：初始化完成");
     return true;
 }
 
@@ -86,7 +86,7 @@ bool LuaManager::callGlobalVoid(const char* funcName)
     if (lua_pcall(m_L, 0, 0, 0) != LUA_OK)
     {
         m_lastError = lua_tostring(m_L, -1);
-        ClientLogger::instance().err("LuaManager: %s failed: %s", funcName, m_lastError.c_str());
+        ClientLogger::instance().err("LuaManager：调用 %s 失败：%s", funcName, m_lastError.c_str());
         lua_pop(m_L, 1);
         return false;
     }
@@ -113,7 +113,7 @@ bool LuaManager::callGlobalVoid2(const char* funcName, double a, double b)
     if (lua_pcall(m_L, 2, 0, 0) != LUA_OK)
     {
         m_lastError = lua_tostring(m_L, -1);
-        ClientLogger::instance().err("LuaManager: %s failed: %s", funcName, m_lastError.c_str());
+        ClientLogger::instance().err("LuaManager：调用 %s 失败：%s", funcName, m_lastError.c_str());
         lua_pop(m_L, 1);
         return false;
     }
@@ -139,7 +139,7 @@ bool LuaManager::callGlobalVoid1(const char* funcName, double a)
     if (lua_pcall(m_L, 1, 0, 0) != LUA_OK)
     {
         m_lastError = lua_tostring(m_L, -1);
-        ClientLogger::instance().err("LuaManager: %s failed: %s", funcName, m_lastError.c_str());
+        ClientLogger::instance().err("LuaManager：调用 %s 失败：%s", funcName, m_lastError.c_str());
         lua_pop(m_L, 1);
         return false;
     }
@@ -166,7 +166,7 @@ bool LuaManager::setupPackagePath(const std::string& exeDir)
     if (luaL_dostring(m_L, luaCode.c_str()) != LUA_OK)
     {
         m_lastError = lua_tostring(m_L, -1);
-        ClientLogger::instance().err("LuaManager: package.path error: %s", m_lastError.c_str());
+        ClientLogger::instance().err("LuaManager：设置 package.path 失败：%s", m_lastError.c_str());
         lua_pop(m_L, 1);
         return false;
     }
@@ -179,7 +179,7 @@ bool LuaManager::loadInitScript()
     if (luaL_dofile(m_L, initPath.c_str()) != LUA_OK)
     {
         m_lastError = lua_tostring(m_L, -1);
-        ClientLogger::instance().warn("LuaManager: init.lua missing, using stub: %s", m_lastError.c_str());
+        ClientLogger::instance().warn("LuaManager：init.lua 缺失，使用桩脚本：%s", m_lastError.c_str());
         lua_pop(m_L, 1);
 
         const char* stub = R"(
@@ -199,7 +199,7 @@ function OnBagInfo(slotCount) end
 
     if (!callGlobalVoid("OnClientInit"))
     {
-        ClientLogger::instance().warn("LuaManager: OnClientInit not defined");
+        ClientLogger::instance().warn("LuaManager：未定义 OnClientInit");
     }
     return true;
 }

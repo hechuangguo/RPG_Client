@@ -11,6 +11,7 @@
 AuthLoginPanel::AuthLoginPanel()
     : m_theme(nullptr)
     , m_settings(nullptr)
+    , m_focusedInputIndex(0)
 {
 }
 
@@ -28,8 +29,13 @@ void AuthLoginPanel::setup(UiTheme* theme, LocalSettings* settings, const sf::Ve
     m_accountInput.setup(theme, u8"请输入账号", px + 40.f, py + 100.f, panelW - 80.f, 36.f);
     m_passwordInput.setup(theme, u8"请输入密码", px + 40.f, py + 150.f, panelW - 80.f, 36.f, true);
     m_rememberBox.setup(theme, u8"记住账号", px + 40.f, py + 200.f);
+    m_showPasswordBox.setup(theme, u8"显示密码", px + 180.f, py + 200.f);
     m_loginButton.setup(theme, u8"登录", px + 40.f, py + 250.f, 160.f, 40.f);
     m_registerButton.setup(theme, u8"注册账号", px + 220.f, py + 250.f, 160.f, 40.f);
+    m_backToZoneButton.setup(theme, u8"返回选择服务器", px + 40.f, py + 300.f, panelW - 80.f, 36.f);
+    m_showPasswordBox.setChecked(false);
+    m_passwordInput.setPasswordMasked(true);
+    focusInputByIndex(0);
 
     m_loginButton.setOnClick([this]() {
         if (!m_onLogin || m_accountInput.text().empty())
@@ -49,6 +55,13 @@ void AuthLoginPanel::setup(UiTheme* theme, LocalSettings* settings, const sf::Ve
             m_onRegisterClick();
         }
     });
+
+    m_backToZoneButton.setOnClick([this]() {
+        if (m_onBackToZoneHome)
+        {
+            m_onBackToZoneHome();
+        }
+    });
 }
 
 void AuthLoginPanel::setOnLogin(std::function<void(const LoginRequest&)> cb)
@@ -61,13 +74,46 @@ void AuthLoginPanel::setOnRegisterClick(std::function<void()> cb)
     m_onRegisterClick = std::move(cb);
 }
 
+void AuthLoginPanel::setOnBackToZoneHome(std::function<void()> cb)
+{
+    m_onBackToZoneHome = std::move(cb);
+}
+
 void AuthLoginPanel::handleEvent(const sf::Event& event, const sf::RenderWindow& window)
 {
+    if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Tab)
+    {
+        if (event.key.shift)
+        {
+            m_focusedInputIndex = (m_focusedInputIndex == 0) ? 1 : (m_focusedInputIndex - 1);
+        }
+        else
+        {
+            m_focusedInputIndex = (m_focusedInputIndex + 1) % 2;
+        }
+        focusInputByIndex(m_focusedInputIndex);
+        return;
+    }
+
     m_accountInput.handleEvent(event, window);
     m_passwordInput.handleEvent(event, window);
     m_rememberBox.handleEvent(event, window);
+    m_showPasswordBox.handleEvent(event, window);
     m_loginButton.handleEvent(event, window);
     m_registerButton.handleEvent(event, window);
+    m_backToZoneButton.handleEvent(event, window);
+
+    m_passwordInput.setPasswordMasked(!m_showPasswordBox.isChecked());
+
+    if (m_accountInput.isFocused())
+    {
+        m_focusedInputIndex = 0;
+    }
+    else if (m_passwordInput.isFocused())
+    {
+        m_focusedInputIndex = 1;
+    }
+
     refreshLoginButtonState();
 }
 
@@ -95,8 +141,10 @@ void AuthLoginPanel::draw(sf::RenderTarget& target) const
     m_accountInput.draw(target);
     m_passwordInput.draw(target);
     m_rememberBox.draw(target);
+    m_showPasswordBox.draw(target);
     m_loginButton.draw(target);
     m_registerButton.draw(target);
+    m_backToZoneButton.draw(target);
 
     if (!m_errorMessage.empty())
     {
@@ -132,4 +180,10 @@ void AuthLoginPanel::applyLocalSettings()
 void AuthLoginPanel::refreshLoginButtonState()
 {
     m_loginButton.setEnabled(!m_accountInput.text().empty());
+}
+
+void AuthLoginPanel::focusInputByIndex(std::size_t idx)
+{
+    m_accountInput.setFocused(idx == 0);
+    m_passwordInput.setFocused(idx == 1);
 }

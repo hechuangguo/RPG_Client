@@ -104,6 +104,12 @@ Ensure `config/`, `script/`, `database/`, `basefile/`, `map/`, `assets/` are bes
 
 Logs: 仓库根目录 `logs/client_YYYYMMDD.log`（从 exe 向上查找含 `main.cpp` 的目录；发布包无源码时回退 exe 旁 `logs/`）
 
+### 日志文案规范
+
+- 客户端日志固定文案统一使用中文（`ClientLogger::info/warn/err`）。
+- 保留格式占位符与参数顺序（如 `%s`、`%d`、`%u`、`%zu` 等）不变。
+- 错误日志建议包含“模块 + 动作”上下文，便于定位问题，例如：`LoginSession：连接失败：%s`。
+
 ## 中文 UI 与 UTF-8
 
 - 源码字符串为 UTF-8（`u8""` + MSVC `/utf-8`）。

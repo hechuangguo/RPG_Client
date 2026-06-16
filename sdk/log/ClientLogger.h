@@ -30,7 +30,7 @@ enum class ClientLogLevel : int
  * 使用示例：
  * @code
  *   ClientLogger::instance().setLogToConsole(true);
- *   ClientLogger::instance().info("Client started");
+ *   ClientLogger::instance().info("客户端启动完成");
  * @endcode
  */
 class ClientLogger

@@ -108,7 +108,7 @@ bool GameApp::init()
     wireCallbacks();
     m_lastLuaTickMs = TimeUtil::nowMs();
 
-    ClientLogger::instance().info("GameApp: initialized");
+    ClientLogger::instance().info("GameApp：初始化完成");
     return true;
 }
 
@@ -167,12 +167,20 @@ void GameApp::wireCallbacks()
         switchState(AppState::Register);
     });
 
+    m_authLoginPanel.setOnBackToZoneHome([this]() {
+        switchState(AppState::ZoneHome);
+    });
+
     m_registerPanel.setOnRegister([this](const RegisterPanel::RegisterRequest& req) {
         beginRegister(req);
     });
 
     m_registerPanel.setOnBack([this]() {
         switchState(AppState::AuthLogin);
+    });
+
+    m_registerPanel.setOnBackToZoneHome([this]() {
+        switchState(AppState::ZoneHome);
     });
 
     m_loginSession.setOnEnterGame([this](const Msg_S2C_EnterGame& enter) {
@@ -204,7 +212,7 @@ void GameApp::wireCallbacks()
     });
 
     m_gameSession.setOnError([this](const std::string& err) {
-        ClientLogger::instance().err("GameSession: %s", err.c_str());
+        ClientLogger::instance().err("GameSession：%s", err.c_str());
     });
 
     m_gameSession.setOnDisconnected([this]() {
@@ -268,7 +276,7 @@ void GameApp::finishLoadingAuth()
     {
         if (!m_luaManager.init(exeDir))
         {
-            ClientLogger::instance().warn("GameApp: Lua init failed");
+            ClientLogger::instance().warn("GameApp：Lua 初始化失败");
         }
         m_luaInitialized = true;
     }
@@ -471,7 +479,8 @@ void GameApp::beginRegister(const RegisterPanel::RegisterRequest& req)
     m_pendingGameType = req.gameType;
 
     switchState(AppState::Connecting);
-    m_loginSession.startRegister(req.account, req.password, req.zoneId, req.gameType);
+    m_loginSession.startRegister(
+        req.account, req.password, req.confirmPassword, req.zoneId, req.gameType);
 }
 
 void GameApp::onEnterGame(const Msg_S2C_EnterGame& enter)
@@ -486,7 +495,7 @@ void GameApp::onEnterGame(const Msg_S2C_EnterGame& enter)
     m_gameScene.setViewSize(m_window.getSize());
 
     switchState(AppState::Game);
-    ClientLogger::instance().info("GameApp: entered game map=%u", enter.mapID);
+    ClientLogger::instance().info("GameApp：进入游戏成功，地图=%u", enter.mapID);
 }
 
 void GameApp::onResize(const sf::Vector2u& size)

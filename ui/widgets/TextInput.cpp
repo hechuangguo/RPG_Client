@@ -184,6 +184,33 @@ bool TextInput::isFocused() const
     return m_focused;
 }
 
+void TextInput::setFocused(bool focused)
+{
+    m_focused = focused;
+    if (m_focused)
+    {
+        m_blinkElapsed  = 0.f;
+        m_cursorVisible = true;
+        syncCursorPos();
+    }
+}
+
+bool TextInput::isPasswordField() const
+{
+    return m_password;
+}
+
+void TextInput::setPasswordMasked(bool masked)
+{
+    m_password = masked;
+    syncCursorPos();
+}
+
+bool TextInput::isPasswordMasked() const
+{
+    return m_password;
+}
+
 std::string TextInput::displayText() const
 {
     if (m_password && !m_text.empty())

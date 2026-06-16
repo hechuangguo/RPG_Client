@@ -73,6 +73,7 @@ public:
      */
     void startRegister(const std::string& account,
                        const std::string& password,
+                       const std::string& confirmPassword,
                        uint32_t zoneId,
                        uint8_t gameType);
 
@@ -133,6 +134,7 @@ private:
 
     std::string             m_account;
     std::string             m_password;
+    std::string             m_confirmPassword;
     uint32_t                m_zoneId;
     uint8_t                 m_gameType;
 
