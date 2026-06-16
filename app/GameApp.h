@@ -95,6 +95,8 @@ private:
     std::string        m_loadingMessage;
     uint32_t           m_pendingZoneId;
     uint8_t            m_pendingGameType;
+    std::string        m_pendingRegisterAccount;
+    std::string        m_pendingRegisterPassword;
     bool               m_luaInitialized;
     bool               m_loadingAuthPending;
     int64_t            m_lastLuaTickMs;

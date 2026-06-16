@@ -31,7 +31,13 @@ void Checkbox::handleEvent(const sf::Event& event, const sf::RenderWindow& windo
     const sf::Vector2i pixel(event.mouseButton.x, event.mouseButton.y);
     const sf::Vector2f pos = window.mapPixelToCoords(pixel);
 
-    sf::FloatRect hit(m_boxBounds.left, m_boxBounds.top, 200.f, m_boxBounds.height);
+    float labelW = 80.f;
+    if (m_theme)
+    {
+        labelW = m_theme->measureTextWidth(m_label, 16);
+    }
+    const float hitW = m_boxBounds.width + 8.f + labelW;
+    sf::FloatRect hit(m_boxBounds.left, m_boxBounds.top, hitW, m_boxBounds.height);
     if (hit.contains(pos))
     {
         m_checked = !m_checked;

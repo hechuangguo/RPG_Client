@@ -170,6 +170,7 @@ void GameApp::wireCallbacks()
     });
 
     m_authLoginPanel.setOnRegisterClick([this]() {
+        m_authLoginPanel.setSuccessMessage("");
         m_registerPanel.setZone(m_selectedZone.zoneId, m_selectedZone.gameType);
         switchState(AppState::Register);
     });
@@ -202,7 +203,10 @@ void GameApp::wireCallbacks()
     });
 
     m_loginSession.setOnRegisterSuccess([this]() {
-        m_registerPanel.setMessage(u8"注册成功，请返回登录", false);
+        m_authLoginPanel.setCredentials(m_pendingRegisterAccount, m_pendingRegisterPassword);
+        m_authLoginPanel.setSuccessMessage(u8"注册成功！账号已填入，可直接登录");
+        m_registerPanel.setMessage("", false);
+        m_statusMessage.clear();
         switchState(AppState::AuthLogin);
     });
 
@@ -476,14 +480,17 @@ void GameApp::beginLogin(const AuthLoginPanel::LoginRequest& req)
     m_localSettings.save();
 
     m_authLoginPanel.setErrorMessage("");
+    m_authLoginPanel.setSuccessMessage("");
     switchState(AppState::Connecting);
     m_loginSession.startLogin(req.account, req.password, m_pendingZoneId, m_pendingGameType);
 }
 
 void GameApp::beginRegister(const RegisterPanel::RegisterRequest& req)
 {
-    m_pendingZoneId   = req.zoneId;
-    m_pendingGameType = req.gameType;
+    m_pendingZoneId              = req.zoneId;
+    m_pendingGameType            = req.gameType;
+    m_pendingRegisterAccount     = req.account;
+    m_pendingRegisterPassword    = req.password;
 
     switchState(AppState::Connecting);
     m_loginSession.startRegister(

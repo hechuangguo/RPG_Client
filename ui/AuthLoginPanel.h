@@ -45,11 +45,14 @@ public:
     void draw(sf::RenderTarget& target) const;
 
     void setErrorMessage(const std::string& msg);
+    void setSuccessMessage(const std::string& msg);
+    void setCredentials(const std::string& account, const std::string& password);
     void applyLocalSettings();
 
 private:
     void refreshLoginButtonState();
     void focusInputByIndex(std::size_t idx);
+    float successToastAlpha() const;
 
     UiTheme*                m_theme;
     LocalSettings*          m_settings;
@@ -64,6 +67,8 @@ private:
     std::function<void()>   m_onRegisterClick;
     std::function<void()>   m_onBackToZoneHome;
     std::string             m_errorMessage;
+    std::string             m_successMessage;
+    float                   m_successElapsed;
     sf::Vector2u            m_viewSize;
     std::size_t             m_focusedInputIndex;
 };

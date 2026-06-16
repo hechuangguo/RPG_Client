@@ -8,9 +8,22 @@
 #include "ui/UiTheme.h"
 #include "util/LocalSettings.h"
 
+#include <algorithm>
+
+namespace
+{
+constexpr float kSuccessHoldSec = 3.f;
+constexpr float kSuccessFadeSec = 1.f;
+constexpr float kSuccessBannerX = 40.f;
+constexpr float kSuccessBannerY = -44.f;
+constexpr float kSuccessBannerH = 40.f;
+constexpr float kSuccessTextY   = -34.f;
+}  // namespace
+
 AuthLoginPanel::AuthLoginPanel()
     : m_theme(nullptr)
     , m_settings(nullptr)
+    , m_successElapsed(0.f)
     , m_focusedInputIndex(0)
 {
 }
@@ -121,6 +134,18 @@ void AuthLoginPanel::update(float dt)
 {
     m_accountInput.update(dt);
     m_passwordInput.update(dt);
+
+    if (m_successMessage.empty())
+    {
+        return;
+    }
+
+    m_successElapsed += dt;
+    if (m_successElapsed >= kSuccessHoldSec + kSuccessFadeSec)
+    {
+        m_successMessage.clear();
+        m_successElapsed = 0.f;
+    }
 }
 
 void AuthLoginPanel::draw(sf::RenderTarget& target) const
@@ -156,11 +181,68 @@ void AuthLoginPanel::draw(sf::RenderTarget& target) const
             14,
             sf::Color(255, 120, 100));
     }
+
+    if (!m_successMessage.empty())
+    {
+        const float alpha = successToastAlpha();
+        const auto  a     = static_cast<sf::Uint8>(alpha * 255.f);
+
+        sf::RectangleShape banner({panelW - kSuccessBannerX * 2.f, kSuccessBannerH});
+        banner.setPosition(px + kSuccessBannerX, py + kSuccessBannerY);
+        banner.setFillColor(sf::Color(35, 110, 85, static_cast<sf::Uint8>(alpha * 160.f)));
+        banner.setOutlineColor(sf::Color(130, 230, 170, a));
+        banner.setOutlineThickness(1.f);
+        target.draw(banner);
+
+        m_theme->drawTextCentered(
+            target,
+            m_successMessage,
+            px + panelW / 2.f,
+            py + kSuccessTextY,
+            18,
+            sf::Color(200, 255, 220, a),
+            false);
+    }
 }
 
 void AuthLoginPanel::setErrorMessage(const std::string& msg)
 {
     m_errorMessage = msg;
+    if (!msg.empty())
+    {
+        m_successMessage.clear();
+        m_successElapsed = 0.f;
+    }
+}
+
+void AuthLoginPanel::setSuccessMessage(const std::string& msg)
+{
+    m_successMessage = msg;
+    m_errorMessage.clear();
+    m_successElapsed = 0.f;
+}
+
+float AuthLoginPanel::successToastAlpha() const
+{
+    if (m_successMessage.empty())
+    {
+        return 0.f;
+    }
+    if (m_successElapsed <= kSuccessHoldSec)
+    {
+        return 1.f;
+    }
+    const float fade = (m_successElapsed - kSuccessHoldSec) / kSuccessFadeSec;
+    return std::max(0.f, 1.f - fade);
+}
+
+void AuthLoginPanel::setCredentials(const std::string& account, const std::string& password)
+{
+    m_accountInput.setText(account);
+    m_passwordInput.setText(password);
+    m_showPasswordBox.setChecked(false);
+    m_passwordInput.setPasswordMasked(true);
+    refreshLoginButtonState();
 }
 
 void AuthLoginPanel::applyLocalSettings()
