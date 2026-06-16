@@ -67,6 +67,35 @@ std::string PathUtil::joinPath(const std::string& left, const std::string& right
     return normalizePath(left + right);
 }
 
+std::string PathUtil::getProjectRoot()
+{
+    std::filesystem::path dir(getExeDir());
+
+    for (int depth = 0; depth < 8; ++depth)
+    {
+        const std::filesystem::path marker = dir / "main.cpp";
+        std::error_code ec;
+        if (std::filesystem::exists(marker, ec))
+        {
+            return normalizePath(dir.string());
+        }
+
+        const std::filesystem::path parent = dir.parent_path();
+        if (parent == dir || parent.empty())
+        {
+            break;
+        }
+        dir = parent;
+    }
+
+    return getExeDir();
+}
+
+std::string PathUtil::logDir()
+{
+    return joinPath(getProjectRoot(), "logs");
+}
+
 std::string PathUtil::mapPath(uint32_t mapId)
 {
     char idBuf[16];

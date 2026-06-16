@@ -114,28 +114,82 @@ bool ClientMsgHandler::parseZoneListRsp(const char* data,
         return false;
     }
 
-    const uint16_t expectedLen =
-        static_cast<uint16_t>(sizeof(Msg_S2C_ZoneListRspHeader) +
-                              static_cast<size_t>(hdr.count) * sizeof(Msg_S2C_ZoneEntryWire));
-    if (len < expectedLen)
+    const size_t bodyLen = len - sizeof(Msg_S2C_ZoneListRspHeader);
+    if (hdr.count == 0)
+    {
+        return true;
+    }
+
+    if (bodyLen % hdr.count != 0)
     {
         errMsg = u8"区列表数据不完整";
+        return false;
+    }
+
+    const size_t entrySize = bodyLen / hdr.count;
+    const bool wireV2 = entrySize == sizeof(Msg_S2C_ZoneEntryWire);
+    const bool wireV1 = entrySize == ZONE_ENTRY_WIRE_V1_SIZE;
+    if (!wireV1 && !wireV2)
+    {
+        errMsg = u8"区列表条目格式未知";
         return false;
     }
 
     const char* p = data + sizeof(Msg_S2C_ZoneListRspHeader);
     for (uint16_t i = 0; i < hdr.count; ++i)
     {
-        Msg_S2C_ZoneEntryWire entry{};
-        std::memcpy(&entry, p, sizeof(entry));
-        p += sizeof(entry);
-
         GameZoneEntry zone{};
-        zone.zoneId   = entry.zoneId;
-        zone.gameType = entry.gameType;
-        zone.enabled  = entry.enabled != 0;
-        zone.name     = entry.name;
+
+        if (wireV2)
+        {
+            Msg_S2C_ZoneEntryWire entry{};
+            std::memcpy(&entry, p, sizeof(entry));
+
+            zone.zoneId       = entry.zoneId;
+            zone.gameType     = entry.gameType;
+            zone.enabled      = entry.enabled != 0;
+            zone.name         = entry.name;
+            zone.onlineCount  = entry.onlineCount;
+            zone.gatewayCount = entry.gatewayCount;
+
+            if (!zone.enabled)
+            {
+                zone.loadStatus = ZoneLoadStatus::Maintenance;
+            }
+            else if (entry.loadStatus <= static_cast<uint8_t>(ZoneLoadStatus::Maintenance))
+            {
+                zone.loadStatus = static_cast<ZoneLoadStatus>(entry.loadStatus);
+            }
+            else
+            {
+                zone.loadStatus = ZoneLoadStatus::Smooth;
+            }
+        }
+        else
+        {
+            struct ZoneEntryWireV1
+            {
+                uint32_t zoneId;
+                uint8_t  gameType;
+                uint8_t  enabled;
+                char     name[32];
+                char     ip[64];
+                uint16_t superPort;
+            };
+
+            ZoneEntryWireV1 entry{};
+            std::memcpy(&entry, p, sizeof(entry));
+
+            zone.zoneId   = entry.zoneId;
+            zone.gameType = entry.gameType;
+            zone.enabled  = entry.enabled != 0;
+            zone.name     = entry.name;
+            zone.loadStatus =
+                zone.enabled ? ZoneLoadStatus::Smooth : ZoneLoadStatus::Maintenance;
+        }
+
         out.push_back(zone);
+        p += entrySize;
     }
     return true;
 }

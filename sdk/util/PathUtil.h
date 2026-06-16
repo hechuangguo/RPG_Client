@@ -2,7 +2,8 @@
  * @file    PathUtil.h
  * @brief   客户端路径解析工具
  *
- * 以 .exe 所在目录为基准解析 logs/、map/、config/ 等相对路径。
+ * 以 .exe 所在目录为基准解析 map/、config/ 等运行时资源；
+ * 日志目录通过向上查找 main.cpp 定位项目根下的 logs/。
  *
  * 线程：仅主线程调用，非线程安全。
  */
@@ -31,6 +32,18 @@ public:
      * @return 拼接后的路径
      */
     static std::string joinPath(const std::string& left, const std::string& right);
+
+    /**
+     * @brief 获取项目根目录（含 main.cpp 的目录）
+     * @return 从 exe 向上查找；未找到时回退 getExeDir()
+     */
+    static std::string getProjectRoot();
+
+    /**
+     * @brief 获取日志目录
+     * @return {projectRoot}/logs
+     */
+    static std::string logDir();
 
     /**
      * @brief 获取指定地图资源目录

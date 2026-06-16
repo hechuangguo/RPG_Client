@@ -110,8 +110,7 @@ void ClientLogger::flush()
 std::string ClientLogger::currentLogPath() const
 {
     const std::string date = TimeUtil::todayDateString();
-    return PathUtil::joinPath(PathUtil::joinPath(PathUtil::getExeDir(), "logs"),
-                              "client_" + date + ".log");
+    return PathUtil::joinPath(PathUtil::logDir(), "client_" + date + ".log");
 }
 
 bool ClientLogger::ensureLogFile()
@@ -129,7 +128,7 @@ bool ClientLogger::ensureLogFile()
         m_file = nullptr;
     }
 
-    const std::string logDir = PathUtil::joinPath(PathUtil::getExeDir(), "logs");
+    const std::string logDir = PathUtil::logDir();
     std::error_code ec;
     std::filesystem::create_directories(logDir, ec);
 

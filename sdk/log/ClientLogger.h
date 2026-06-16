@@ -3,7 +3,7 @@
  * @brief   客户端统一日志单例
  *
  * 职责：
- * - 按日滚动写入 ./logs/client_YYYYMMDD.log
+ * - 按日滚动写入 {projectRoot}/logs/client_YYYYMMDD.log（projectRoot 为含 main.cpp 的目录）
  * - 可选同步输出到 stdout（默认关闭；GUI 子系统下 stdout 不可用，请查看 logs/）
  *
  * 线程：仅主线程调用，非线程安全。

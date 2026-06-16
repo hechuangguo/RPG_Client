@@ -11,6 +11,43 @@ namespace
 {
 constexpr float kRowHeight = 36.f;
 constexpr float kListTopOffset = 120.f;
+
+const char* loadStatusLabel(ZoneLoadStatus status)
+{
+    switch (status)
+    {
+    case ZoneLoadStatus::Smooth:
+        return u8"畅通";
+    case ZoneLoadStatus::Busy:
+        return u8"繁忙";
+    case ZoneLoadStatus::Full:
+        return u8"爆满";
+    case ZoneLoadStatus::Maintenance:
+        return u8"维护中";
+    }
+    return u8"畅通";
+}
+
+sf::Color loadStatusColor(ZoneLoadStatus status)
+{
+    switch (status)
+    {
+    case ZoneLoadStatus::Smooth:
+        return sf::Color(100, 220, 140);
+    case ZoneLoadStatus::Busy:
+        return sf::Color(255, 180, 80);
+    case ZoneLoadStatus::Full:
+        return sf::Color(255, 100, 90);
+    case ZoneLoadStatus::Maintenance:
+        return sf::Color(130, 130, 135);
+    }
+    return sf::Color(100, 220, 140);
+}
+
+bool zoneRowSelectable(const GameZoneEntry& zone)
+{
+    return zone.enabled && zone.loadStatus != ZoneLoadStatus::Maintenance;
+}
 }  // namespace
 
 ServerListPanel::ServerListPanel()
@@ -41,7 +78,7 @@ void ServerListPanel::setup(UiTheme* theme, const sf::Vector2u& viewSize)
             return;
         }
         const GameZoneEntry& zone = m_zones[static_cast<size_t>(m_selectedIndex)];
-        if (zone.enabled)
+        if (zoneRowSelectable(zone))
         {
             m_onConfirm(zone);
         }
@@ -129,7 +166,7 @@ void ServerListPanel::refreshConfirmButton()
 {
     const bool ok = m_status == Status::Ready && m_selectedIndex >= 0 &&
                     m_selectedIndex < static_cast<int>(m_zones.size()) &&
-                    m_zones[static_cast<size_t>(m_selectedIndex)].enabled;
+                    zoneRowSelectable(m_zones[static_cast<size_t>(m_selectedIndex)]);
     m_confirmButton.setEnabled(ok);
 }
 
@@ -150,7 +187,7 @@ void ServerListPanel::handleEvent(const sf::Event& event, const sf::RenderWindow
     const sf::Vector2f pos = window.mapPixelToCoords(pixel);
     const int row          = rowAtPosition(pos);
     if (row >= 0 && row < static_cast<int>(m_zones.size()) &&
-        m_zones[static_cast<size_t>(row)].enabled)
+        zoneRowSelectable(m_zones[static_cast<size_t>(row)]))
     {
         m_selectedIndex = row;
         refreshConfirmButton();
@@ -213,11 +250,12 @@ void ServerListPanel::draw(sf::RenderTarget& target) const
         for (size_t i = 0; i < m_zones.size(); ++i)
         {
             const GameZoneEntry& z = m_zones[i];
+            const bool selectable = zoneRowSelectable(z);
             sf::RectangleShape row({list.width - 8.f, kRowHeight - 4.f});
             row.setPosition(list.left + 4.f, y);
 
             const bool selected = static_cast<int>(i) == m_selectedIndex;
-            if (!z.enabled)
+            if (!selectable)
             {
                 row.setFillColor(sf::Color(40, 40, 40, 180));
             }
@@ -231,18 +269,24 @@ void ServerListPanel::draw(sf::RenderTarget& target) const
             }
             target.draw(row);
 
-            std::string label = z.name;
-            if (!z.enabled)
+            const sf::Color nameColor =
+                selectable ? m_theme->textColor() : sf::Color(130, 130, 135);
+            m_theme->drawText(target, z.name, list.left + 12.f, y + 8.f, 16, nameColor);
+
+            const float statusRight = list.left + list.width - 16.f;
+            std::string statusText = loadStatusLabel(z.loadStatus);
+            if (z.onlineCount > 0)
             {
-                label += u8"（维护中）";
+                statusText += u8" · 在线" + std::to_string(z.onlineCount);
             }
+            const float statusW = m_theme->measureTextWidth(statusText, 16);
             m_theme->drawText(
                 target,
-                label,
-                list.left + 12.f,
+                statusText,
+                statusRight - statusW,
                 y + 8.f,
                 16,
-                z.enabled ? m_theme->textColor() : sf::Color(130, 130, 135));
+                loadStatusColor(z.loadStatus));
 
             y += kRowHeight;
             if (y > list.top + list.height)

@@ -74,7 +74,7 @@ If `cl.exe` is missing, open Visual Studio Installer → Modify → check **Desk
 - **Release（脚本）：** `build/bin/RPGClient.exe`（Ninja 单配置）。
 - **Debug vs Release：** Debug 链接 `sfml-*-d` 并复制 `sfml-*-d-2.dll`；勿混用 Release DLL。
 - **Fonts：** F5 前运行 `.\assets\fonts\fetch_font.ps1`，确保 `out/build/x64-Debug/bin/assets/fonts/` 有字体。
-- **No console:** F5 仅启动 SFML 窗口；日志在 `./logs/client_YYYYMMDD.log`。
+- **No console:** F5 仅启动 SFML 窗口；日志写在仓库根目录 `logs/client_YYYYMMDD.log`（与 `main.cpp` 同级，非 exe 旁）。
 
 ## Run
 
@@ -84,9 +84,10 @@ Ensure `config/`, `script/`, `database/`, `basefile/`, `map/`, `assets/` are bes
 ## 登录流程
 
 1. **选区首页**：显示「当前游戏区：xxx」（未选则为「未选择」），按钮「选择服务器」「登录游戏」（未选区时后者禁用）。
-2. **区列表**：点击「选择服务器」后连接 LoginServer，拉取区列表；选中可用区后点「确定」返回首页。
-3. **加载资源**：点击「登录游戏」后初始化 Lua 等，进入账号登录界面。
-4. **账号登录**：账号、密码、记住账号、注册账号、登录（网络流程与原先一致）。
+2. **区列表**：点击「选择服务器」后连接 LoginServer（`client_config.json` 的 `loginHost`/`loginPort`），发送 `C2S_ZONE_LIST_REQ` 拉取区列表；**不读本地 serverlist.xml**（区列表由 LoginServer 从 `serverlist.xml` 加载后下发）。选中可用区后点「确定」返回首页。
+3. **区服状态**：列表右侧显示负载状态（畅通 / 繁忙 / 爆满 / 维护中）及在线人数（服务端 v2 协议下发时）。旧版 LoginServer 仅下发 `enabled` 时，可用区显示「畅通」，维护区显示「维护中」。
+4. **加载资源**：点击「登录游戏」后初始化 Lua 等，进入账号登录界面。
+5. **账号登录**：账号、密码、记住账号、注册账号、登录（网络流程与原先一致）。
 
 输入框聚焦时显示**闪烁光标**。
 
@@ -101,7 +102,7 @@ Ensure `config/`, `script/`, `database/`, `basefile/`, `map/`, `assets/` are bes
 | `logToConsole` | `false` | GUI 子系统无 stdout；调试请查看日志文件 |
 | `logLevel` | `info` | `info` / `warn` / `err` |
 
-Logs: `./logs/client_YYYYMMDD.log`
+Logs: 仓库根目录 `logs/client_YYYYMMDD.log`（从 exe 向上查找含 `main.cpp` 的目录；发布包无源码时回退 exe 旁 `logs/`）
 
 ## 中文 UI 与 UTF-8
 
@@ -141,3 +142,13 @@ git submodule update --init --recursive
 
 - `C2S_ZONE_LIST_REQ` (0x000B)
 - `S2C_ZONE_LIST_RSP` (0x000C) — 变长 body：`Msg_S2C_ZoneListRspHeader` + N×`Msg_S2C_ZoneEntryWire`
+
+`Msg_S2C_ZoneEntryWire` 扩展字段（v2，单条 109 字节；旧版 v1 为 104 字节，客户端自动兼容）：
+
+| 字段 | 说明 |
+|------|------|
+| `loadStatus` | 0=畅通 1=繁忙 2=爆满 3=维护 |
+| `onlineCount` | 当前在线人数 |
+| `gatewayCount` | 可用网关数量 |
+
+服务端 LoginServer 需升级 RPG_Common 并填充上述字段后，客户端才显示真实繁忙度；SuperServer 上报在线数据后由 LoginServer 合并下发（见 Server 侧实现）。
