@@ -10,3 +10,4 @@ vs_modify.log
 *.user
 *.suo
 .vs/
+_sizeof_test.*
