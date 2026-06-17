@@ -24,7 +24,7 @@ void ZoneHomePanel::setup(UiTheme* theme, const sf::Vector2u& viewSize)
     const float py = (static_cast<float>(viewSize.y) - panelH) / 2.f;
 
     m_selectServerButton.setup(theme, u8"选择服务器", px + 40.f, py + 180.f, 340.f, 44.f);
-    m_enterGameButton.setup(theme, u8"登录游戏", px + 40.f, py + 240.f, 340.f, 44.f);
+    m_enterGameButton.setup(theme, u8"进入游戏", px + 40.f, py + 240.f, 340.f, 44.f);
 
     m_selectServerButton.setOnClick([this]() {
         if (m_onSelectServer)

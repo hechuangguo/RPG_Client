@@ -1,6 +1,6 @@
 /**
  * @file    ZoneHomePanel.h
- * @brief   选区首页：当前游戏区 + 选择服务器 + 登录游戏
+ * @brief   选区首页：当前游戏区 + 选择服务器 + 进入游戏
  */
 
 #pragma once
