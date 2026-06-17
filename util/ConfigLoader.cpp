@@ -32,6 +32,13 @@ std::string stripXmlComments(const std::string& content)
     static const std::regex commentPattern(R"(<!--[\s\S]*?-->)");
     return std::regex_replace(content, commentPattern, "");
 }
+
+bool isXmlDeclarationOnly(const std::string& content)
+{
+    static const std::regex declPattern(R"(<\?xml[\s\S]*?\?>)");
+    std::string remainder = std::regex_replace(content, declPattern, "");
+    return trim(remainder).empty();
+}
 }  // namespace
 
 ConfigLoader::ConfigLoader()
@@ -108,12 +115,23 @@ uint16_t ConfigLoader::loginPort() const
 bool ConfigLoader::parseXmlContent(const std::string& content)
 {
     const std::string stripped = stripXmlComments(content);
+    const std::string trimmed = trim(stripped);
+    if (trimmed.empty())
+    {
+        m_lastError = "配置文件为空";
+        return false;
+    }
+
     static const std::regex tagPattern(R"(<([A-Za-z_][\w]*)>([^<]*)</\1>)");
 
-    auto begin = std::sregex_iterator(stripped.begin(), stripped.end(), tagPattern);
+    auto begin = std::sregex_iterator(trimmed.begin(), trimmed.end(), tagPattern);
     const auto end = std::sregex_iterator();
     if (begin == end)
     {
+        if (isXmlDeclarationOnly(trimmed))
+        {
+            return true;
+        }
         m_lastError = "XML 解析失败：未找到有效配置项";
         return false;
     }
