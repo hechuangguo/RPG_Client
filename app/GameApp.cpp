@@ -68,8 +68,11 @@ int GameApp::run()
 bool GameApp::init()
 {
     const std::string exeDir = PathUtil::getExeDir();
-    const std::string configPath = PathUtil::joinPath(exeDir, "config/client_config.json");
-    m_config.load(configPath);
+    const std::string configPath = PathUtil::joinPath(exeDir, "config/client_config.xml");
+    if (!m_config.load(configPath))
+    {
+        ClientLogger::instance().warn("GameApp：%s，使用默认配置", m_config.lastError().c_str());
+    }
 
     ClientLogger::instance().setLogToConsole(m_config.logToConsole());
     if (m_config.logLevel() == "warn")

@@ -11,4 +11,4 @@ vs_modify.log
 *.suo
 .vs/
 _sizeof_test.*
-config/client_config.json
+config/client_config.xml

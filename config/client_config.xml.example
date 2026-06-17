@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  复制为 client_config.xml 后按本机修改。
+  loginHost：可访问的 LoginServer IP（虚拟机/局域网地址因机器而异）
+-->
+<ClientConfig>
+    <windowWidth>1280</windowWidth>
+    <windowHeight>720</windowHeight>
+    <logLevel>info</logLevel>
+    <logToConsole>false</logToConsole>
+    <loginHost>127.0.0.1</loginHost>
+    <loginPort>9010</loginPort>
+</ClientConfig>

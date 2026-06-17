@@ -84,7 +84,7 @@ Ensure `config/`, `script/`, `database/`, `basefile/`, `map/`, `assets/` are bes
 ## 登录流程
 
 1. **选区首页**：显示「当前游戏区：xxx」（未选则为「未选择」），按钮「选择服务器」「登录游戏」（未选区时后者禁用）。
-2. **区列表**：点击「选择服务器」后连接 LoginServer（`client_config.json` 的 `loginHost`/`loginPort`），发送 `C2S_ZONE_LIST_REQ` 拉取区列表；**不读本地 serverlist.xml**（区列表由 LoginServer 从 `serverlist.xml` 加载后下发）。选中可用区后点「确定」返回首页。
+2. **区列表**：点击「选择服务器」后连接 LoginServer（`client_config.xml` 的 `loginHost`/`loginPort`），发送 `C2S_ZONE_LIST_REQ` 拉取区列表；**不读本地 serverlist.xml**（区列表由 LoginServer 从 `serverlist.xml` 加载后下发）。选中可用区后点「确定」返回首页。
 3. **区服状态**：列表右侧显示负载状态（畅通 / 繁忙 / 爆满 / 维护中）及在线人数（服务端 v2 协议下发时）。旧版 LoginServer 仅下发 `enabled` 时，可用区显示「畅通」，维护区显示「维护中」。
 4. **加载资源**：点击「登录游戏」后初始化 Lua 等，进入账号登录界面。
 5. **账号登录**：账号、密码、记住账号、注册账号、登录（网络流程与原先一致）。
@@ -93,14 +93,45 @@ Ensure `config/`, `script/`, `database/`, `basefile/`, `map/`, `assets/` are bes
 
 ## Config
 
-- `config/client_config.json` — 窗口/日志设置及 **LoginServer 地址**（`loginHost` / `loginPort`）
+客户端配置使用 XML，支持注释，便于多人各自维护本机 `loginHost` 等差异。
 
-| Field | Default | Notes |
-|-------|---------|-------|
+| 文件 | 版本库 | 说明 |
+|------|--------|------|
+| `config/client_config.xml.example` | 提交 | 配置模板 |
+| `config/client_config.xml` | **不入库**（gitignore） | 每人本地复制并修改 |
+
+**首次配置：**
+
+```powershell
+.\scripts\setup_config.ps1
+# 或手动：Copy-Item config/client_config.xml.example config/client_config.xml
+# 编辑 loginHost / loginPort 为本机可访问的 LoginServer
+```
+
+示例（`client_config.xml`）：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<ClientConfig>
+    <windowWidth>1280</windowWidth>
+    <windowHeight>720</windowHeight>
+    <logLevel>info</logLevel>
+    <logToConsole>false</logToConsole>
+    <loginHost>127.0.0.1</loginHost>
+    <loginPort>9010</loginPort>
+</ClientConfig>
+```
+
+| 字段 | 默认值 | 说明 |
+|------|--------|------|
 | `loginHost` | `127.0.0.1` | LoginServer IP |
 | `loginPort` | `9010` | LoginServer ClientListen 端口 |
 | `logToConsole` | `false` | GUI 子系统无 stdout；调试请查看日志文件 |
 | `logLevel` | `info` | `info` / `warn` / `err` |
+| `windowWidth` | `1280` | 窗口宽度（像素） |
+| `windowHeight` | `720` | 窗口高度（像素） |
+
+配置文件缺失或解析失败时，客户端使用上表默认值并在日志中输出中文警告。
 
 Logs: 仓库根目录 `logs/client_YYYYMMDD.log`（从 exe 向上查找含 `main.cpp` 的目录；发布包无源码时回退 exe 旁 `logs/`）
 

@@ -7,6 +7,7 @@
 
 #include <cctype>
 #include <fstream>
+#include <regex>
 #include <sstream>
 
 namespace
@@ -26,13 +27,10 @@ std::string trim(const std::string& s)
     return s.substr(start, end - start);
 }
 
-std::string unquote(const std::string& s)
+std::string stripXmlComments(const std::string& content)
 {
-    if (s.size() >= 2 && s.front() == '"' && s.back() == '"')
-    {
-        return s.substr(1, s.size() - 2);
-    }
-    return s;
+    static const std::regex commentPattern(R"(<!--[\s\S]*?-->)");
+    return std::regex_replace(content, commentPattern, "");
 }
 }  // namespace
 
@@ -59,13 +57,13 @@ bool ConfigLoader::load(const std::string& path)
     std::ifstream file(path);
     if (!file.is_open())
     {
-        m_lastError = "Cannot open config: " + path;
+        m_lastError = "无法打开配置文件：" + path;
         return false;
     }
 
     std::ostringstream ss;
     ss << file.rdbuf();
-    if (!parseJsonContent(ss.str()))
+    if (!parseXmlContent(ss.str()))
     {
         return false;
     }
@@ -107,48 +105,45 @@ uint16_t ConfigLoader::loginPort() const
     return m_loginPort;
 }
 
-bool ConfigLoader::parseJsonContent(const std::string& content)
+bool ConfigLoader::parseXmlContent(const std::string& content)
 {
-    std::istringstream stream(content);
-    std::string line;
-    while (std::getline(stream, line))
+    const std::string stripped = stripXmlComments(content);
+    static const std::regex tagPattern(R"(<([A-Za-z_][\w]*)>([^<]*)</\1>)");
+
+    auto begin = std::sregex_iterator(stripped.begin(), stripped.end(), tagPattern);
+    const auto end = std::sregex_iterator();
+    if (begin == end)
     {
-        const size_t colon = line.find(':');
-        if (colon == std::string::npos)
-        {
-            continue;
-        }
+        m_lastError = "XML 解析失败：未找到有效配置项";
+        return false;
+    }
 
-        std::string key = trim(line.substr(0, colon));
-        std::string value = trim(line.substr(colon + 1));
-        if (!value.empty() && value.back() == ',')
-        {
-            value.pop_back();
-            value = trim(value);
-        }
-        value = unquote(value);
+    for (auto it = begin; it != end; ++it)
+    {
+        const std::string tag = (*it)[1].str();
+        const std::string value = trim((*it)[2].str());
 
-        if (key == "\"windowWidth\"")
+        if (tag == "windowWidth")
         {
             m_windowWidth = static_cast<unsigned>(std::stoul(value));
         }
-        else if (key == "\"windowHeight\"")
+        else if (tag == "windowHeight")
         {
             m_windowHeight = static_cast<unsigned>(std::stoul(value));
         }
-        else if (key == "\"logLevel\"")
+        else if (tag == "logLevel")
         {
             m_logLevel = value;
         }
-        else if (key == "\"logToConsole\"")
+        else if (tag == "logToConsole")
         {
             m_logToConsole = (value == "true" || value == "1");
         }
-        else if (key == "\"loginHost\"")
+        else if (tag == "loginHost")
         {
             m_loginHost = value;
         }
-        else if (key == "\"loginPort\"")
+        else if (tag == "loginPort")
         {
             m_loginPort = static_cast<uint16_t>(std::stoul(value));
         }
