@@ -1,8 +1,0 @@
-{
-  "windowWidth": 1280,
-  "windowHeight": 720,
-  "logLevel": "info",
-  "logToConsole": false,
-  "loginHost": "192.168.65.128",
-  "loginPort": 9010
-}
