@@ -12,6 +12,7 @@
 
 #include "ClientMsg.h"
 #include "MsgId.h"
+#include "net/CharacterTypes.h"
 
 #include <cstdint>
 #include <string>
@@ -114,6 +115,29 @@ public:
      * @return 长度合法返回 true
      */
     static bool parseEnterGame(const char* data, uint16_t len, Msg_S2C_EnterGame& out);
+
+    /** @brief 构造 C2S_GATEWAY_AUTH_REQ 完整帧 */
+    static std::vector<char> buildGatewayAuthReq(const std::string& account,
+                                                 const std::string& loginToken,
+                                                 uint32_t zoneId,
+                                                 uint8_t gameType);
+
+    /** @brief 解析 S2C_USER_LIST 消息体（变长 entries） */
+    static bool parseUserList(const char* data,
+                              uint16_t len,
+                              std::vector<CharacterEntry>& out,
+                              std::string& errMsg);
+
+    /** @brief 构造 C2S_SELECT_USER_REQ 完整帧 */
+    static std::vector<char> buildSelectUserReq(uint64_t userID, uint64_t loginTxnId = 0);
+
+    /** @brief 构造 C2S_CREATE_USER_REQ 完整帧 */
+    static std::vector<char> buildCreateUserReq(const std::string& name,
+                                                uint8_t vocation,
+                                                uint8_t sex);
+
+    /** @brief 解析 S2C_CREATE_USER_RSP 消息体 */
+    static bool parseCreateUserRsp(const char* data, uint16_t len, Msg_S2C_CreateUserRsp& out);
 
     /**
      * @brief 解析 S2C_SPAWN_ENTITY 消息体

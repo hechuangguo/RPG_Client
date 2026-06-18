@@ -87,7 +87,13 @@ Ensure `config/`, `script/`, `database/`, `basefile/`, `map/`, `assets/` are bes
 2. **区列表**：点击「选择服务器」后连接 LoginServer（`client_config.xml` 的 `loginHost`/`loginPort`），发送 `C2S_ZONE_LIST_REQ` 拉取区列表；**不读本地 serverlist.xml**（区列表由 LoginServer 从 `serverlist.xml` 加载后下发）。选中可用区后点「确定」返回首页。
 3. **区服状态**：列表右侧显示负载状态（畅通 / 繁忙 / 爆满 / 维护中）及在线人数（服务端 v2 协议下发时）。旧版 LoginServer 仅下发 `enabled` 时，可用区显示「畅通」，维护区显示「维护中」。
 4. **加载资源**：点击「进入游戏」后初始化 Lua 等，进入账号登录界面。
-5. **账号登录**：账号、密码、记住账号、注册账号、登录（网络流程与原先一致）。
+5. **账号登录/注册**：输入账号密码登录，或注册后返回登录页（账号密码自动填入）。
+6. **Gateway 鉴权**：LoginServer 验证通过后下发 `S2C_GATEWAY_INFO` 与 `loginToken`；客户端连接 Gateway 并发送 `C2S_GATEWAY_AUTH_REQ`（无票据时回退 `C2S_LOGIN_REQ` 兼容旧 Gateway）。
+7. **角色列表**：Gateway 返回 `S2C_USER_LIST`；客户端展示角色名、等级、职业、性别，并标注「上次登录」角色。
+8. **选角/创角**：选择角色点「进入游戏」发送 `C2S_SELECT_USER_REQ`；无角色时可「创建角色」（`C2S_CREATE_USER_REQ`）。职业/性别 wire 值：`0=战士/男, 1=法师/女`（须与 Server 一致）。
+9. **进入场景**：收到 `S2C_ENTER_GAME`（含 mapID 与出生坐标）后加载地图并进入游戏世界。
+
+**旧 Gateway 兼容**：若 Gateway 未下发角色列表而直接返回 `S2C_LOGIN_RSP` + `S2C_ENTER_GAME`，客户端跳过选角界面直接进入场景。
 
 输入框聚焦时显示**闪烁光标**。
 
@@ -179,6 +185,20 @@ git submodule update --init --recursive
 
 - `C2S_ZONE_LIST_REQ` (0x000B)
 - `S2C_ZONE_LIST_RSP` (0x000C) — 变长 body：`Msg_S2C_ZoneListRspHeader` + N×`Msg_S2C_ZoneEntryWire`
+
+账号登录与选角协议（LoginServer / Gateway）：
+
+| 消息 | ID | 说明 |
+|------|-----|------|
+| `C2S_LOGIN_REQ` | 0x0001 | 账号密码登录 |
+| `S2C_LOGIN_RSP` | 0x0002 | 含 `userID`（上次角色）、`loginToken` |
+| `S2C_GATEWAY_INFO` | 0x000A | Gateway 地址 |
+| `C2S_GATEWAY_AUTH_REQ` | 0x000D | Gateway 票据鉴权 |
+| `S2C_USER_LIST` | 0x0006 | 角色列表（变长） |
+| `C2S_SELECT_USER_REQ` | 0x0005 | 选择角色进入游戏 |
+| `C2S_CREATE_USER_REQ` | 0x0007 | 创建角色 |
+| `S2C_CREATE_USER_RSP` | 0x0008 | 创角结果 |
+| `S2C_ENTER_GAME` | 0x0009 | 进入场景（mapID、坐标、属性） |
 
 `Msg_S2C_ZoneEntryWire` 扩展字段（v2，单条 112 字节；旧版 v1 为 104 字节，客户端自动兼容）：
 

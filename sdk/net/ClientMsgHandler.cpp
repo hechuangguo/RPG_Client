@@ -16,9 +16,12 @@ constexpr uint8_t kLoginModule  = static_cast<uint8_t>(ClientModule::LOGIN);
 constexpr uint8_t kSceneModule  = static_cast<uint8_t>(ClientModule::SCENE);
 constexpr uint8_t kSystemModule = static_cast<uint8_t>(ClientModule::SYSTEM);
 
-constexpr uint8_t kLoginReqSub     = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_LOGIN_REQ));
-constexpr uint8_t kRegisterReqSub  = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_REGISTER_REQ));
-constexpr uint8_t kZoneListReqSub  = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_ZONE_LIST_REQ));
+constexpr uint8_t kLoginReqSub        = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_LOGIN_REQ));
+constexpr uint8_t kRegisterReqSub     = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_REGISTER_REQ));
+constexpr uint8_t kZoneListReqSub     = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_ZONE_LIST_REQ));
+constexpr uint8_t kGatewayAuthReqSub  = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_GATEWAY_AUTH_REQ));
+constexpr uint8_t kSelectUserReqSub   = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_SELECT_USER_REQ));
+constexpr uint8_t kCreateUserReqSub   = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_CREATE_USER_REQ));
 constexpr uint8_t kMoveReqSub      = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_MOVE_REQ));
 constexpr uint8_t kHeartbeatSub    = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_HEARTBEAT));
 
@@ -239,6 +242,102 @@ bool ClientMsgHandler::parseGatewayInfo(const char* data, uint16_t len, Msg_S2C_
 }
 
 bool ClientMsgHandler::parseEnterGame(const char* data, uint16_t len, Msg_S2C_EnterGame& out)
+{
+    return copyStruct(data, len, &out, sizeof(out));
+}
+
+std::vector<char> ClientMsgHandler::buildGatewayAuthReq(const std::string& account,
+                                                        const std::string& loginToken,
+                                                        uint32_t zoneId,
+                                                        uint8_t gameType)
+{
+    Msg_C2S_GatewayAuthReq body{};
+    copyFixedString(body.account, sizeof(body.account), account);
+    copyFixedString(body.loginToken, sizeof(body.loginToken), loginToken);
+    body.zoneId   = zoneId;
+    body.gameType = gameType;
+    std::memset(body.reserved, 0, sizeof(body.reserved));
+
+    return ProtocolCodec::encode(kLoginModule, kGatewayAuthReqSub,
+                                 reinterpret_cast<const char*>(&body),
+                                 static_cast<uint16_t>(sizeof(body)));
+}
+
+bool ClientMsgHandler::parseUserList(const char* data,
+                                     uint16_t len,
+                                     std::vector<CharacterEntry>& out,
+                                     std::string& errMsg)
+{
+    out.clear();
+    errMsg.clear();
+
+    if (!data || len < sizeof(Msg_S2C_UserListHeader))
+    {
+        errMsg = u8"角色列表响应过短";
+        return false;
+    }
+
+    Msg_S2C_UserListHeader hdr{};
+    std::memcpy(&hdr, data, sizeof(hdr));
+
+    if (hdr.code != 0)
+    {
+        errMsg = u8"获取角色列表失败";
+        return false;
+    }
+
+    const size_t expectedBody = static_cast<size_t>(hdr.count) * sizeof(Msg_S2C_UserListEntryWire);
+    if (len < sizeof(Msg_S2C_UserListHeader) + expectedBody)
+    {
+        errMsg = u8"角色列表数据不完整";
+        return false;
+    }
+
+    const char* p = data + sizeof(Msg_S2C_UserListHeader);
+    for (uint16_t i = 0; i < hdr.count; ++i)
+    {
+        Msg_S2C_UserListEntryWire wire{};
+        std::memcpy(&wire, p, sizeof(wire));
+
+        CharacterEntry entry{};
+        entry.userID   = wire.userID;
+        entry.name     = wire.name;
+        entry.level    = wire.level;
+        entry.vocation = wire.vocation;
+        entry.sex      = wire.sex;
+        out.push_back(entry);
+        p += sizeof(wire);
+    }
+    return true;
+}
+
+std::vector<char> ClientMsgHandler::buildSelectUserReq(uint64_t userID, uint64_t loginTxnId)
+{
+    Msg_C2S_SelectUserReq body{};
+    body.userID     = userID;
+    body.loginTxnId = loginTxnId;
+
+    return ProtocolCodec::encode(kLoginModule, kSelectUserReqSub,
+                                 reinterpret_cast<const char*>(&body),
+                                 static_cast<uint16_t>(sizeof(body)));
+}
+
+std::vector<char> ClientMsgHandler::buildCreateUserReq(const std::string& name,
+                                                       uint8_t vocation,
+                                                       uint8_t sex)
+{
+    Msg_C2S_CreateUserReq body{};
+    copyFixedString(body.name, sizeof(body.name), name);
+    body.vocation = vocation;
+    body.sex      = sex;
+    std::memset(body.reserved, 0, sizeof(body.reserved));
+
+    return ProtocolCodec::encode(kLoginModule, kCreateUserReqSub,
+                                 reinterpret_cast<const char*>(&body),
+                                 static_cast<uint16_t>(sizeof(body)));
+}
+
+bool ClientMsgHandler::parseCreateUserRsp(const char* data, uint16_t len, Msg_S2C_CreateUserRsp& out)
 {
     return copyStruct(data, len, &out, sizeof(out));
 }

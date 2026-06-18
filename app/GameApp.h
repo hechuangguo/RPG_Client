@@ -16,6 +16,7 @@
 #include "net/LoginSession.h"
 #include "net/ZoneListSession.h"
 #include "net/ZoneTypes.h"
+#include "ui/CharacterSelectPanel.h"
 #include "ui/AuthLoginPanel.h"
 #include "ui/LoginChrome.h"
 #include "ui/RegisterPanel.h"
@@ -77,8 +78,9 @@ private:
     LoginChrome        m_loginChrome;
     ZoneHomePanel      m_zoneHomePanel;
     ServerListPanel    m_serverListPanel;
-    AuthLoginPanel     m_authLoginPanel;
-    RegisterPanel      m_registerPanel;
+    AuthLoginPanel       m_authLoginPanel;
+    RegisterPanel        m_registerPanel;
+    CharacterSelectPanel m_characterSelectPanel;
     ZoneListSession    m_zoneListSession;
     LoginSession       m_loginSession;
     GameSession        m_gameSession;
