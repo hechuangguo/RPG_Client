@@ -5,28 +5,18 @@
 
 #include "net/GameSession.h"
 
+#include "EquipCommon.h"
+#include "PropertyCommon.h"
 #include "net/ClientMsgHandler.h"
 #include "lua/ClientScriptHost.h"
 #include "log/ClientLogger.h"
 #include "net/TcpClient.h"
 #include "time/TimeUtil.h"
 
-#include <cstring>
-
 namespace
 {
 constexpr int64_t kHeartbeatIntervalMs = 10000;
 constexpr int64_t kMoveSendIntervalMs  = 100;
-
-bool parseDespawn(const char* data, uint16_t len, Msg_S2C_DespawnEntity& out)
-{
-    if (!data || len < sizeof(out))
-    {
-        return false;
-    }
-    std::memcpy(&out, data, sizeof(out));
-    return true;
-}
 }  // namespace
 
 GameSession::GameSession()
@@ -191,7 +181,7 @@ void GameSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, ui
 {
     const uint16_t flatId = makeMsgId(module, sub);
 
-    if (flatId == static_cast<uint16_t>(ClientMsgID::S2C_SPAWN_ENTITY))
+    if (flatId == clientMsgFlatId<Msg_S2C_SpawnEntity>())
     {
         Msg_S2C_SpawnEntity spawn{};
         if (ClientMsgHandler::parseSpawnEntity(data, len, spawn) && m_onSpawn)
@@ -199,7 +189,7 @@ void GameSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, ui
             m_onSpawn(spawn);
         }
     }
-    else if (flatId == static_cast<uint16_t>(ClientMsgID::S2C_MOVE_NOTIFY))
+    else if (flatId == clientMsgFlatId<Msg_S2C_MoveNotify>())
     {
         Msg_S2C_MoveNotify move{};
         if (ClientMsgHandler::parseMoveNotify(data, len, move) && m_onMove)
@@ -207,38 +197,36 @@ void GameSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, ui
             m_onMove(move);
         }
     }
-    else if (flatId == static_cast<uint16_t>(ClientMsgID::S2C_DESPAWN_ENTITY))
+    else if (flatId == clientMsgFlatId<Msg_S2C_DespawnEntity>())
     {
         Msg_S2C_DespawnEntity despawn{};
-        if (parseDespawn(data, len, despawn) && m_onDespawn)
+        if (ClientMsgHandler::parseDespawnEntity(data, len, despawn) && m_onDespawn)
         {
             m_onDespawn(despawn);
         }
     }
-    else if (flatId == static_cast<uint16_t>(ClientMsgID::S2C_HEARTBEAT))
+    else if (flatId == clientMsgFlatId<Msg_S2C_Heartbeat>())
     {
         // echo ack, no action
     }
-    else if (flatId == static_cast<uint16_t>(ClientMsgID::S2C_ERROR))
+    else if (flatId == clientMsgFlatId<Msg_S2C_Error>())
     {
         Msg_S2C_Error err{};
-        if (data && len >= sizeof(err))
+        if (ClientMsgHandler::parseGatewayError(data, len, err) && m_onError)
         {
-            std::memcpy(&err, data, sizeof(err));
-            if (m_onError)
-            {
-                m_onError(std::string("服务器错误: ") + err.msg);
-            }
+            m_onError(ClientMsgHandler::gatewayErrorText(err));
         }
     }
-    else if (flatId == static_cast<uint16_t>(ClientMsgID::S2C_QUEST_INFO))
+    else if (flatId == makeMsgId(static_cast<uint8_t>(ClientModule::QUEST),
+                                 static_cast<uint8_t>(QuestMsgSub::S2C_QUEST_INFO)))
     {
         if (m_scriptHost)
         {
             m_scriptHost->onQuestInfo(data, len);
         }
     }
-    else if (flatId == static_cast<uint16_t>(ClientMsgID::S2C_BAG_INFO_RSP))
+    else if (flatId == makeMsgId(static_cast<uint8_t>(ClientModule::BAG),
+                                 static_cast<uint8_t>(EquipMsgSub::S2C_BAG_INFO_RSP)))
     {
         if (m_scriptHost)
         {

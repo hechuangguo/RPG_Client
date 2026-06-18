@@ -207,7 +207,16 @@ void GameApp::wireCallbacks()
     });
 
     m_characterSelectPanel.setOnEnterGame([this](uint64_t userId) {
-        m_characterSelectPanel.setStatus(CharacterSelectPanel::Status::Loading, u8"正在进入游戏...");
+        if (!m_loginSession.gatewayConnected())
+        {
+            m_characterSelectPanel.setStatus(CharacterSelectPanel::Status::Loading,
+                                             u8"正在连接网关...");
+        }
+        else
+        {
+            m_characterSelectPanel.setStatus(CharacterSelectPanel::Status::Loading,
+                                             u8"正在进入游戏...");
+        }
         m_loginSession.selectCharacter(userId);
     });
 
@@ -291,7 +300,7 @@ void GameApp::beginFetchZoneList()
 {
     switchState(AppState::ServerList);
     m_serverListPanel.setStatus(ServerListPanel::Status::Loading, u8"正在连接 LoginServer...");
-    m_zoneListSession.fetchZoneList(0xFF);
+    m_zoneListSession.fetchZoneList(ZONE_LIST_ALL_GAME_TYPES);
 }
 
 void GameApp::applySelectedZone(const GameZoneEntry& zone)

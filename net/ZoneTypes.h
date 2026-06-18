@@ -9,7 +9,7 @@
 #include <string>
 
 /**
- * @brief 区服负载状态（与 Common/ClientMsg.h ZoneLoadLevel 数值对齐）
+ * @brief 区服负载状态（与 Common/ZoneCommon.h ZoneLoadLevel 数值对齐）
  */
 enum class ZoneLoadStatus : uint8_t
 {

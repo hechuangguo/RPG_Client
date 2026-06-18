@@ -1,6 +1,6 @@
 /**
  * @file    ClientMsgHandler.cpp
- * @brief   客户端消息构造与解析辅助实现
+ * @brief   客户端消息构造与解析辅助实现（wire v2）
  */
 
 #include "ClientMsgHandler.h"
@@ -12,19 +12,6 @@
 
 namespace
 {
-constexpr uint8_t kLoginModule  = static_cast<uint8_t>(ClientModule::LOGIN);
-constexpr uint8_t kSceneModule  = static_cast<uint8_t>(ClientModule::SCENE);
-constexpr uint8_t kSystemModule = static_cast<uint8_t>(ClientModule::SYSTEM);
-
-constexpr uint8_t kLoginReqSub        = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_LOGIN_REQ));
-constexpr uint8_t kRegisterReqSub     = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_REGISTER_REQ));
-constexpr uint8_t kZoneListReqSub     = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_ZONE_LIST_REQ));
-constexpr uint8_t kGatewayAuthReqSub  = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_GATEWAY_AUTH_REQ));
-constexpr uint8_t kSelectUserReqSub   = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_SELECT_USER_REQ));
-constexpr uint8_t kCreateUserReqSub   = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_CREATE_USER_REQ));
-constexpr uint8_t kMoveReqSub      = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_MOVE_REQ));
-constexpr uint8_t kHeartbeatSub    = msgSub(static_cast<uint16_t>(ClientMsgID::C2S_HEARTBEAT));
-
 /** @brief 区列表 wire v1 单条大小（无 onlineCount/loadLevel 扩展字段） */
 constexpr size_t kZoneEntryWireV1Size = 104;
 
@@ -39,6 +26,31 @@ ZoneLoadStatus loadStatusFromWire(uint8_t enabled, uint8_t loadLevel)
         return static_cast<ZoneLoadStatus>(loadLevel);
     }
     return ZoneLoadStatus::Smooth;
+}
+
+template<typename MsgT>
+std::vector<char> encodeWire(MsgT& body)
+{
+    initClientMsg(body);
+    return ProtocolCodec::encode(MsgT::kModule,
+                                 MsgT::kSub,
+                                 reinterpret_cast<const char*>(&body),
+                                 static_cast<uint16_t>(sizeof(body)));
+}
+
+template<typename MsgT>
+bool parseWire(const char* data, uint16_t len, MsgT& out)
+{
+    if (!data || len < sizeof(MsgT))
+    {
+        return false;
+    }
+    if (!clientMsgBodyMatches(MsgT::kModule, MsgT::kSub, data, len))
+    {
+        return false;
+    }
+    std::memcpy(&out, data, sizeof(out));
+    return true;
 }
 }  // namespace
 
@@ -56,16 +68,6 @@ void ClientMsgHandler::copyFixedString(char* dest, size_t destSize, const std::s
     }
 }
 
-bool ClientMsgHandler::copyStruct(const char* data, uint16_t len, void* out, size_t structSize)
-{
-    if (!data || !out || len < structSize)
-    {
-        return false;
-    }
-    std::memcpy(out, data, structSize);
-    return true;
-}
-
 std::vector<char> ClientMsgHandler::buildLoginReq(const std::string& account,
                                                   const std::string& password,
                                                   uint32_t zoneId,
@@ -77,10 +79,7 @@ std::vector<char> ClientMsgHandler::buildLoginReq(const std::string& account,
     body.zoneId   = zoneId;
     body.gameType = gameType;
     std::memset(body.reserved, 0, sizeof(body.reserved));
-
-    return ProtocolCodec::encode(kLoginModule, kLoginReqSub,
-                                 reinterpret_cast<const char*>(&body),
-                                 static_cast<uint16_t>(sizeof(body)));
+    return encodeWire(body);
 }
 
 std::vector<char> ClientMsgHandler::buildRegisterReq(const std::string& account,
@@ -96,20 +95,14 @@ std::vector<char> ClientMsgHandler::buildRegisterReq(const std::string& account,
     body.zoneId   = zoneId;
     body.gameType = gameType;
     std::memset(body.reserved, 0, sizeof(body.reserved));
-
-    return ProtocolCodec::encode(kLoginModule, kRegisterReqSub,
-                                 reinterpret_cast<const char*>(&body),
-                                 static_cast<uint16_t>(sizeof(body)));
+    return encodeWire(body);
 }
 
 std::vector<char> ClientMsgHandler::buildZoneListReq(uint8_t gameType)
 {
     Msg_C2S_ZoneListReq body{};
     body.gameType = gameType;
-
-    return ProtocolCodec::encode(kLoginModule, kZoneListReqSub,
-                                 reinterpret_cast<const char*>(&body),
-                                 static_cast<uint16_t>(sizeof(body)));
+    return encodeWire(body);
 }
 
 bool ClientMsgHandler::parseZoneListRsp(const char* data,
@@ -127,7 +120,11 @@ bool ClientMsgHandler::parseZoneListRsp(const char* data,
     }
 
     Msg_S2C_ZoneListRspHeader hdr{};
-    std::memcpy(&hdr, data, sizeof(hdr));
+    if (!parseWire(data, len, hdr))
+    {
+        errMsg = u8"区列表响应格式错误";
+        return false;
+    }
 
     if (hdr.code != 0)
     {
@@ -135,28 +132,28 @@ bool ClientMsgHandler::parseZoneListRsp(const char* data,
         return false;
     }
 
-    const size_t bodyLen = len - sizeof(Msg_S2C_ZoneListRspHeader);
-    if (hdr.count == 0)
-    {
-        return true;
-    }
-
-    if (bodyLen % hdr.count != 0)
+    if (len != zoneListBodyLen(hdr.count))
     {
         errMsg = u8"区列表数据不完整";
         return false;
     }
 
+    if (hdr.count == 0)
+    {
+        return true;
+    }
+
+    const char* p = data + sizeof(Msg_S2C_ZoneListRspHeader);
+    const size_t bodyLen = len - sizeof(Msg_S2C_ZoneListRspHeader);
     const size_t entrySize = bodyLen / hdr.count;
-    const bool wireV2 = entrySize == sizeof(Msg_S2C_ZoneEntryWire);
-    const bool wireV1 = entrySize == kZoneEntryWireV1Size;
+    const bool wireV2      = entrySize == sizeof(Msg_S2C_ZoneEntryWire);
+    const bool wireV1      = entrySize == kZoneEntryWireV1Size;
     if (!wireV1 && !wireV2)
     {
         errMsg = u8"区列表条目格式未知";
         return false;
     }
 
-    const char* p = data + sizeof(Msg_S2C_ZoneListRspHeader);
     for (uint16_t i = 0; i < hdr.count; ++i)
     {
         GameZoneEntry zone{};
@@ -207,10 +204,7 @@ std::vector<char> ClientMsgHandler::buildHeartbeat(uint32_t seq)
 {
     Msg_C2S_Heartbeat body{};
     body.seq = seq;
-
-    return ProtocolCodec::encode(kSystemModule, kHeartbeatSub,
-                                 reinterpret_cast<const char*>(&body),
-                                 static_cast<uint16_t>(sizeof(body)));
+    return encodeWire(body);
 }
 
 std::vector<char> ClientMsgHandler::buildMoveReq(uint64_t userID,
@@ -225,25 +219,27 @@ std::vector<char> ClientMsgHandler::buildMoveReq(uint64_t userID,
     body.z        = z;
     body.dir      = dir;
     body.moveType = moveType;
-
-    return ProtocolCodec::encode(kSceneModule, kMoveReqSub,
-                                 reinterpret_cast<const char*>(&body),
-                                 static_cast<uint16_t>(sizeof(body)));
+    return encodeWire(body);
 }
 
 bool ClientMsgHandler::parseLoginRsp(const char* data, uint16_t len, Msg_S2C_LoginRsp& out)
 {
-    return copyStruct(data, len, &out, sizeof(out));
+    return parseWire(data, len, out);
+}
+
+bool ClientMsgHandler::parseRegisterRsp(const char* data, uint16_t len, Msg_S2C_RegisterRsp& out)
+{
+    return parseWire(data, len, out);
 }
 
 bool ClientMsgHandler::parseGatewayInfo(const char* data, uint16_t len, Msg_S2C_GatewayInfo& out)
 {
-    return copyStruct(data, len, &out, sizeof(out));
+    return parseWire(data, len, out);
 }
 
 bool ClientMsgHandler::parseEnterGame(const char* data, uint16_t len, Msg_S2C_EnterGame& out)
 {
-    return copyStruct(data, len, &out, sizeof(out));
+    return parseWire(data, len, out);
 }
 
 std::vector<char> ClientMsgHandler::buildGatewayAuthReq(const std::string& account,
@@ -257,10 +253,7 @@ std::vector<char> ClientMsgHandler::buildGatewayAuthReq(const std::string& accou
     body.zoneId   = zoneId;
     body.gameType = gameType;
     std::memset(body.reserved, 0, sizeof(body.reserved));
-
-    return ProtocolCodec::encode(kLoginModule, kGatewayAuthReqSub,
-                                 reinterpret_cast<const char*>(&body),
-                                 static_cast<uint16_t>(sizeof(body)));
+    return encodeWire(body);
 }
 
 bool ClientMsgHandler::parseUserList(const char* data,
@@ -278,7 +271,11 @@ bool ClientMsgHandler::parseUserList(const char* data,
     }
 
     Msg_S2C_UserListHeader hdr{};
-    std::memcpy(&hdr, data, sizeof(hdr));
+    if (!parseWire(data, len, hdr))
+    {
+        errMsg = u8"角色列表响应格式错误";
+        return false;
+    }
 
     if (hdr.code != 0)
     {
@@ -286,8 +283,7 @@ bool ClientMsgHandler::parseUserList(const char* data,
         return false;
     }
 
-    const size_t expectedBody = static_cast<size_t>(hdr.count) * sizeof(Msg_S2C_UserListEntryWire);
-    if (len < sizeof(Msg_S2C_UserListHeader) + expectedBody)
+    if (len != userListBodyLen(hdr.count))
     {
         errMsg = u8"角色列表数据不完整";
         return false;
@@ -316,10 +312,7 @@ std::vector<char> ClientMsgHandler::buildSelectUserReq(uint64_t userID, uint64_t
     Msg_C2S_SelectUserReq body{};
     body.userID     = userID;
     body.loginTxnId = loginTxnId;
-
-    return ProtocolCodec::encode(kLoginModule, kSelectUserReqSub,
-                                 reinterpret_cast<const char*>(&body),
-                                 static_cast<uint16_t>(sizeof(body)));
+    return encodeWire(body);
 }
 
 std::vector<char> ClientMsgHandler::buildCreateUserReq(const std::string& name,
@@ -331,23 +324,54 @@ std::vector<char> ClientMsgHandler::buildCreateUserReq(const std::string& name,
     body.vocation = vocation;
     body.sex      = sex;
     std::memset(body.reserved, 0, sizeof(body.reserved));
-
-    return ProtocolCodec::encode(kLoginModule, kCreateUserReqSub,
-                                 reinterpret_cast<const char*>(&body),
-                                 static_cast<uint16_t>(sizeof(body)));
+    return encodeWire(body);
 }
 
 bool ClientMsgHandler::parseCreateUserRsp(const char* data, uint16_t len, Msg_S2C_CreateUserRsp& out)
 {
-    return copyStruct(data, len, &out, sizeof(out));
+    return parseWire(data, len, out);
 }
 
 bool ClientMsgHandler::parseSpawnEntity(const char* data, uint16_t len, Msg_S2C_SpawnEntity& out)
 {
-    return copyStruct(data, len, &out, sizeof(out));
+    return parseWire(data, len, out);
 }
 
 bool ClientMsgHandler::parseMoveNotify(const char* data, uint16_t len, Msg_S2C_MoveNotify& out)
 {
-    return copyStruct(data, len, &out, sizeof(out));
+    return parseWire(data, len, out);
+}
+
+bool ClientMsgHandler::parseDespawnEntity(const char* data, uint16_t len, Msg_S2C_DespawnEntity& out)
+{
+    return parseWire(data, len, out);
+}
+
+bool ClientMsgHandler::parseGatewayError(const char* data, uint16_t len, Msg_S2C_Error& out)
+{
+    return parseWire(data, len, out);
+}
+
+std::string ClientMsgHandler::gatewayErrorText(const Msg_S2C_Error& err)
+{
+    switch (static_cast<GatewayValidateCode>(err.code))
+    {
+    case GatewayValidateCode::UNKNOWN_MSG:
+        return u8"未知消息类型";
+    case GatewayValidateCode::BAD_LENGTH:
+        return u8"消息长度非法";
+    case GatewayValidateCode::BAD_STATE:
+        return u8"连接状态不允许该操作";
+    case GatewayValidateCode::BAD_PAYLOAD:
+        return u8"请求参数非法";
+    case GatewayValidateCode::RATE_LIMITED:
+        return u8"请求过于频繁";
+    default:
+        break;
+    }
+    if (err.msg[0] != '\0')
+    {
+        return std::string(err.msg);
+    }
+    return u8"网关校验失败";
 }

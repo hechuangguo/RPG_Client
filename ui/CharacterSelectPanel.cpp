@@ -5,6 +5,7 @@
 
 #include "ui/CharacterSelectPanel.h"
 
+#include "LoginCommon.h"
 #include "ui/UiTheme.h"
 
 namespace
@@ -231,7 +232,12 @@ bool CharacterSelectPanel::validateCreate(std::string& err) const
         err = u8"请输入角色名";
         return false;
     }
-    if (name.size() > 31)
+    if (name.size() < MIN_ROLE_NAME_LEN)
+    {
+        err = u8"角色名过短";
+        return false;
+    }
+    if (name.size() > MAX_ROLE_NAME_LEN)
     {
         err = u8"角色名过长";
         return false;

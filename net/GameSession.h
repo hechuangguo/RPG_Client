@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include "ClientMsg.h"
+#include "ClientProtocol.h"
 
 #include <cstdint>
 #include <functional>

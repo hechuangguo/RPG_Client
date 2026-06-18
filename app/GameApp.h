@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include "ClientMsg.h"
+#include "ClientProtocol.h"
 #include "app/AppState.h"
 #include "game/GameScene.h"
 #include "game/ItemBagModel.h"

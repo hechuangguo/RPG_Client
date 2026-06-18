@@ -3,11 +3,11 @@ $ErrorActionPreference = "Stop"
 
 $clientDir = $PSScriptRoot
 $repoRoot = (git -C $clientDir rev-parse --show-toplevel 2>$null)
-if ($repoRoot -and -not (Test-Path (Join-Path $clientDir "Common\ClientMsg.h"))) {
+if ($repoRoot -and -not (Test-Path (Join-Path $clientDir "Common\LoginMsg.h"))) {
     Write-Host "Common submodule missing; initializing ..."
     git -C $repoRoot submodule update --init Common
-    if (-not (Test-Path (Join-Path $clientDir "Common\ClientMsg.h"))) {
-        throw "Common/ClientMsg.h not found. Run: git submodule update --init --recursive"
+    if (-not (Test-Path (Join-Path $clientDir "Common\LoginMsg.h"))) {
+        throw "Common/LoginMsg.h not found. Run: git submodule update --init --recursive"
     }
 }
 

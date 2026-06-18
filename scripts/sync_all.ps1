@@ -1,8 +1,8 @@
-$ErrorActionPreference = "Stop"
-
 param(
     [switch]$AllowDirty
 )
+
+$ErrorActionPreference = "Stop"
 
 function Invoke-Git {
     param(
@@ -28,7 +28,7 @@ if ($dirty -and -not $AllowDirty) {
     throw @"
 Working tree is not clean.
 Please commit/stash your changes first, or run:
-  powershell -ExecutionPolicy Bypass -File .\scripts\sync_all.ps1 -AllowDirty
+  .\sync_all.bat
 "@
 }
 

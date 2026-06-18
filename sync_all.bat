@@ -15,8 +15,8 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo Running sync script...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" %*
+echo Running sync script (allows local uncommitted changes)...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -AllowDirty %*
 set "EXIT_CODE=%ERRORLEVEL%"
 
 if not "%EXIT_CODE%"=="0" (

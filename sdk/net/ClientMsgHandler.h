@@ -1,17 +1,14 @@
 /**
  * @file    ClientMsgHandler.h
- * @brief   客户端消息构造与解析辅助
+ * @brief   客户端消息构造与解析辅助（wire v2）
  *
- * 对 Common/ClientMsg.h 中的常用 C2S/S2C 结构体提供类型安全的
- * 组包（build*）与解包（parse*）接口，避免业务层手动偏移。
- *
- * 线程：仅主线程调用，非线程安全。
+ * 对 Common/LoginMsg.h、ZoneMsg.h、MapDataMsg.h 等提供 build/parse 接口。
+ * 组包须 initClientMsg；解包须 clientMsgBodyMatches。
  */
 
 #pragma once
 
-#include "ClientMsg.h"
-#include "MsgId.h"
+#include "ClientProtocol.h"
 #include "net/CharacterTypes.h"
 
 #include <cstdint>
@@ -20,144 +17,70 @@
 
 struct GameZoneEntry;
 
-/**
- * @brief 客户端消息辅助类（静态方法）
- */
 class ClientMsgHandler
 {
 public:
-    /**
-     * @brief 构造 C2S_LOGIN_REQ 完整帧
-     * @param account  账号
-     * @param password 密码
-     * @param zoneId   所选游戏区号
-     * @param gameType 游戏类型
-     * @return 含 MsgHeader 的字节流
-     */
     static std::vector<char> buildLoginReq(const std::string& account,
                                            const std::string& password,
                                            uint32_t zoneId,
                                            uint8_t gameType);
 
-    /**
-     * @brief 构造 C2S_REGISTER_REQ 完整帧
-     * @param account  账号
-     * @param password 密码
-     * @param zoneId   所选游戏区号
-     * @param gameType 游戏类型
-     * @return 含 MsgHeader 的字节流
-     */
     static std::vector<char> buildRegisterReq(const std::string& account,
                                               const std::string& password,
                                               const std::string& confirmPassword,
                                               uint32_t zoneId,
                                               uint8_t gameType);
 
-    /**
-     * @brief 构造 C2S_ZONE_LIST_REQ 完整帧
-     * @param gameType 0=全部类型
-     */
-    static std::vector<char> buildZoneListReq(uint8_t gameType = 0);
+    static std::vector<char> buildZoneListReq(uint8_t gameType = ZONE_LIST_ALL_GAME_TYPES);
 
-    /**
-     * @brief 解析 S2C_ZONE_LIST_RSP 消息体（含变长 entries）
-     */
-    static bool parseZoneListRsp(const char* data,
-                                 uint16_t len,
-                                 std::vector<GameZoneEntry>& out,
-                                 std::string& errMsg);
-
-    /**
-     * @brief 构造 C2S_HEARTBEAT 完整帧
-     * @param seq 心跳序列号
-     * @return 含 MsgHeader 的字节流
-     */
     static std::vector<char> buildHeartbeat(uint32_t seq);
 
-    /**
-     * @brief 构造 C2S_MOVE_REQ 完整帧
-     * @param userID   用户 ID
-     * @param x        目标 X
-     * @param y        目标 Y
-     * @param z        目标 Z
-     * @param dir      朝向（弧度）
-     * @param moveType 移动类型：0=行走 1=跑步
-     * @return 含 MsgHeader 的字节流
-     */
     static std::vector<char> buildMoveReq(uint64_t userID,
                                           float x, float y, float z,
                                           float dir,
                                           uint8_t moveType);
 
-    /**
-     * @brief 解析 S2C_LOGIN_RSP 消息体
-     * @param data 消息体指针
-     * @param len  消息体长度
-     * @param out  [out] 解析结果
-     * @return 长度合法返回 true
-     */
-    static bool parseLoginRsp(const char* data, uint16_t len, Msg_S2C_LoginRsp& out);
-
-    /**
-     * @brief 解析 S2C_GATEWAY_INFO 消息体
-     * @param data 消息体指针
-     * @param len  消息体长度
-     * @param out  [out] 解析结果
-     * @return 长度合法返回 true
-     */
-    static bool parseGatewayInfo(const char* data, uint16_t len, Msg_S2C_GatewayInfo& out);
-
-    /**
-     * @brief 解析 S2C_ENTER_GAME 消息体
-     * @param data 消息体指针
-     * @param len  消息体长度
-     * @param out  [out] 解析结果
-     * @return 长度合法返回 true
-     */
-    static bool parseEnterGame(const char* data, uint16_t len, Msg_S2C_EnterGame& out);
-
-    /** @brief 构造 C2S_GATEWAY_AUTH_REQ 完整帧 */
     static std::vector<char> buildGatewayAuthReq(const std::string& account,
                                                  const std::string& loginToken,
                                                  uint32_t zoneId,
                                                  uint8_t gameType);
 
-    /** @brief 解析 S2C_USER_LIST 消息体（变长 entries） */
+    static std::vector<char> buildSelectUserReq(uint64_t userID, uint64_t loginTxnId = 0);
+
+    static std::vector<char> buildCreateUserReq(const std::string& name,
+                                                uint8_t vocation,
+                                                uint8_t sex);
+
+    static bool parseZoneListRsp(const char* data,
+                                 uint16_t len,
+                                 std::vector<GameZoneEntry>& out,
+                                 std::string& errMsg);
+
+    static bool parseLoginRsp(const char* data, uint16_t len, Msg_S2C_LoginRsp& out);
+
+    static bool parseRegisterRsp(const char* data, uint16_t len, Msg_S2C_RegisterRsp& out);
+
+    static bool parseGatewayInfo(const char* data, uint16_t len, Msg_S2C_GatewayInfo& out);
+
+    static bool parseEnterGame(const char* data, uint16_t len, Msg_S2C_EnterGame& out);
+
     static bool parseUserList(const char* data,
                               uint16_t len,
                               std::vector<CharacterEntry>& out,
                               std::string& errMsg);
 
-    /** @brief 构造 C2S_SELECT_USER_REQ 完整帧 */
-    static std::vector<char> buildSelectUserReq(uint64_t userID, uint64_t loginTxnId = 0);
-
-    /** @brief 构造 C2S_CREATE_USER_REQ 完整帧 */
-    static std::vector<char> buildCreateUserReq(const std::string& name,
-                                                uint8_t vocation,
-                                                uint8_t sex);
-
-    /** @brief 解析 S2C_CREATE_USER_RSP 消息体 */
     static bool parseCreateUserRsp(const char* data, uint16_t len, Msg_S2C_CreateUserRsp& out);
 
-    /**
-     * @brief 解析 S2C_SPAWN_ENTITY 消息体
-     * @param data 消息体指针
-     * @param len  消息体长度
-     * @param out  [out] 解析结果
-     * @return 长度合法返回 true
-     */
     static bool parseSpawnEntity(const char* data, uint16_t len, Msg_S2C_SpawnEntity& out);
 
-    /**
-     * @brief 解析 S2C_MOVE_NOTIFY 消息体
-     * @param data 消息体指针
-     * @param len  消息体长度
-     * @param out  [out] 解析结果
-     * @return 长度合法返回 true
-     */
     static bool parseMoveNotify(const char* data, uint16_t len, Msg_S2C_MoveNotify& out);
+
+    static bool parseDespawnEntity(const char* data, uint16_t len, Msg_S2C_DespawnEntity& out);
+
+    static bool parseGatewayError(const char* data, uint16_t len, Msg_S2C_Error& out);
+
+    static std::string gatewayErrorText(const Msg_S2C_Error& err);
 
 private:
     static void copyFixedString(char* dest, size_t destSize, const std::string& src);
-    static bool copyStruct(const char* data, uint16_t len, void* out, size_t structSize);
 };

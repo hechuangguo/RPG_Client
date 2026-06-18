@@ -6,7 +6,7 @@ Windows PC MMORPG 2D client (C++17 + SFML). Runs as a **GUI application** (no co
 
 ```
 RPG_Client/
-  Common/      # Git Submodule → RPG_Common（ClientMsg.h 等 wire 协议）
+  Common/      # Git Submodule → RPG_Common（LoginMsg.h 等 wire 协议，按域拆分）
   3Party/      # SFML、Lua 等第三方库
   scripts/     # init_common.ps1、sync_common.ps1
   sdk/         # 底层封装（net/log/time/math/util）
@@ -87,13 +87,15 @@ Ensure `config/`, `script/`, `database/`, `basefile/`, `map/`, `assets/` are bes
 2. **区列表**：点击「选择服务器」后连接 LoginServer（`client_config.xml` 的 `loginHost`/`loginPort`），发送 `C2S_ZONE_LIST_REQ` 拉取区列表；**不读本地 serverlist.xml**（区列表由 LoginServer 从 `serverlist.xml` 加载后下发）。选中可用区后点「确定」返回首页。
 3. **区服状态**：列表右侧显示负载状态（畅通 / 繁忙 / 爆满 / 维护中）及在线人数（服务端 v2 协议下发时）。旧版 LoginServer 仅下发 `enabled` 时，可用区显示「畅通」，维护区显示「维护中」。
 4. **加载资源**：点击「进入游戏」后初始化 Lua 等，进入账号登录界面。
-5. **账号登录/注册**：输入账号密码登录，或注册后返回登录页（账号密码自动填入）。
-6. **Gateway 鉴权**：LoginServer 验证通过后下发 `S2C_GATEWAY_INFO` 与 `loginToken`；客户端连接 Gateway 并发送 `C2S_GATEWAY_AUTH_REQ`（无票据时回退 `C2S_LOGIN_REQ` 兼容旧 Gateway）。
-7. **角色列表**：Gateway 返回 `S2C_USER_LIST`；客户端展示角色名、等级、职业、性别，并标注「上次登录」角色。
-8. **选角/创角**：选择角色点「进入游戏」发送 `C2S_SELECT_USER_REQ`；无角色时可「创建角色」（`C2S_CREATE_USER_REQ`）。职业/性别 wire 值：`0=战士/男, 1=法师/女`（须与 Server 一致）。
+5. **账号登录/注册**：连接 LoginServer，发送 `C2S_LOGIN_REQ` 或 `C2S_REGISTER_REQ`。
+6. **角色列表与创角（LoginServer）**：登录成功后 LoginServer 下发 `S2C_LOGIN_RSP`、`S2C_USER_LIST`；无角色时在本界面创建（`C2S_CREATE_USER_REQ` / `S2C_CREATE_USER_RSP`），**保持 LoginServer 连接**。
+7. **Gateway 鉴权**：LoginServer 下发 `S2C_GATEWAY_INFO` 与 `loginToken`；具备角色后客户端连接 Gateway 并发送 `C2S_GATEWAY_AUTH_REQ`（无票据时回退 `C2S_LOGIN_REQ` 兼容旧 Gateway）。
+8. **选角（Gateway）**：Gateway 鉴权成功后展示角色列表（若 LoginServer 已下发则使用缓存）；选择角色点「进入游戏」发送 `C2S_SELECT_USER_REQ`。职业/性别 wire 值：`0=战士/男, 1=法师/女`（须与 Server 一致）。
 9. **进入场景**：收到 `S2C_ENTER_GAME`（含 mapID 与出生坐标）后加载地图并进入游戏世界。
 
 **旧 Gateway 兼容**：若 Gateway 未下发角色列表而直接返回 `S2C_LOGIN_RSP` + `S2C_ENTER_GAME`，客户端跳过选角界面直接进入场景。
+
+**wire v2**：线上帧仍为 `MsgHeader(6B) + body`；body 前两字节须与 header 的 `module`/`sub` 一致。发送前调用 `initClientMsg`，解析时校验 `clientMsgBodyMatches`。网关校验失败由 **SYSTEM** 模块 `S2C_ERROR`（0x0F/0x05）下发，非 LOGIN 模块。
 
 输入框聚焦时显示**闪烁光标**。
 
@@ -158,7 +160,7 @@ Logs: 仓库根目录 `logs/client_YYYYMMDD.log`（从 exe 向上查找含 `main
 
 ## 共享协议（RPG_Common Submodule）
 
-[`Common/`](Common/) 指向 GitHub 仓库 [RPG_Common](https://github.com/hechuangguo/RPG_Common)，与 Server 侧 `Common/` 为**同一源码**。无需再手动 copy 到 RPG_Server。
+[`Common/`](Common/) 指向 GitHub 仓库 [RPG_Common](https://github.com/hechuangguo/RPG_Common)，与 Server 侧 `Common/` 为**同一源码**。协议按域拆分（`LoginMsg.h`、`ZoneMsg.h`、`MapDataMsg.h` 等）；客户端通过 [`sdk/net/ClientProtocol.h`](sdk/net/ClientProtocol.h) 聚合常用头文件。废弃聚合头 `ClientMsg.h`，新代码请按域 include。
 
 | 脚本 | 说明 |
 |------|------|
@@ -181,24 +183,29 @@ git submodule update --init --recursive
 
 协议头位于 `Common/`（submodule）。Server 使用相同 RPG_Common 仓库，挂载路径同为 `Common/`。
 
-区列表协议（LoginServer ClientListen）：
+区列表协议（LoginServer ClientListen，module=LOGIN）：
 
-- `C2S_ZONE_LIST_REQ` (0x000B)
-- `S2C_ZONE_LIST_RSP` (0x000C) — 变长 body：`Msg_S2C_ZoneListRspHeader` + N×`Msg_S2C_ZoneEntryWire`
+| 消息 | module | sub | 扁平 ID | 说明 |
+|------|--------|-----|---------|------|
+| `C2S_ZONE_LIST_REQ` | 0x00 | 0x0B | 0x000B | 拉取区列表 |
+| `S2C_ZONE_LIST_RSP` | 0x00 | 0x0C | 0x000C | 变长 body：`Msg_S2C_ZoneListRspHeader`(8B) + N×`Msg_S2C_ZoneEntryWire` |
 
-账号登录与选角协议（LoginServer / Gateway）：
+账号登录与选角协议：
 
-| 消息 | ID | 说明 |
-|------|-----|------|
-| `C2S_LOGIN_REQ` | 0x0001 | 账号密码登录 |
-| `S2C_LOGIN_RSP` | 0x0002 | 含 `userID`（上次角色）、`loginToken` |
-| `S2C_GATEWAY_INFO` | 0x000A | Gateway 地址 |
-| `C2S_GATEWAY_AUTH_REQ` | 0x000D | Gateway 票据鉴权 |
-| `S2C_USER_LIST` | 0x0006 | 角色列表（变长） |
-| `C2S_SELECT_USER_REQ` | 0x0005 | 选择角色进入游戏 |
-| `C2S_CREATE_USER_REQ` | 0x0007 | 创建角色 |
-| `S2C_CREATE_USER_RSP` | 0x0008 | 创角结果 |
-| `S2C_ENTER_GAME` | 0x0009 | 进入场景（mapID、坐标、属性） |
+| 消息 | module | sub | 扁平 ID | 处理方 | 说明 |
+|------|--------|-----|---------|--------|------|
+| `C2S_LOGIN_REQ` | 0x00 | 0x01 | 0x0001 | LoginServer | 账号密码登录 |
+| `S2C_LOGIN_RSP` | 0x00 | 0x02 | 0x0002 | LoginServer | 含 `userID`（上次角色）、`loginToken` |
+| `C2S_REGISTER_REQ` | 0x00 | 0x03 | 0x0003 | LoginServer | 注册 |
+| `S2C_REGISTER_RSP` | 0x00 | 0x04 | 0x0004 | LoginServer | 0=成功；1=账号已存在；-1=系统错误 |
+| `C2S_SELECT_USER_REQ` | 0x00 | 0x05 | 0x0005 | Gateway | 选择角色进入游戏 |
+| `S2C_USER_LIST` | 0x00 | 0x06 | 0x0006 | LoginServer | 角色列表（变长，header 8B） |
+| `C2S_CREATE_USER_REQ` | 0x00 | 0x07 | 0x0007 | LoginServer | 创建角色（角色名 2–16 字符） |
+| `S2C_CREATE_USER_RSP` | 0x00 | 0x08 | 0x0008 | LoginServer | 0=成功；1=重名；-1=系统错误 |
+| `S2C_ENTER_GAME` | 0x00 | 0x09 | 0x0009 | Gateway | 进入场景（mapID、坐标、属性） |
+| `S2C_GATEWAY_INFO` | 0x00 | 0x0A | 0x000A | LoginServer | Gateway 地址 |
+| `C2S_GATEWAY_AUTH_REQ` | 0x00 | 0x0D | 0x000D | Gateway | Gateway 票据鉴权 |
+| `S2C_ERROR` | **0x0F** | **0x05** | 0x0F05 | Gateway | 网关校验失败（SYSTEM 域，非 LOGIN） |
 
 `Msg_S2C_ZoneEntryWire` 扩展字段（v2，单条 112 字节；旧版 v1 为 104 字节，客户端自动兼容）：
 

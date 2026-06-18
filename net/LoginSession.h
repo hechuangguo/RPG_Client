@@ -3,8 +3,11 @@
  * @brief   登录/注册/选角网络会话状态机
  *
  * 职责：
- * - LoginServer 账号登录/注册 → Gateway 票据鉴权 → 角色列表 → 选角/创角 → S2C_ENTER_GAME
+ * - LoginServer：账号登录/注册、角色列表、创角、S2C_GATEWAY_INFO
+ * - Gateway：票据鉴权、选角、S2C_ENTER_GAME
  * - 每帧 update() 驱动 TcpClient::poll() 并推进状态机
+ *
+ * 协议见 Common/LoginMsg.h（wire v2 body 前缀 module/sub）。
  *
  * 协作：GameApp、ClientMsgHandler、ConfigLoader、CharacterSelectPanel。
  *
@@ -13,7 +16,7 @@
 
 #pragma once
 
-#include "ClientMsg.h"
+#include "ClientProtocol.h"
 #include "net/CharacterTypes.h"
 
 #include <cstdint>
@@ -64,6 +67,7 @@ public:
     void update();
 
     bool isBusy() const;
+    bool gatewayConnected() const;
 
     void cancel();
 
@@ -96,7 +100,16 @@ private:
     void sendLoginReq();
     void sendRegisterReq();
     void sendGatewayAuthOrLogin();
+    void sendSelectUserReq(uint64_t userID);
     void deliverUserList(uint64_t highlightUserId);
+    void tryConnectGateway();
+    void onGatewayAuthSent();
+    void handleLoginRsp(const Msg_S2C_LoginRsp& rsp);
+    void handleUserList();
+    void handleCreateUserRsp(const Msg_S2C_CreateUserRsp& rsp);
+    void handleGatewayInfo(const Msg_S2C_GatewayInfo& info);
+    void handleEnterGame(const char* data, uint16_t len);
+    void handleSystemError(const char* data, uint16_t len);
     std::string loginHost() const;
     uint16_t loginPort() const;
 
@@ -114,6 +127,9 @@ private:
 
     bool                    m_gotLoginRsp;
     bool                    m_gotGatewayInfo;
+    bool                    m_gotUserList;
+    bool                    m_userCreated;
+    bool                    m_gatewayConnected;
     Msg_S2C_LoginRsp        m_loginRsp;
     Msg_S2C_GatewayInfo     m_gatewayInfo;
 
@@ -121,6 +137,7 @@ private:
     uint16_t                m_gatewayPort;
 
     std::vector<CharacterEntry> m_characters;
+    uint64_t                m_pendingSelectUserId;
     std::string             m_pendingCreateName;
     uint8_t                 m_pendingCreateVocation;
     uint8_t                 m_pendingCreateSex;

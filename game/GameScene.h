@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include "ClientMsg.h"
+#include "ClientProtocol.h"
 #include "game/AmbientSystem.h"
 #include "game/BuildingManager.h"
 #include "game/EntityManager.h"

@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "ClientMsg.h"
+#include "ClientProtocol.h"
 
 #include <SFML/Graphics.hpp>
 
