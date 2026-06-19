@@ -10,8 +10,14 @@
 
 namespace
 {
-constexpr float kRowHeight = 36.f;
-constexpr float kListTopOffset = 120.f;
+constexpr float kPanelW       = 720.f;
+constexpr float kPanelH     = 520.f;
+constexpr float kListW        = 280.f;
+constexpr float kListH        = 240.f;
+constexpr float kRowHeight    = 36.f;
+constexpr float kBtnW         = 150.f;
+constexpr float kBtnH         = 40.f;
+constexpr float kBottomBtnY   = 420.f;
 
 const char* vocationLabel(uint8_t vocation)
 {
@@ -49,20 +55,21 @@ void CharacterSelectPanel::setup(UiTheme* theme, const sf::Vector2u& viewSize)
     const sf::FloatRect panel = panelRect();
     const float px = panel.left;
     const float py = panel.top;
-    const float panelW = panel.width;
 
-    m_nameInput.setup(theme, u8"道号", px + 40.f, py + 120.f, panelW - 80.f, 36.f);
-    m_vocationWarriorBtn.setup(theme, u8"战士", px + 40.f, py + 180.f, 150.f, 36.f);
-    m_vocationMageBtn.setup(theme, u8"法师", px + 210.f, py + 180.f, 150.f, 36.f);
-    m_sexMaleBtn.setup(theme, u8"男", px + 40.f, py + 230.f, 150.f, 36.f);
-    m_sexFemaleBtn.setup(theme, u8"女", px + 210.f, py + 230.f, 150.f, 36.f);
+    m_nameInput.setup(theme, u8"角色名", px + 40.f, py + 120.f, 260.f, 36.f);
+    m_vocationWarriorBtn.setup(theme, u8"战士", px + 40.f, py + 180.f, 120.f, 36.f);
+    m_vocationMageBtn.setup(theme, u8"法师", px + 180.f, py + 180.f, 120.f, 36.f);
+    m_sexMaleBtn.setup(theme, u8"男", px + 40.f, py + 230.f, 120.f, 36.f);
+    m_sexFemaleBtn.setup(theme, u8"女", px + 180.f, py + 230.f, 120.f, 36.f);
 
-    m_enterGameButton.setup(theme, u8"进入游戏", px + 40.f, py + 420.f, 150.f, 40.f);
-    m_createCharButton.setup(theme, u8"创建角色", px + 210.f, py + 420.f, 150.f, 40.f);
-    m_backButton.setup(theme, u8"返回登录", px + 40.f, py + 470.f, panelW - 80.f, 36.f);
+    m_confirmCreateButton.setup(theme, u8"确认创建", px + 40.f, py + 290.f, 120.f, 40.f);
+    m_cancelCreateButton.setup(theme, u8"取消", px + 180.f, py + 290.f, 120.f, 40.f);
 
-    m_confirmCreateButton.setup(theme, u8"确认创建", px + 40.f, py + 290.f, 150.f, 40.f);
-    m_cancelCreateButton.setup(theme, u8"取消", px + 210.f, py + 290.f, 150.f, 40.f);
+    const float centerX = px + panel.width / 2.f;
+    m_enterGameButton.setup(theme, u8"进入游戏", centerX - kBtnW / 2.f, py + kBottomBtnY, kBtnW, kBtnH);
+    m_createCharButton.setup(
+        theme, u8"创建角色", px + panel.width - kBtnW - 40.f, py + kBottomBtnY, kBtnW, kBtnH);
+    m_backButton.setup(theme, u8"返回登录", px + 40.f, py + 470.f, panel.width - 80.f, 36.f);
 
     m_vocationWarriorBtn.setOnClick([this]() {
         m_selectedVocation = CharacterDef::kVocationWarrior;
@@ -92,6 +99,7 @@ void CharacterSelectPanel::setup(UiTheme* theme, const sf::Vector2u& viewSize)
 
     m_createCharButton.setOnClick([this]() {
         m_mode = Mode::Create;
+        m_statusMessage.clear();
         refreshButtons();
     });
 
@@ -119,15 +127,12 @@ void CharacterSelectPanel::setup(UiTheme* theme, const sf::Vector2u& viewSize)
     });
 
     m_cancelCreateButton.setOnClick([this]() {
-        if (m_characters.empty())
-        {
-            if (m_onBack)
-            {
-                m_onBack();
-            }
-            return;
-        }
         m_mode = Mode::Select;
+        m_statusMessage.clear();
+        if (m_status == Status::Error)
+        {
+            m_status = Status::Ready;
+        }
         refreshButtons();
     });
 
@@ -138,7 +143,7 @@ void CharacterSelectPanel::setCharacters(const std::vector<CharacterEntry>& char
 {
     m_characters  = chars;
     m_lastUserId  = lastUserId;
-    m_mode        = chars.empty() ? Mode::Create : Mode::Select;
+    m_mode        = Mode::Select;
     m_status      = Status::Ready;
     m_statusMessage.clear();
     refreshSelection();
@@ -210,10 +215,12 @@ void CharacterSelectPanel::refreshSelection()
 
 void CharacterSelectPanel::refreshButtons()
 {
-    const bool ready = m_status == Status::Ready;
+    const bool ready   = m_status == Status::Ready;
     const bool loading = m_status == Status::Loading;
+    const bool hasChar   = m_selectedIndex >= 0 &&
+                         m_selectedIndex < static_cast<int>(m_characters.size());
 
-    m_enterGameButton.setEnabled(ready && m_mode == Mode::Select && m_selectedIndex >= 0 && !loading);
+    m_enterGameButton.setEnabled(ready && m_mode == Mode::Select && hasChar && !loading);
     m_createCharButton.setEnabled(ready && m_mode == Mode::Select && !loading);
     m_backButton.setEnabled(!loading);
     m_confirmCreateButton.setEnabled(ready && m_mode == Mode::Create && !loading);
@@ -247,20 +254,18 @@ bool CharacterSelectPanel::validateCreate(std::string& err) const
 
 sf::FloatRect CharacterSelectPanel::panelRect() const
 {
-    const float panelW = 420.f;
-    const float panelH = 540.f;
-    const float px = (static_cast<float>(m_viewSize.x) - panelW) / 2.f;
-    const float py = (static_cast<float>(m_viewSize.y) - panelH) / 2.f;
-    return sf::FloatRect(px, py, panelW, panelH);
+    const float px = (static_cast<float>(m_viewSize.x) - kPanelW) / 2.f;
+    const float py = (static_cast<float>(m_viewSize.y) - kPanelH) / 2.f;
+    return sf::FloatRect(px, py, kPanelW, kPanelH);
 }
 
 sf::FloatRect CharacterSelectPanel::listAreaRect() const
 {
     const sf::FloatRect panel = panelRect();
-    return sf::FloatRect(panel.left + 20.f,
-                         panel.top + kListTopOffset,
-                         panel.width - 40.f,
-                         220.f);
+    return sf::FloatRect(panel.left + panel.width - kListW - 20.f,
+                         panel.top + 80.f,
+                         kListW,
+                         kListH);
 }
 
 int CharacterSelectPanel::rowAtPosition(const sf::Vector2f& pos) const
@@ -294,7 +299,7 @@ void CharacterSelectPanel::handleEvent(const sf::Event& event, const sf::RenderW
         m_confirmCreateButton.handleEvent(event, window);
         m_cancelCreateButton.handleEvent(event, window);
     }
-    else
+    else if (m_status == Status::Ready)
     {
         if (event.type == sf::Event::MouseButtonPressed &&
             event.mouseButton.button == sf::Mouse::Left)
@@ -315,6 +320,14 @@ void CharacterSelectPanel::handleEvent(const sf::Event& event, const sf::RenderW
     m_backButton.handleEvent(event, window);
 }
 
+void CharacterSelectPanel::update(float dt)
+{
+    if (m_mode == Mode::Create && m_status == Status::Ready)
+    {
+        m_nameInput.update(dt);
+    }
+}
+
 void CharacterSelectPanel::draw(sf::RenderTarget& target) const
 {
     if (!m_theme)
@@ -329,13 +342,75 @@ void CharacterSelectPanel::draw(sf::RenderTarget& target) const
     if (!m_statusMessage.empty())
     {
         const sf::Color color = m_status == Status::Error ? sf::Color(255, 120, 120)
-                                                          : m_theme->accentColor();
+                                                        : m_theme->accentColor();
         m_theme->drawText(target,
                           m_statusMessage,
                           panel.left + 40.f,
-                          panel.top + 56.f,
+                          panel.top + 52.f,
                           16,
                           color);
+    }
+
+    const sf::FloatRect list = listAreaRect();
+    m_theme->drawText(target,
+                      u8"角色列表",
+                      list.left,
+                      list.top - 28.f,
+                      18,
+                      m_theme->textColor());
+
+    if (m_status == Status::Loading)
+    {
+        m_theme->drawText(target,
+                          m_statusMessage.empty() ? u8"正在连接..." : m_statusMessage,
+                          list.left,
+                          list.top + 80.f,
+                          18,
+                          m_theme->accentColor());
+    }
+    else
+    {
+        if (m_characters.empty())
+        {
+            m_theme->drawText(target,
+                              u8"暂无角色",
+                              list.left + 8.f,
+                              list.top + 12.f,
+                              16,
+                              m_theme->textColor());
+        }
+        else
+        {
+            const size_t maxRows = static_cast<size_t>(kListH / kRowHeight);
+            const size_t drawCount = std::min(m_characters.size(), maxRows);
+            for (size_t i = 0; i < drawCount; ++i)
+            {
+                const float rowY = list.top + static_cast<float>(i) * kRowHeight;
+                const bool selected = static_cast<int>(i) == m_selectedIndex;
+                if (selected)
+                {
+                    sf::RectangleShape highlight(sf::Vector2f(list.width, kRowHeight - 2.f));
+                    highlight.setPosition(list.left, rowY);
+                    highlight.setFillColor(sf::Color(60, 100, 90, 120));
+                    target.draw(highlight);
+                }
+
+                const CharacterEntry& ch = m_characters[i];
+                std::string line = ch.name + u8"  Lv." + std::to_string(ch.level) + u8"  " +
+                                   vocationLabel(ch.vocation) + u8"  " + sexLabel(ch.sex);
+                if (ch.userID == m_lastUserId)
+                {
+                    line += u8"  [上次]";
+                }
+
+                m_theme->drawText(target,
+                                  line,
+                                  list.left + 8.f,
+                                  rowY + 8.f,
+                                  15,
+                                  selected ? m_theme->accentColor() : m_theme->textColor());
+            }
+        }
     }
 
     if (m_mode == Mode::Create)
@@ -353,48 +428,6 @@ void CharacterSelectPanel::draw(sf::RenderTarget& target) const
         m_sexFemaleBtn.draw(target);
         m_confirmCreateButton.draw(target);
         m_cancelCreateButton.draw(target);
-    }
-    else if (m_status == Status::Loading)
-    {
-        m_theme->drawText(target,
-                          m_statusMessage.empty() ? u8"正在获取角色列表..." : m_statusMessage,
-                          panel.left + 40.f,
-                          panel.top + 200.f,
-                          18,
-                          m_theme->accentColor());
-    }
-    else
-    {
-        const sf::FloatRect list = listAreaRect();
-        m_theme->drawText(target, u8"角色列表", panel.left + 40.f, panel.top + 90.f, 18, m_theme->textColor());
-
-        for (size_t i = 0; i < m_characters.size(); ++i)
-        {
-            const float rowY = list.top + static_cast<float>(i) * kRowHeight;
-            const bool selected = static_cast<int>(i) == m_selectedIndex;
-            if (selected)
-            {
-                sf::RectangleShape highlight(sf::Vector2f(list.width, kRowHeight - 2.f));
-                highlight.setPosition(list.left, rowY);
-                highlight.setFillColor(sf::Color(60, 100, 90, 120));
-                target.draw(highlight);
-            }
-
-            const CharacterEntry& ch = m_characters[i];
-            std::string line = ch.name + u8"  Lv." + std::to_string(ch.level) + u8"  " +
-                               vocationLabel(ch.vocation) + u8"  " + sexLabel(ch.sex);
-            if (ch.userID == m_lastUserId)
-            {
-                line += u8"  [上次登录]";
-            }
-
-            m_theme->drawText(target,
-                              line,
-                              list.left + 8.f,
-                              rowY + 8.f,
-                              16,
-                              selected ? m_theme->accentColor() : m_theme->textColor());
-        }
     }
 
     m_enterGameButton.draw(target);

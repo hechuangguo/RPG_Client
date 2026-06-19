@@ -39,6 +39,7 @@ public:
     using VoidCallback      = std::function<void()>;
     using UserListCallback  = std::function<void(const std::vector<CharacterEntry>& chars,
                                                  uint64_t lastUserId)>;
+    using StatusCallback    = std::function<void(const std::string&)>;
 
     LoginSession();
     ~LoginSession();
@@ -49,6 +50,7 @@ public:
     void setOnError(ErrorCallback cb);
     void setOnRegisterSuccess(VoidCallback cb);
     void setOnUserList(UserListCallback cb);
+    void setOnStatus(StatusCallback cb);
 
     void startLogin(const std::string& account,
                     const std::string& password,
@@ -110,6 +112,10 @@ private:
     void handleGatewayInfo(const Msg_S2C_GatewayInfo& info);
     void handleEnterGame(const char* data, uint16_t len);
     void handleSystemError(const char* data, uint16_t len);
+    void notifyStatus(const std::string& message);
+    bool isConnectingState() const;
+    bool isWaitingResponseState() const;
+    std::string responseTimeoutMessage() const;
     std::string loginHost() const;
     uint16_t loginPort() const;
 
@@ -141,9 +147,12 @@ private:
     std::string             m_pendingCreateName;
     uint8_t                 m_pendingCreateVocation;
     uint8_t                 m_pendingCreateSex;
+    int64_t                 m_connectStartMs;
+    int64_t                 m_waitResponseStartMs;
 
     EnterGameCallback       m_onEnterGame;
     ErrorCallback           m_onError;
     VoidCallback            m_onRegisterSuccess;
     UserListCallback        m_onUserList;
+    StatusCallback          m_onStatus;
 };

@@ -201,22 +201,24 @@ void GameApp::wireCallbacks()
         onEnterGame(enter);
     });
 
+    m_loginSession.setOnStatus([this](const std::string& msg) {
+        if (m_state == AppState::CharacterSelect)
+        {
+            m_characterSelectPanel.setStatus(CharacterSelectPanel::Status::Loading, msg);
+        }
+        else if (m_state == AppState::Register)
+        {
+            m_registerPanel.setMessage(msg, false);
+        }
+    });
+
     m_loginSession.setOnUserList([this](const std::vector<CharacterEntry>& chars, uint64_t lastUserId) {
         m_characterSelectPanel.setCharacters(chars, lastUserId);
-        switchState(AppState::CharacterSelect);
     });
 
     m_characterSelectPanel.setOnEnterGame([this](uint64_t userId) {
-        if (!m_loginSession.gatewayConnected())
-        {
-            m_characterSelectPanel.setStatus(CharacterSelectPanel::Status::Loading,
-                                             u8"正在连接网关...");
-        }
-        else
-        {
-            m_characterSelectPanel.setStatus(CharacterSelectPanel::Status::Loading,
-                                             u8"正在进入游戏...");
-        }
+        m_characterSelectPanel.setStatus(CharacterSelectPanel::Status::Loading,
+                                         u8"正在加载地图与角色资源...");
         m_loginSession.selectCharacter(userId);
     });
 
@@ -234,7 +236,6 @@ void GameApp::wireCallbacks()
     });
 
     m_loginSession.setOnError([this](const std::string& err) {
-        m_statusMessage = err;
         if (m_state == AppState::CharacterSelect)
         {
             const auto panelStatus = m_loginSession.isBusy()
@@ -242,10 +243,13 @@ void GameApp::wireCallbacks()
                                          : CharacterSelectPanel::Status::Error;
             m_characterSelectPanel.setStatus(panelStatus, err);
         }
+        else if (m_state == AppState::Register)
+        {
+            m_registerPanel.setMessage(err, true);
+        }
         else
         {
             m_authLoginPanel.setErrorMessage(err);
-            m_registerPanel.setMessage(err, true);
             switchState(AppState::AuthLogin);
         }
     });
@@ -373,7 +377,6 @@ void GameApp::processEvents()
             m_serverListPanel.handleEvent(event, m_window);
             break;
         case AppState::AuthLogin:
-        case AppState::Connecting:
             m_authLoginPanel.handleEvent(event, m_window);
             break;
         case AppState::Register:
@@ -414,7 +417,7 @@ void GameApp::update(float dt)
         finishLoadingAuth();
     }
 
-    if (m_state == AppState::AuthLogin || m_state == AppState::Connecting)
+    if (m_state == AppState::AuthLogin)
     {
         m_authLoginPanel.update(dt);
     }
@@ -422,22 +425,17 @@ void GameApp::update(float dt)
     {
         m_registerPanel.update(dt);
     }
-
-    else if (m_state == AppState::Register)
+    else if (m_state == AppState::CharacterSelect)
     {
-        m_registerPanel.update(dt);
+        m_characterSelectPanel.update(dt);
     }
 
-    if (m_state == AppState::Connecting || m_state == AppState::CharacterSelect)
+    if (m_loginSession.isBusy())
     {
         m_loginSession.update();
     }
 
-    if (m_state == AppState::Connecting)
-    {
-        m_gameSession.update(dt);
-    }
-    else if (m_state == AppState::Game)
+    if (m_state == AppState::Game)
     {
         m_gameSession.update(dt);
         m_gameScene.update(dt);
@@ -479,19 +477,8 @@ void GameApp::render()
         break;
 
     case AppState::AuthLogin:
-    case AppState::Connecting:
         m_theme.drawBackground(m_window, m_window.getSize());
         m_authLoginPanel.draw(m_window);
-        if (m_state == AppState::Connecting && !m_statusMessage.empty())
-        {
-            m_theme.drawText(
-                m_window,
-                m_statusMessage,
-                40.f,
-                static_cast<float>(m_window.getSize().y) - 40.f,
-                16,
-                m_theme.accentColor());
-        }
         break;
 
     case AppState::Register:
@@ -520,10 +507,6 @@ void GameApp::render()
 void GameApp::switchState(AppState state)
 {
     m_state = state;
-    if (state == AppState::Connecting)
-    {
-        m_statusMessage = u8"正在验证账号...";
-    }
 }
 
 void GameApp::beginLogin(const AuthLoginPanel::LoginRequest& req)
@@ -548,7 +531,7 @@ void GameApp::beginLogin(const AuthLoginPanel::LoginRequest& req)
     m_authLoginPanel.setSuccessMessage("");
     m_characterSelectPanel.reset();
     m_characterSelectPanel.setStatus(CharacterSelectPanel::Status::Loading, u8"正在验证账号...");
-    switchState(AppState::Connecting);
+    switchState(AppState::CharacterSelect);
     m_loginSession.startLogin(req.account, req.password, m_pendingZoneId, m_pendingGameType);
 }
 
@@ -559,7 +542,7 @@ void GameApp::beginRegister(const RegisterPanel::RegisterRequest& req)
     m_pendingRegisterAccount     = req.account;
     m_pendingRegisterPassword    = req.password;
 
-    switchState(AppState::Connecting);
+    m_registerPanel.setMessage(u8"正在注册...", false);
     m_loginSession.startRegister(
         req.account, req.password, req.confirmPassword, req.zoneId, req.gameType);
 }

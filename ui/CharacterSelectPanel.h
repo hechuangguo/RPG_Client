@@ -2,11 +2,15 @@
  * @file    CharacterSelectPanel.h
  * @brief   账号登录后的角色选择与创建面板
  *
- * 职责：
- * - 展示 S2C_USER_LIST 下发的角色列表
- * - 选择角色进入游戏，或创建新角色
+ * 布局（宽面板约 720×520）：
+ * - 右上：角色列表（可点击选中）
+ * - 中下：进入游戏
+ * - 右下：创建角色
+ * - 创角模式：中部左侧显示道号、职业、性别与确认/取消
  *
- * 协作：GameApp、LoginSession（selectCharacter / createCharacter）。
+ * 协作：GameApp 在登录成功后展示本面板；LoginSession 在 LoginServer 下发
+ * S2C_USER_LIST 后 deliverUserList；创角走 LoginSession::createCharacter；
+ * 选角进游戏走 LoginSession::selectCharacter（连 Gateway）。
  *
  * 线程：仅主线程，非线程安全。
  */
@@ -61,6 +65,7 @@ public:
     void setOnBack(std::function<void()> cb);
 
     void handleEvent(const sf::Event& event, const sf::RenderWindow& window);
+    void update(float dt);
     void draw(sf::RenderTarget& target) const;
 
 private:
