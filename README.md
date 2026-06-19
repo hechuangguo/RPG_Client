@@ -42,7 +42,7 @@ Prerequisites: Visual Studio 2022/2026 with **Desktop development with C++** wor
 
 ```powershell
 git submodule update --init --recursive
-.\3Party\download_and_build.ps1
+.\3Party\download_and_build.ps1   # SFML、Lua、OpenSSL
 .\assets\fonts\fetch_font.ps1
 .\build_client.ps1
 ```
@@ -114,7 +114,15 @@ Ensure `config/`, `script/`, `database/`, `basefile/`, `map/`, `assets/` are bes
 
 ## Config
 
-客户端配置使用 XML，支持注释，便于多人各自维护本机 `loginHost` 等差异。
+客户端配置分三层，职责互不重叠：
+
+| 层 | 路径 | 职责 |
+|----|------|------|
+| 部署配置 | `config/client_config.xml` | 窗口、日志、LoginServer 地址、**网络时序**、**TLS** |
+| 用户偏好 | `%APPDATA%/RPGClient/settings.json` | 记住账号、上次区服（`LocalSettings`） |
+| 玩法数据 | `database/*.lua`、`map/*` | 任务/物品/地图资源 |
+
+部署配置使用 XML，支持注释，便于多人各自维护本机 `loginHost` 等差异。
 
 | 文件 | 版本库 | 说明 |
 |------|--------|------|
@@ -140,6 +148,13 @@ Ensure `config/`, `script/`, `database/`, `basefile/`, `map/`, `assets/` are bes
     <logToConsole>false</logToConsole>
     <loginHost>127.0.0.1</loginHost>
     <loginPort>9010</loginPort>
+    <connectTimeoutMs>10000</connectTimeoutMs>
+    <responseTimeoutMs>15000</responseTimeoutMs>
+    <zoneListResponseTimeoutMs>10000</zoneListResponseTimeoutMs>
+    <heartbeatIntervalMs>10000</heartbeatIntervalMs>
+    <moveSendIntervalMs>100</moveSendIntervalMs>
+    <logoutTimeoutMs>15000</logoutTimeoutMs>
+    <Tls enabled="1" ca="config/tls/ca.crt" insecureSkipVerify="0" minVersion="1.2"/>
 </ClientConfig>
 ```
 
@@ -151,6 +166,27 @@ Ensure `config/`, `script/`, `database/`, `basefile/`, `map/`, `assets/` are bes
 | `logLevel` | `info` | `info` / `warn` / `err` |
 | `windowWidth` | `1280` | 窗口宽度（像素） |
 | `windowHeight` | `720` | 窗口高度（像素） |
+| `connectTimeoutMs` | `10000` | TCP 连接握手超时（毫秒） |
+| `responseTimeoutMs` | `15000` | 登录/选角等等待服务端响应超时（毫秒） |
+| `zoneListResponseTimeoutMs` | `10000` | 区列表请求响应超时（毫秒） |
+| `heartbeatIntervalMs` | `10000` | 游戏内心跳发送间隔（毫秒） |
+| `moveSendIntervalMs` | `100` | 移动包发送节流间隔（毫秒） |
+| `logoutTimeoutMs` | `15000` | 离世界等待响应超时（毫秒） |
+
+**TLS**（与服务端 `Tls enabled=1` 对齐；详见 [`config/tls/README.md`](config/tls/README.md)）：
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `enabled` | `1` | 启用 TLS 1.2+（Login 9010、Gateway 9005） |
+| `ca` | `config/tls/ca.crt` | 信任 CA（从服务端 `config/tls` 复制） |
+| `insecureSkipVerify` | `0` | `1` 跳过证书校验（仅本地调试） |
+| `minVersion` | `1.2` | 最低 TLS 版本 |
+
+OpenSSL 预编译库由 [`3Party/download_and_build.ps1`](3Party/download_and_build.ps1) 通过 **winget** 安装 FireDaemon OpenSSL 并复制到 `3Party/openssl/`（首次需联网）。
+
+网络时序默认值定义于 [`sdk/net/ClientTimingDefaults.h`](sdk/net/ClientTimingDefaults.h)；配置文件缺失某项时回退到该头文件常量。联调时可适当缩短超时以便快速发现问题。
+
+**错误码**：wire 协议结果码见 [`Common/LoginCommon.h`](Common/LoginCommon.h)（如 `LoginResultCode`）；客户端本地错误码见 [`sdk/net/ClientLocalError.h`](sdk/net/ClientLocalError.h)；用户可见文案由 [`sdk/net/ClientErrorText`](sdk/net/ClientErrorText.h) 统一映射。
 
 配置文件缺失或解析失败时，客户端使用上表默认值并在日志中输出中文警告。
 

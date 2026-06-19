@@ -29,6 +29,13 @@ endif()
 set(SFML_INCLUDE ${SFML_ROOT}/include)
 set(SFML_MODULES graphics window system network audio)
 
+# --- OpenSSL prebuilt (TLS) ---
+set(OPENSSL_ROOT ${THIRD_PARTY_DIR}/openssl)
+if(NOT EXISTS ${OPENSSL_ROOT}/lib/libssl.lib)
+    message(FATAL_ERROR "OpenSSL not found. Run 3Party\\download_and_build.ps1")
+endif()
+set(OPENSSL_INCLUDE ${OPENSSL_ROOT}/include)
+
 # --- RPGClient ---
 file(GLOB_RECURSE SDK_SRC CONFIGURE_DEPENDS sdk/*.cpp)
 
@@ -49,9 +56,10 @@ target_include_directories(RPGClient PRIVATE
     ${CMAKE_SOURCE_DIR}/sdk
     ${SDK_INCLUDE_DIRS}
     ${SFML_INCLUDE}
+    ${OPENSSL_INCLUDE}
 )
 
-target_link_directories(RPGClient PRIVATE ${SFML_ROOT}/lib)
+target_link_directories(RPGClient PRIVATE ${SFML_ROOT}/lib ${OPENSSL_ROOT}/lib)
 
 target_link_libraries(RPGClient PRIVATE
     $<$<CONFIG:Debug>:sfml-graphics-d>
@@ -63,6 +71,8 @@ target_link_libraries(RPGClient PRIVATE
     opengl32 winmm gdi32
     lua54
     ws2_32
+    libssl
+    libcrypto
 )
 
 if(MSVC)
@@ -103,3 +113,18 @@ add_custom_command(TARGET RPGClient POST_BUILD
         "${SFML_ROOT}/bin/openal32.dll"
         "$<TARGET_FILE_DIR:RPGClient>"
 )
+foreach(_ossl_dll libssl-3-x64.dll libcrypto-3-x64.dll libssl-4-x64.dll libcrypto-4-x64.dll)
+    if(EXISTS ${OPENSSL_ROOT}/bin/${_ossl_dll})
+        add_custom_command(TARGET RPGClient POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${OPENSSL_ROOT}/bin/${_ossl_dll}"
+                "$<TARGET_FILE_DIR:RPGClient>"
+        )
+    elseif(EXISTS ${OPENSSL_ROOT}/${_ossl_dll})
+        add_custom_command(TARGET RPGClient POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${OPENSSL_ROOT}/${_ossl_dll}"
+                "$<TARGET_FILE_DIR:RPGClient>"
+        )
+    endif()
+endforeach()

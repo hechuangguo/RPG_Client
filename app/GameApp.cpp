@@ -7,6 +7,7 @@
 
 #include "log/ClientLogger.h"
 #include "net/CharacterTypes.h"
+#include "net/ClientTlsContext.h"
 #include "net/TcpClient.h"
 #include "time/TimeUtil.h"
 #include "util/PathUtil.h"
@@ -77,6 +78,13 @@ bool GameApp::init()
         ClientLogger::instance().warn("GameApp：%s，使用默认配置", m_config.lastError().c_str());
     }
 
+    std::string tlsErr;
+    if (!ClientTlsContext::instance().init(m_config.tls(), &tlsErr))
+    {
+        ClientLogger::instance().err("GameApp：TLS 初始化失败：%s", tlsErr.c_str());
+        return false;
+    }
+
     ClientLogger::instance().setLogToConsole(m_config.logToConsole());
     if (m_config.logLevel() == "warn")
     {
@@ -112,6 +120,7 @@ bool GameApp::init()
 
     m_loginSession.setConfig(&m_config);
     m_zoneListSession.setConfig(&m_config);
+    m_gameSession.setConfig(&m_config);
 
     wireCallbacks();
     m_lastLuaTickMs = TimeUtil::nowMs();

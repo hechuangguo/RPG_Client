@@ -4,6 +4,7 @@
  *
  * 职责：
  * - Windows WinSock 非阻塞 connect/send/recv
+ * - 可选 TLS 1.2+（OpenSSL）握手与应用数据
  * - 主循环 poll() 驱动 IO 与按 MsgHeader 切帧
  * - 通过 std::function 回调上报连接与消息事件
  *
@@ -16,6 +17,8 @@
 #include <functional>
 #include <string>
 #include <vector>
+
+struct ssl_st;
 
 /**
  * @brief 客户端 TCP 连接器（单连接）
@@ -73,17 +76,17 @@ public:
     /**
      * @brief 单帧 IO 驱动（主循环每帧调用）
      *
-     * 处理非阻塞 connect 完成、recv 收包、send 刷出及断线检测。
+     * 处理非阻塞 connect 完成、TLS 握手、recv 收包、send 刷出及断线检测。
      */
     void poll();
 
     /** @brief 主动断开并释放 socket */
     void disconnect();
 
-    /** @brief 是否处于已连接且未断开状态 */
+    /** @brief 是否处于已连接且未断开状态（TLS 握手已完成） */
     bool isConnected() const;
 
-    /** @brief 是否正在连接中（connect 已发起但未 OnConnected） */
+    /** @brief 是否正在连接中（TCP 或 TLS 握手未完成） */
     bool isConnecting() const;
 
 private:
@@ -91,15 +94,22 @@ private:
     {
         Disconnected,
         Connecting,
+        TlsHandshaking,
         Connected,
     };
 
     void closeSocket();
+    void freeSsl();
     void notifyDisconnected();
     bool flushSendBuffer();
     void handleReadable();
     void handleConnectComplete();
+    void beginTlsHandshake();
+    void driveTlsHandshake();
+    void notifyConnected();
     bool initWinsock();
+    int  transportRead(char* buf, int len);
+    int  transportWrite(const char* buf, int len);
 
     MessageCallback m_onMessage;
     VoidCallback    m_onConnected;
@@ -107,6 +117,8 @@ private:
 
     State           m_state;
     uintptr_t       m_socket;
+    ssl_st*         m_ssl;
+    std::string     m_peerHost;
     std::vector<char> m_recvBuffer;
     std::vector<char> m_sendBuffer;
     bool            m_connectNotified;

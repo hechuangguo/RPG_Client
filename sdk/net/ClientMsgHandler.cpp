@@ -6,6 +6,7 @@
 #include "ClientMsgHandler.h"
 
 #include "ProtocolCodec.h"
+#include "net/ClientErrorText.h"
 #include "net/ZoneTypes.h"
 
 #include <cstring>
@@ -367,24 +368,5 @@ bool ClientMsgHandler::parseGatewayError(const char* data, uint16_t len, Msg_S2C
 
 std::string ClientMsgHandler::gatewayErrorText(const Msg_S2C_Error& err)
 {
-    switch (static_cast<GatewayValidateCode>(err.code))
-    {
-    case GatewayValidateCode::UNKNOWN_MSG:
-        return u8"未知消息类型";
-    case GatewayValidateCode::BAD_LENGTH:
-        return u8"消息长度非法";
-    case GatewayValidateCode::BAD_STATE:
-        return u8"连接状态不允许该操作";
-    case GatewayValidateCode::BAD_PAYLOAD:
-        return u8"请求参数非法";
-    case GatewayValidateCode::RATE_LIMITED:
-        return u8"请求过于频繁";
-    default:
-        break;
-    }
-    if (err.msg[0] != '\0')
-    {
-        return std::string(err.msg);
-    }
-    return u8"网关校验失败";
+    return ClientErrorText::gatewayValidateText(err);
 }

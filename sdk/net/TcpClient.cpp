@@ -1,17 +1,20 @@
 /**
  * @file    TcpClient.cpp
- * @brief   客户端非阻塞 TCP 连接实现
+ * @brief   客户端非阻塞 TCP/TLS 连接实现
  */
 
 #include "TcpClient.h"
 
 #include "ProtocolCodec.h"
+#include "net/ClientTlsContext.h"
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <WinSock2.h>
 #include <WS2tcpip.h>
+
+#include <openssl/ssl.h>
 
 #include <algorithm>
 #include <cstring>
@@ -42,6 +45,20 @@ bool waitSocketWritable(SOCKET sock, int timeoutMs)
     return ret > 0 && FD_ISSET(sock, &writeSet);
 }
 
+bool waitSocketReadable(SOCKET sock, int timeoutMs)
+{
+    fd_set readSet;
+    FD_ZERO(&readSet);
+    FD_SET(sock, &readSet);
+
+    timeval tv{};
+    tv.tv_sec  = timeoutMs / 1000;
+    tv.tv_usec = (timeoutMs % 1000) * 1000;
+
+    const int ret = select(0, &readSet, nullptr, nullptr, &tv);
+    return ret > 0 && FD_ISSET(sock, &readSet);
+}
+
 bool checkConnectError(SOCKET sock)
 {
     int err = 0;
@@ -57,6 +74,7 @@ bool checkConnectError(SOCKET sock)
 TcpClient::TcpClient()
     : m_state(State::Disconnected)
     , m_socket(kInvalidSocket)
+    , m_ssl(nullptr)
     , m_connectNotified(false)
     , m_winsockReady(false)
 {
@@ -107,6 +125,8 @@ bool TcpClient::connect(const std::string& host, uint16_t port)
     {
         return false;
     }
+
+    m_peerHost = host;
 
     addrinfo hints{};
     hints.ai_family   = AF_INET;
@@ -178,12 +198,7 @@ bool TcpClient::connect(const std::string& host, uint16_t port)
     }
     else
     {
-        m_state = State::Connected;
-        m_connectNotified = true;
-        if (m_onConnected)
-        {
-            m_onConnected();
-        }
+        handleConnectComplete();
     }
 
     return true;
@@ -231,18 +246,15 @@ void TcpClient::poll()
         }
     }
 
+    if (m_state == State::TlsHandshaking)
+    {
+        driveTlsHandshake();
+        return;
+    }
+
     if (m_state == State::Connected)
     {
-        fd_set readSet;
-        FD_ZERO(&readSet);
-        FD_SET(sock, &readSet);
-
-        timeval tv{};
-        tv.tv_sec = 0;
-        tv.tv_usec = 0;
-
-        const int ret = select(0, &readSet, nullptr, nullptr, &tv);
-        if (ret > 0 && FD_ISSET(sock, &readSet))
+        if (waitSocketReadable(sock, 0))
         {
             handleReadable();
         }
@@ -253,7 +265,8 @@ void TcpClient::poll()
 
 void TcpClient::disconnect()
 {
-    if (m_state == State::Connected || m_state == State::Connecting)
+    if (m_state == State::Connected || m_state == State::Connecting ||
+        m_state == State::TlsHandshaking)
     {
         notifyDisconnected();
     }
@@ -271,11 +284,21 @@ bool TcpClient::isConnected() const
 
 bool TcpClient::isConnecting() const
 {
-    return m_state == State::Connecting;
+    return m_state == State::Connecting || m_state == State::TlsHandshaking;
+}
+
+void TcpClient::freeSsl()
+{
+    if (m_ssl)
+    {
+        ClientTlsContext::instance().freeSsl(m_ssl);
+        m_ssl = nullptr;
+    }
 }
 
 void TcpClient::closeSocket()
 {
+    freeSsl();
     if (m_socket != kInvalidSocket)
     {
         closesocket(static_cast<SOCKET>(m_socket));
@@ -291,11 +314,34 @@ void TcpClient::notifyDisconnected()
     m_connectNotified = false;
     m_recvBuffer.clear();
     m_sendBuffer.clear();
+    m_peerHost.clear();
 
     if (wasActive && m_onDisconnected)
     {
         m_onDisconnected();
     }
+}
+
+int TcpClient::transportRead(char* buf, int len)
+{
+    if (m_ssl)
+    {
+        return SSL_read(static_cast<SSL*>(m_ssl), buf, len);
+    }
+
+    SOCKET sock = static_cast<SOCKET>(m_socket);
+    return recv(sock, buf, len, 0);
+}
+
+int TcpClient::transportWrite(const char* buf, int len)
+{
+    if (m_ssl)
+    {
+        return SSL_write(static_cast<SSL*>(m_ssl), buf, len);
+    }
+
+    SOCKET sock = static_cast<SOCKET>(m_socket);
+    return ::send(sock, buf, len, 0);
 }
 
 bool TcpClient::flushSendBuffer()
@@ -305,16 +351,26 @@ bool TcpClient::flushSendBuffer()
         return true;
     }
 
-    SOCKET sock = static_cast<SOCKET>(m_socket);
     while (!m_sendBuffer.empty())
     {
-        const int sent = ::send(sock, m_sendBuffer.data(),
-                                static_cast<int>(m_sendBuffer.size()), 0);
+        const int sent = transportWrite(m_sendBuffer.data(),
+                                        static_cast<int>(m_sendBuffer.size()));
         if (sent > 0)
         {
             m_sendBuffer.erase(m_sendBuffer.begin(),
                                m_sendBuffer.begin() + sent);
             continue;
+        }
+
+        if (m_ssl)
+        {
+            const int err = SSL_get_error(static_cast<SSL*>(m_ssl), sent);
+            if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
+            {
+                return true;
+            }
+            notifyDisconnected();
+            return false;
         }
 
         const int err = WSAGetLastError();
@@ -331,16 +387,31 @@ bool TcpClient::flushSendBuffer()
 
 void TcpClient::handleReadable()
 {
-    SOCKET sock = static_cast<SOCKET>(m_socket);
     char chunk[4096];
 
     for (;;)
     {
-        const int received = recv(sock, chunk, sizeof(chunk), 0);
+        const int received = transportRead(chunk, sizeof(chunk));
         if (received > 0)
         {
             m_recvBuffer.insert(m_recvBuffer.end(), chunk, chunk + received);
             continue;
+        }
+
+        if (m_ssl)
+        {
+            const int err = SSL_get_error(static_cast<SSL*>(m_ssl), received);
+            if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE)
+            {
+                break;
+            }
+            if (err == SSL_ERROR_ZERO_RETURN)
+            {
+                notifyDisconnected();
+                return;
+            }
+            notifyDisconnected();
+            return;
         }
 
         if (received == 0)
@@ -373,20 +444,90 @@ void TcpClient::handleReadable()
     }
 }
 
-void TcpClient::handleConnectComplete()
+void TcpClient::notifyConnected()
 {
-    if (m_state != State::Connecting)
+    if (m_connectNotified)
     {
         return;
     }
 
-    m_state = State::Connected;
-    if (!m_connectNotified)
+    m_connectNotified = true;
+    if (m_onConnected)
     {
-        m_connectNotified = true;
-        if (m_onConnected)
-        {
-            m_onConnected();
-        }
+        m_onConnected();
     }
+}
+
+void TcpClient::beginTlsHandshake()
+{
+    SOCKET sock = static_cast<SOCKET>(m_socket);
+    m_ssl         = ClientTlsContext::instance().newSsl(static_cast<int>(sock));
+    if (!m_ssl)
+    {
+        notifyDisconnected();
+        return;
+    }
+
+    if (!m_peerHost.empty())
+    {
+        SSL_set1_host(static_cast<SSL*>(m_ssl), m_peerHost.c_str());
+    }
+
+    m_state = State::TlsHandshaking;
+    driveTlsHandshake();
+}
+
+void TcpClient::driveTlsHandshake()
+{
+    if (m_state != State::TlsHandshaking || !m_ssl)
+    {
+        return;
+    }
+
+    const int ret = SSL_connect(static_cast<SSL*>(m_ssl));
+    if (ret == 1)
+    {
+        m_state = State::Connected;
+        notifyConnected();
+        return;
+    }
+
+    const int err = SSL_get_error(static_cast<SSL*>(m_ssl), ret);
+    if (err == SSL_ERROR_WANT_READ)
+    {
+        SOCKET sock = static_cast<SOCKET>(m_socket);
+        if (waitSocketReadable(sock, 0))
+        {
+            driveTlsHandshake();
+        }
+        return;
+    }
+    if (err == SSL_ERROR_WANT_WRITE)
+    {
+        SOCKET sock = static_cast<SOCKET>(m_socket);
+        if (waitSocketWritable(sock, 0))
+        {
+            driveTlsHandshake();
+        }
+        return;
+    }
+
+    notifyDisconnected();
+}
+
+void TcpClient::handleConnectComplete()
+{
+    if (m_state != State::Connecting && m_state != State::Disconnected)
+    {
+        return;
+    }
+
+    if (ClientTlsContext::instance().enabled())
+    {
+        beginTlsHandshake();
+        return;
+    }
+
+    m_state = State::Connected;
+    notifyConnected();
 }

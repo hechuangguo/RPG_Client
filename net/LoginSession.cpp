@@ -5,7 +5,9 @@
 
 #include "net/LoginSession.h"
 
+#include "net/ClientErrorText.h"
 #include "net/ClientMsgHandler.h"
+#include "net/ClientTimingDefaults.h"
 #include "log/ClientLogger.h"
 #include "net/TcpClient.h"
 #include "time/TimeUtil.h"
@@ -15,8 +17,6 @@ namespace
 {
 constexpr uint8_t kLoginModule  = static_cast<uint8_t>(ClientModule::LOGIN);
 constexpr uint8_t kSystemModule = static_cast<uint8_t>(ClientModule::SYSTEM);
-constexpr int64_t kConnectTimeoutMs  = 10000;
-constexpr int64_t kResponseTimeoutMs = 15000;
 
 bool hasLoginToken(const Msg_S2C_LoginRsp& rsp)
 {
@@ -125,7 +125,7 @@ void LoginSession::startLogin(const std::string& account,
 
     if (!m_tcp->connect(loginHost(), loginPort()))
     {
-        fail(u8"无法连接服务器，请检查 loginHost/loginPort");
+        fail(ClientLocalError::ConnectFailed, LoginTimeoutContext::LoginServerConnect);
     }
 }
 
@@ -160,7 +160,7 @@ void LoginSession::startRegister(const std::string& account,
 
     if (!m_tcp->connect(loginHost(), loginPort()))
     {
-        fail(u8"无法连接服务器，请检查 loginHost/loginPort");
+        fail(ClientLocalError::ConnectFailed, LoginTimeoutContext::LoginServerConnect);
     }
 }
 
@@ -207,22 +207,15 @@ void LoginSession::update()
     }
 
     const int64_t now = TimeUtil::nowMs();
-    if (isConnectingState() && TimeUtil::elapsed(m_connectStartMs, kConnectTimeoutMs, now))
+    if (isConnectingState() && TimeUtil::elapsed(m_connectStartMs, connectTimeoutMs(), now))
     {
-        if (m_state == State::ConnectGateway)
-        {
-            fail(u8"连接游戏网关超时，请检查网络与配置");
-        }
-        else
-        {
-            fail(u8"连接超时，请检查网络与配置");
-        }
+        fail(ClientLocalError::ConnectTimeout, connectTimeoutContext());
         return;
     }
     if (isWaitingResponseState() && m_waitResponseStartMs > 0 &&
-        TimeUtil::elapsed(m_waitResponseStartMs, kResponseTimeoutMs, now))
+        TimeUtil::elapsed(m_waitResponseStartMs, responseTimeoutMs(), now))
     {
-        fail(responseTimeoutMessage());
+        fail(ClientLocalError::ResponseTimeout, timeoutContextForState());
         return;
     }
 
@@ -321,6 +314,49 @@ void LoginSession::fail(const std::string& msg)
     }
 }
 
+void LoginSession::fail(ClientLocalError err, LoginTimeoutContext ctx)
+{
+    fail(ClientErrorText::localErrorText(err, ctx));
+}
+
+int64_t LoginSession::connectTimeoutMs() const
+{
+    return m_config ? m_config->connectTimeoutMs() : ClientTiming::kConnectTimeoutMs;
+}
+
+int64_t LoginSession::responseTimeoutMs() const
+{
+    return m_config ? m_config->responseTimeoutMs() : ClientTiming::kResponseTimeoutMs;
+}
+
+LoginTimeoutContext LoginSession::connectTimeoutContext() const
+{
+    if (m_state == State::ConnectGateway)
+    {
+        return LoginTimeoutContext::GatewayConnect;
+    }
+    return LoginTimeoutContext::LoginServerConnect;
+}
+
+LoginTimeoutContext LoginSession::timeoutContextForState() const
+{
+    switch (m_state)
+    {
+    case State::WaitLoginRsp:
+        return LoginTimeoutContext::Login;
+    case State::RegisterWaitRsp:
+        return LoginTimeoutContext::Register;
+    case State::WaitUserList:
+        return LoginTimeoutContext::UserList;
+    case State::WaitEnterGame:
+        return LoginTimeoutContext::EnterGame;
+    case State::WaitCreateUserRsp:
+        return LoginTimeoutContext::CreateCharacter;
+    default:
+        return LoginTimeoutContext::Generic;
+    }
+}
+
 void LoginSession::deliverUserList(uint64_t highlightUserId)
 {
     m_state = State::WaitUserAction;
@@ -352,7 +388,7 @@ void LoginSession::tryConnectGateway()
     m_connectStartMs = TimeUtil::nowMs();
     if (!m_tcp->connect(m_gatewayHost, m_gatewayPort))
     {
-        fail(u8"无法连接游戏网关，请确认 Gateway 已启动");
+        fail(ClientLocalError::ConnectFailed, LoginTimeoutContext::GatewayConnect);
     }
 }
 
@@ -404,16 +440,16 @@ void LoginSession::onTcpDisconnected()
 
     if (m_state == State::ConnectLogin || m_state == State::RegisterConnect)
     {
-        fail(u8"无法连接 LoginServer，请确认服务器已启动并监听 9010 端口");
+        fail(ClientLocalError::Disconnected, LoginTimeoutContext::LoginServerConnect);
         return;
     }
     if (m_state == State::ConnectGateway)
     {
-        fail(u8"无法连接游戏网关，请确认 Gateway 已启动");
+        fail(ClientLocalError::Disconnected, LoginTimeoutContext::GatewayConnect);
         return;
     }
 
-    fail(u8"连接已断开");
+    fail(ClientLocalError::Disconnected, timeoutContextForState());
 }
 
 void LoginSession::sendLoginReq()
@@ -497,9 +533,9 @@ void LoginSession::handleLoginRsp(const Msg_S2C_LoginRsp& rsp)
     m_loginRsp    = rsp;
     m_gotLoginRsp = true;
 
-    if (rsp.code != 0)
+    if (static_cast<LoginResultCode>(rsp.code) != LoginResultCode::OK)
     {
-        fail(std::string(u8"登录失败：") + rsp.msg);
+        fail(ClientErrorText::loginResultText(static_cast<LoginResultCode>(rsp.code), rsp.msg));
         return;
     }
 
@@ -536,13 +572,15 @@ void LoginSession::handleUserList()
 
 void LoginSession::handleCreateUserRsp(const Msg_S2C_CreateUserRsp& rsp)
 {
-    if (rsp.code != 0)
+    if (static_cast<CreateCharacterResultCode>(rsp.code) != CreateCharacterResultCode::OK)
     {
         m_state = State::WaitUserAction;
-        ClientLogger::instance().err("LoginSession：创建角色失败：%s", rsp.msg);
+        const std::string errMsg = ClientErrorText::createCharacterText(
+            static_cast<CreateCharacterResultCode>(rsp.code), rsp.msg);
+        ClientLogger::instance().err("LoginSession：%s", errMsg.c_str());
         if (m_onError)
         {
-            m_onError(std::string(u8"创建角色失败：") + rsp.msg);
+            m_onError(errMsg);
         }
         return;
     }
@@ -563,9 +601,10 @@ void LoginSession::handleGatewayInfo(const Msg_S2C_GatewayInfo& info)
     m_gatewayInfo    = info;
     m_gotGatewayInfo = true;
 
-    if (info.code != 0)
+    if (static_cast<GatewayInfoResultCode>(info.code) != GatewayInfoResultCode::OK)
     {
-        fail(std::string(u8"无可用网关：") + info.msg);
+        fail(ClientErrorText::gatewayInfoText(static_cast<GatewayInfoResultCode>(info.code),
+                                            info.msg));
         return;
     }
 
@@ -613,7 +652,7 @@ void LoginSession::handleSystemError(const char* data, uint16_t len)
         fail(u8"网关错误消息解析失败");
         return;
     }
-    fail(ClientMsgHandler::gatewayErrorText(err));
+    fail(ClientErrorText::gatewayValidateText(err));
 }
 
 void LoginSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, uint16_t len)
@@ -690,9 +729,10 @@ void LoginSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, u
         m_tcp->disconnect();
         resetToIdle();
 
-        if (rsp.code != 0)
+        if (static_cast<RegisterResultCode>(rsp.code) != RegisterResultCode::OK)
         {
-            fail(std::string(u8"注册失败：") + rsp.msg);
+            fail(ClientErrorText::registerResultText(static_cast<RegisterResultCode>(rsp.code),
+                                                     rsp.msg));
             return;
         }
 
@@ -727,19 +767,6 @@ bool LoginSession::isWaitingResponseState() const
 
 std::string LoginSession::responseTimeoutMessage() const
 {
-    switch (m_state)
-    {
-    case State::WaitLoginRsp:
-        return u8"验证账号超时，服务器未响应";
-    case State::RegisterWaitRsp:
-        return u8"注册超时，服务器未响应";
-    case State::WaitUserList:
-        return u8"获取角色列表超时，服务器未响应";
-    case State::WaitEnterGame:
-        return u8"进入游戏超时，服务器未响应";
-    case State::WaitCreateUserRsp:
-        return u8"创建角色超时，服务器未响应";
-    default:
-        return u8"服务器响应超时";
-    }
+    return ClientErrorText::localErrorText(ClientLocalError::ResponseTimeout,
+                                           timeoutContextForState());
 }

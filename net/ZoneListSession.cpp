@@ -6,7 +6,9 @@
 #include "net/ZoneListSession.h"
 
 #include "log/ClientLogger.h"
+#include "net/ClientErrorText.h"
 #include "net/ClientMsgHandler.h"
+#include "net/ClientTimingDefaults.h"
 #include "net/TcpClient.h"
 #include "util/ConfigLoader.h"
 #include "time/TimeUtil.h"
@@ -14,8 +16,6 @@
 namespace
 {
 constexpr uint8_t kLoginModule = static_cast<uint8_t>(ClientModule::LOGIN);
-constexpr int64_t kConnectTimeoutMs  = 10000;
-constexpr int64_t kResponseTimeoutMs = 10000;
 }  // namespace
 
 ZoneListSession::ZoneListSession()
@@ -80,7 +80,7 @@ void ZoneListSession::fetchZoneList(uint8_t gameType)
 
     if (!m_tcp->connect(host, port))
     {
-        fail(u8"无法连接 LoginServer，请确认服务器已启动");
+        fail(ClientLocalError::ConnectFailed, LoginTimeoutContext::LoginServerConnect);
         return;
     }
 }
@@ -94,15 +94,15 @@ void ZoneListSession::update()
 
     const int64_t now = TimeUtil::nowMs();
     if (m_state == State::Connecting &&
-        TimeUtil::elapsed(m_connectStartMs, kConnectTimeoutMs, now))
+        TimeUtil::elapsed(m_connectStartMs, connectTimeoutMs(), now))
     {
-        fail(u8"连接 LoginServer 超时，请检查 loginHost/loginPort 配置");
+        fail(ClientLocalError::ConnectTimeout, LoginTimeoutContext::LoginServerConnect);
         return;
     }
     if (m_state == State::WaitResponse && m_waitResponseStartMs > 0 &&
-        TimeUtil::elapsed(m_waitResponseStartMs, kResponseTimeoutMs, now))
+        TimeUtil::elapsed(m_waitResponseStartMs, zoneListResponseTimeoutMs(), now))
     {
-        fail(u8"获取区列表超时，服务器未响应");
+        fail(ClientLocalError::ResponseTimeout, LoginTimeoutContext::ZoneList);
         return;
     }
 
@@ -142,6 +142,22 @@ void ZoneListSession::fail(const std::string& msg)
     }
 }
 
+void ZoneListSession::fail(ClientLocalError err, LoginTimeoutContext ctx)
+{
+    fail(ClientErrorText::localErrorText(err, ctx));
+}
+
+int64_t ZoneListSession::connectTimeoutMs() const
+{
+    return m_config ? m_config->connectTimeoutMs() : ClientTiming::kConnectTimeoutMs;
+}
+
+int64_t ZoneListSession::zoneListResponseTimeoutMs() const
+{
+    return m_config ? m_config->zoneListResponseTimeoutMs()
+                    : ClientTiming::kZoneListResponseTimeoutMs;
+}
+
 void ZoneListSession::onTcpConnected()
 {
     if (m_state == State::Connecting)
@@ -162,11 +178,11 @@ void ZoneListSession::onTcpDisconnected()
 
     if (m_state == State::Connecting)
     {
-        fail(u8"无法连接 LoginServer，请确认服务器已启动并监听 9010 端口");
+        fail(ClientLocalError::Disconnected, LoginTimeoutContext::LoginServerConnect);
         return;
     }
 
-    fail(u8"连接已断开");
+    fail(ClientLocalError::Disconnected, LoginTimeoutContext::ZoneList);
 }
 
 void ZoneListSession::notifyStatus(const std::string& message)

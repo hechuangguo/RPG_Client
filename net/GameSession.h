@@ -24,6 +24,7 @@
 #include <string>
 
 class ClientScriptHost;
+class ConfigLoader;
 class TcpClient;
 
 /**
@@ -40,6 +41,8 @@ public:
 
     GameSession();
     ~GameSession();
+
+    void setConfig(const ConfigLoader* config);
 
     /** @brief 设置 Lua 脚本桥（可选） */
     void setScriptHost(ClientScriptHost* host);
@@ -106,6 +109,11 @@ private:
     void flushMoveIfNeeded();
     void clearLogoutWait();
 
+    int64_t heartbeatIntervalMs() const;
+    int64_t moveSendIntervalMs() const;
+    int64_t logoutTimeoutMs() const;
+
+    const ConfigLoader*        m_config;
     std::unique_ptr<TcpClient> m_tcp;
     ClientScriptHost*          m_scriptHost;
 

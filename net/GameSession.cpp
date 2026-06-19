@@ -7,22 +7,24 @@
 
 #include "EquipCommon.h"
 #include "PropertyCommon.h"
+#include "net/ClientErrorText.h"
+#include "net/ClientLocalError.h"
 #include "net/ClientMsgHandler.h"
+#include "net/ClientTimingDefaults.h"
 #include "lua/ClientScriptHost.h"
 #include "log/ClientLogger.h"
 #include "net/TcpClient.h"
 #include "time/TimeUtil.h"
+#include "util/ConfigLoader.h"
 
 namespace
 {
-constexpr int64_t kHeartbeatIntervalMs = 10000;
-constexpr int64_t kMoveSendIntervalMs  = 100;
-constexpr int64_t kLogoutTimeoutMs     = 15000;
-constexpr uint8_t kLoginModule         = static_cast<uint8_t>(ClientModule::LOGIN);
+constexpr uint8_t kLoginModule = static_cast<uint8_t>(ClientModule::LOGIN);
 }  // namespace
 
 GameSession::GameSession()
-    : m_tcp(nullptr)
+    : m_config(nullptr)
+    , m_tcp(nullptr)
     , m_scriptHost(nullptr)
     , m_localUserId(0)
     , m_lastHeartbeatMs(0)
@@ -42,6 +44,26 @@ GameSession::GameSession()
 }
 
 GameSession::~GameSession() = default;
+
+void GameSession::setConfig(const ConfigLoader* config)
+{
+    m_config = config;
+}
+
+int64_t GameSession::heartbeatIntervalMs() const
+{
+    return m_config ? m_config->heartbeatIntervalMs() : ClientTiming::kHeartbeatIntervalMs;
+}
+
+int64_t GameSession::moveSendIntervalMs() const
+{
+    return m_config ? m_config->moveSendIntervalMs() : ClientTiming::kMoveSendIntervalMs;
+}
+
+int64_t GameSession::logoutTimeoutMs() const
+{
+    return m_config ? m_config->logoutTimeoutMs() : ClientTiming::kLogoutTimeoutMs;
+}
 
 void GameSession::setScriptHost(ClientScriptHost* host)
 {
@@ -119,13 +141,14 @@ void GameSession::update(float /*dt*/)
 
     const int64_t now = TimeUtil::nowMs();
     if (m_waitingLogoutRsp && m_logoutWaitStartMs > 0 &&
-        TimeUtil::elapsed(m_logoutWaitStartMs, kLogoutTimeoutMs, now))
+        TimeUtil::elapsed(m_logoutWaitStartMs, logoutTimeoutMs(), now))
     {
         ErrorCallback errCb = std::move(m_onLogoutError);
         clearLogoutWait();
         if (errCb)
         {
-            errCb(u8"离开世界超时，服务器未响应");
+            errCb(ClientErrorText::localErrorText(ClientLocalError::ResponseTimeout,
+                                                  LoginTimeoutContext::Logout));
         }
         return;
     }
@@ -135,7 +158,7 @@ void GameSession::update(float /*dt*/)
         return;
     }
 
-    if (TimeUtil::elapsed(m_lastHeartbeatMs, kHeartbeatIntervalMs, now))
+    if (TimeUtil::elapsed(m_lastHeartbeatMs, heartbeatIntervalMs(), now))
     {
         sendHeartbeat();
         m_lastHeartbeatMs = now;
@@ -265,7 +288,7 @@ void GameSession::flushMoveIfNeeded()
     }
 
     const int64_t now = TimeUtil::nowMs();
-    if (!TimeUtil::elapsed(m_lastMoveSendMs, kMoveSendIntervalMs, now))
+    if (!TimeUtil::elapsed(m_lastMoveSendMs, moveSendIntervalMs(), now))
     {
         return;
     }
@@ -299,17 +322,12 @@ void GameSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, ui
         const LogoutAction action = m_pendingLogoutAction;
         clearLogoutWait();
 
-        if (rsp.code != 0)
+        if (static_cast<LogoutResultCode>(rsp.code) != LogoutResultCode::OK)
         {
-            std::string err = u8"离开世界失败";
-            if (rsp.msg[0] != '\0')
-            {
-                err += u8"：";
-                err += rsp.msg;
-            }
             if (errCb)
             {
-                errCb(err);
+                errCb(ClientErrorText::logoutResultText(static_cast<LogoutResultCode>(rsp.code),
+                                                        rsp.msg));
             }
             return;
         }
@@ -361,7 +379,7 @@ void GameSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, ui
         Msg_S2C_Error err{};
         if (ClientMsgHandler::parseGatewayError(data, len, err) && m_onError)
         {
-            m_onError(ClientMsgHandler::gatewayErrorText(err));
+            m_onError(ClientErrorText::gatewayValidateText(err));
         }
     }
     else if (flatId == makeMsgId(static_cast<uint8_t>(ClientModule::QUEST),

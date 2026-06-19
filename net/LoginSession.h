@@ -18,6 +18,7 @@
 
 #include "ClientProtocol.h"
 #include "net/CharacterTypes.h"
+#include "net/ClientLocalError.h"
 
 #include <cstdint>
 #include <functional>
@@ -103,6 +104,7 @@ private:
 
     void resetToIdle();
     void fail(const std::string& msg);
+    void fail(ClientLocalError err, LoginTimeoutContext ctx = LoginTimeoutContext::Generic);
     void onTcpMessage(uint8_t module, uint8_t sub, const char* data, uint16_t len);
     void onTcpConnected();
     void onTcpDisconnected();
@@ -122,6 +124,10 @@ private:
     void notifyStatus(const std::string& message);
     bool isConnectingState() const;
     bool isWaitingResponseState() const;
+    LoginTimeoutContext timeoutContextForState() const;
+    LoginTimeoutContext connectTimeoutContext() const;
+    int64_t connectTimeoutMs() const;
+    int64_t responseTimeoutMs() const;
     std::string responseTimeoutMessage() const;
     std::string loginHost() const;
     uint16_t loginPort() const;

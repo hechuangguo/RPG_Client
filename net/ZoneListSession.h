@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "net/ClientLocalError.h"
 #include "net/ZoneTypes.h"
 
 #include <cstdint>
@@ -55,6 +56,9 @@ private:
 
     void resetToIdle();
     void fail(const std::string& msg);
+    void fail(ClientLocalError err, LoginTimeoutContext ctx = LoginTimeoutContext::ZoneList);
+    int64_t connectTimeoutMs() const;
+    int64_t zoneListResponseTimeoutMs() const;
     void onTcpConnected();
     void onTcpDisconnected();
     void onTcpMessage(uint8_t module, uint8_t sub, const char* data, uint16_t len);

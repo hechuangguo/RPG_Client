@@ -15,6 +15,12 @@ $buildDir = Join-Path $clientDir "build"
 
 & (Join-Path $clientDir "assets\fonts\fetch_font.ps1")
 
+$opensslLib = Join-Path $clientDir "3Party\openssl\lib\libssl.lib"
+if (-not (Test-Path $opensslLib)) {
+    Write-Host "OpenSSL missing; running 3Party\download_and_build.ps1 ..."
+    & (Join-Path $clientDir "3Party\download_and_build.ps1")
+}
+
 $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) {
     throw "vswhere not found. Install Visual Studio with C++ desktop development."
