@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include "game/CharacterSprite.h"
 #include "net/CharacterTypes.h"
 #include "ui/widgets/Button.h"
 #include "ui/widgets/TextInput.h"
@@ -68,6 +69,13 @@ public:
     void update(float dt);
     void draw(sf::RenderTarget& target) const;
 
+    /** @brief 当前选中角色的外观（进游戏用） */
+    bool getSelectedAppearance(uint8_t& vocation, uint8_t& sex) const;
+
+    /** @brief 创角模式预览用外观 */
+    uint8_t previewVocation() const { return m_selectedVocation; }
+    uint8_t previewSex() const { return m_selectedSex; }
+
 private:
     void refreshSelection();
     void refreshButtons();
@@ -98,6 +106,7 @@ private:
 
     uint8_t                     m_selectedVocation;
     uint8_t                     m_selectedSex;
+    float                       m_previewAnimTime;
 
     std::function<void(uint64_t)> m_onEnterGame;
     std::function<void(const std::string&, uint8_t, uint8_t)> m_onCreateCharacter;

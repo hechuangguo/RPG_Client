@@ -5,6 +5,7 @@
 
 #include "game/AmbientSystem.h"
 
+#include "game/CharacterSprite.h"
 #include "math/Random.h"
 #include "util/PathUtil.h"
 #include "util/TextUtil.h"
@@ -94,19 +95,34 @@ void AmbientSystem::drawSky(sf::RenderTarget& target, const sf::Vector2u& viewSi
     }
 }
 
-void AmbientSystem::drawWorld(sf::RenderTarget& target, const sf::Font& font, float tileSize) const
+void AmbientSystem::drawWorld(sf::RenderTarget& target,
+                              const sf::Font& font,
+                              float tileW,
+                              float tileH) const
 {
     for (const AmbientNpc& n : m_npcs)
     {
-        sf::RectangleShape body({tileSize * 0.5f, tileSize * 0.7f});
-        body.setOrigin(body.getSize().x / 2.f, body.getSize().y);
-        body.setPosition(n.x * tileSize, n.z * tileSize);
-        body.setFillColor(sf::Color(160, 130, 100));
-        target.draw(body);
+        const float screenX = n.x * tileW + tileW * 0.5f;
+        const float screenY = n.z * tileH + tileH;
+        const bool moving   = n.dir != 0;
+        const float animTime =
+            static_cast<float>(n.z) * 0.5f + static_cast<float>(n.x);
 
+        const CharacterSprite& sprite =
+            CharacterSpriteLibrary::instance().get(0, 0);
+        constexpr float kNpcScale = 0.65f;
+        sprite.draw(target,
+                    screenX,
+                    screenY,
+                    n.dir > 0 ? 1.5707963f : -1.5707963f,
+                    moving,
+                    animTime,
+                    kNpcScale);
+
+        const float nameY = screenY - sprite.drawHeight(kNpcScale) - 6.f;
         sf::Text label(TextUtil::utf8ToSfString(n.label), font, 11);
         label.setFillColor(sf::Color(230, 220, 200));
-        label.setPosition(n.x * tileSize - 20.f, n.z * tileSize - tileSize);
+        label.setPosition(screenX - 20.f, nameY);
         target.draw(label);
     }
 }

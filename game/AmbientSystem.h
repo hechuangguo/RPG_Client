@@ -87,7 +87,10 @@ public:
      * @param font     字体
      * @param tileSize 瓦片尺寸
      */
-    void drawWorld(sf::RenderTarget& target, const sf::Font& font, float tileSize) const;
+    void drawWorld(sf::RenderTarget& target,
+                   const sf::Font& font,
+                   float tileW,
+                   float tileH) const;
 
 private:
     void setupDefaults();

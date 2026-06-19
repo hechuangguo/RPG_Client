@@ -404,7 +404,7 @@ void GameApp::processEvents()
                 continue;
             }
 
-            m_gameScene.handleEvent(event);
+            m_gameScene.handleEvent(event, m_window);
             continue;
         }
 
@@ -596,7 +596,11 @@ void GameApp::onEnterGame(const Msg_S2C_EnterGame& enter)
     m_scriptHost.setup(&m_luaManager, &m_questModel, &m_itemBagModel, &m_gameSession);
     m_scriptHost.onEnterGame(enter.userID, enter.mapID);
 
-    m_gameScene.enter(enter, &m_theme, &m_gameSession, &m_questModel);
+    uint8_t vocation = CharacterDef::kVocationWarrior;
+    uint8_t sex      = CharacterDef::kSexMale;
+    m_characterSelectPanel.getSelectedAppearance(vocation, sex);
+
+    m_gameScene.enter(enter, &m_theme, &m_gameSession, &m_questModel, vocation, sex);
     m_gameScene.setViewSize(m_window.getSize());
 
     switchState(AppState::Game);

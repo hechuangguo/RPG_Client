@@ -49,10 +49,12 @@ public:
     void enter(const Msg_S2C_EnterGame& enter,
                UiTheme* theme,
                GameSession* session,
-               QuestModel* quests);
+               QuestModel* quests,
+               uint8_t localVocation = 0,
+               uint8_t localSex = 0);
 
     /** @brief 处理输入事件 */
-    void handleEvent(const sf::Event& event);
+    void handleEvent(const sf::Event& event, const sf::RenderWindow& window);
 
     /**
      * @brief 逻辑更新
@@ -84,6 +86,8 @@ public:
 private:
     void updateCamera();
     void drawHud(sf::RenderTarget& target) const;
+    void drawClickMarker(sf::RenderTarget& target) const;
+    bool trySetClickTarget(float tileX, float tileZ);
 
     MapRenderer     m_map;
     WaterSystem     m_water;
@@ -107,4 +111,9 @@ private:
     bool            m_moveLeft;
     bool            m_moveRight;
     float           m_moveSpeed;
+
+    bool            m_hasClickTarget;
+    float           m_targetX;
+    float           m_targetZ;
+    float           m_clickMarkerTime;
 };
