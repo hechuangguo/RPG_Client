@@ -78,7 +78,14 @@ public:
     /** @brief 当前是否掩码显示 */
     bool isPasswordMasked() const;
 
+    /** @brief 设置最大字符数（按 Unicode 码点计，0 表示仅按字节上限） */
+    void setMaxCodepoints(std::size_t maxCodepoints);
+
 private:
+    bool canAppendCodepoint(char32_t cp) const;
+    void appendCodepoint(char32_t cp);
+    void deleteLastCodepoint();
+
     std::string displayText() const;
     void syncCursorPos();
 
@@ -89,6 +96,8 @@ private:
     bool           m_password;
     bool           m_focused;
     std::size_t    m_cursorPos;
+    std::size_t    m_maxBytes;
+    std::size_t    m_maxCodepoints;
     float          m_blinkElapsed;
     bool           m_cursorVisible;
 };

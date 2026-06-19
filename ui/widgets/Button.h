@@ -49,6 +49,9 @@ public:
     /** @brief 设置是否可用 */
     void setEnabled(bool enabled);
 
+    /** @brief 设置选中态（用于职业/性别等互斥选项） */
+    void setSelected(bool selected);
+
     /** @brief 是否可用 */
     bool isEnabled() const;
 
@@ -75,5 +78,6 @@ private:
     std::string          m_label;
     std::function<void()> m_onClick;
     bool                 m_enabled;
+    bool                 m_selected;
     bool                 m_hovered;
 };

@@ -6,9 +6,10 @@
  * - 维持 Gateway 连接，10 秒心跳 C2S_HEARTBEAT
  * - 处理 S2C_SPAWN_ENTITY / S2C_MOVE_NOTIFY / S2C_DESPAWN_ENTITY
  * - 节流发送 C2S_MOVE_REQ（本地玩家移动）
+ * - C2S_LOGOUT_REQ 离世界（返回选角/返回登录）
  * - 将任务/背包等消息转发给 ClientScriptHost
  *
- * 协作：GameScene、EntityManager、ClientScriptHost、TcpClient。
+ * 协作：GameScene、EntityManager、ClientScriptHost、TcpClient、LoginSession。
  *
  * 线程：仅主线程，非线程安全。
  */
@@ -35,6 +36,7 @@ public:
     using MoveCallback    = std::function<void(const Msg_S2C_MoveNotify&)>;
     using DespawnCallback = std::function<void(const Msg_S2C_DespawnEntity&)>;
     using ErrorCallback   = std::function<void(const std::string&)>;
+    using LogoutCallback  = std::function<void(LogoutAction action)>;
 
     GameSession();
     ~GameSession();
@@ -65,20 +67,31 @@ public:
 
     /**
      * @brief 发送玩家移动（内部节流）
-     * @param userID 用户 ID
-     * @param x      X 坐标
-     * @param y      Y 坐标
-     * @param z      Z 坐标
-     * @param dir    朝向弧度
-     * @param moveType 0=行走 1=跑步
      */
     void sendMove(uint64_t userID, float x, float y, float z, float dir, uint8_t moveType);
+
+    /**
+     * @brief 请求离世界
+     * @param action    RETURN_CHAR_SELECT 或 RETURN_LOGIN
+     * @param onSuccess 收到 S2C_LOGOUT_RSP 且 code=0
+     * @param onError   超时或失败
+     */
+    void requestLogout(LogoutAction action, LogoutCallback onSuccess, ErrorCallback onError);
+
+    /** @brief 停止世界逻辑（心跳/移动），不断开连接 */
+    void leaveWorld();
 
     /** @brief 断开连接 */
     void disconnect();
 
+    /** @brief 移交 TcpClient 给 LoginSession（不断开） */
+    std::unique_ptr<TcpClient> releaseTcpClient();
+
     /** @brief 是否已连接 */
     bool isConnected() const;
+
+    /** @brief 是否正在等待离世界响应 */
+    bool isWaitingLogout() const;
 
     /** @brief 本地玩家 userID */
     uint64_t localUserId() const;
@@ -87,9 +100,11 @@ public:
     const Msg_S2C_EnterGame& enterGameInfo() const;
 
 private:
+    void bindTcpCallbacks();
     void onTcpMessage(uint8_t module, uint8_t sub, const char* data, uint16_t len);
     void sendHeartbeat();
     void flushMoveIfNeeded();
+    void clearLogoutWait();
 
     std::unique_ptr<TcpClient> m_tcp;
     ClientScriptHost*          m_scriptHost;
@@ -101,12 +116,19 @@ private:
     int64_t                    m_lastMoveSendMs;
     uint32_t                   m_heartbeatSeq;
 
+    bool                       m_inWorld;
     bool                       m_moveDirty;
     float                      m_pendingX;
     float                      m_pendingY;
     float                      m_pendingZ;
     float                      m_pendingDir;
     uint8_t                    m_pendingMoveType;
+
+    bool                       m_waitingLogoutRsp;
+    LogoutAction               m_pendingLogoutAction;
+    int64_t                    m_logoutWaitStartMs;
+    LogoutCallback             m_onLogoutSuccess;
+    ErrorCallback              m_onLogoutError;
 
     SpawnCallback              m_onSpawn;
     MoveCallback               m_onMove;

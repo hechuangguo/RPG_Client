@@ -8,9 +8,9 @@
  * - 右下：创建角色
  * - 创角模式：中部左侧显示道号、职业、性别与确认/取消
  *
- * 协作：GameApp 在登录成功后展示本面板；LoginSession 在 LoginServer 下发
- * S2C_USER_LIST 后 deliverUserList；创角走 LoginSession::createCharacter；
- * 选角进游戏走 LoginSession::selectCharacter（连 Gateway）。
+ * 协作：GameApp 在登录成功后展示本面板；LoginSession 在 Gateway 鉴权后下发
+ * S2C_USER_LIST 时 deliverUserList；创角走 LoginSession::createCharacter（Gateway）；
+ * 选角进游戏走 LoginSession::selectCharacter（Gateway 上 C2S_SELECT_USER_REQ）。
  *
  * 线程：仅主线程，非线程安全。
  */

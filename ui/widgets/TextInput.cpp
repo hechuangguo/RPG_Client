@@ -6,6 +6,7 @@
 #include "ui/widgets/TextInput.h"
 
 #include "ui/UiTheme.h"
+#include "util/TextUtil.h"
 
 namespace
 {
@@ -20,6 +21,8 @@ TextInput::TextInput()
     , m_password(false)
     , m_focused(false)
     , m_cursorPos(0)
+    , m_maxBytes(31)
+    , m_maxCodepoints(0)
     , m_blinkElapsed(0.f)
     , m_cursorVisible(true)
 {
@@ -62,29 +65,17 @@ void TextInput::handleEvent(const sf::Event& event, const sf::RenderWindow& wind
         const char32_t ch = event.text.unicode;
         if (ch == 8)
         {
-            if (!m_text.empty())
-            {
-                m_text.pop_back();
-                syncCursorPos();
-            }
+            deleteLastCodepoint();
         }
-        else if (ch >= 32 && ch < 127)
+        else if (TextUtil::isPrintableCodepoint(ch))
         {
-            if (m_text.size() < 31)
-            {
-                m_text.push_back(static_cast<char>(ch));
-                syncCursorPos();
-            }
+            appendCodepoint(ch);
         }
     }
     else if (event.type == sf::Event::KeyPressed &&
              event.key.code == sf::Keyboard::BackSpace)
     {
-        if (!m_text.empty())
-        {
-            m_text.pop_back();
-            syncCursorPos();
-        }
+        deleteLastCodepoint();
     }
 }
 
@@ -218,6 +209,45 @@ std::string TextInput::displayText() const
         return std::string(m_text.size(), '*');
     }
     return m_text;
+}
+
+void TextInput::setMaxCodepoints(std::size_t maxCodepoints)
+{
+    m_maxCodepoints = maxCodepoints;
+}
+
+bool TextInput::canAppendCodepoint(char32_t cp) const
+{
+    const std::string encoded = TextUtil::utf8Encode(cp);
+    if (encoded.empty())
+    {
+        return false;
+    }
+    if (m_maxCodepoints > 0)
+    {
+        return TextUtil::utf8CodepointCount(m_text) + 1 <= m_maxCodepoints;
+    }
+    return m_text.size() + encoded.size() <= m_maxBytes;
+}
+
+void TextInput::appendCodepoint(char32_t cp)
+{
+    if (!canAppendCodepoint(cp))
+    {
+        return;
+    }
+    m_text += TextUtil::utf8Encode(cp);
+    syncCursorPos();
+}
+
+void TextInput::deleteLastCodepoint()
+{
+    if (m_text.empty())
+    {
+        return;
+    }
+    TextUtil::utf8PopLastCodepoint(m_text);
+    syncCursorPos();
 }
 
 void TextInput::syncCursorPos()

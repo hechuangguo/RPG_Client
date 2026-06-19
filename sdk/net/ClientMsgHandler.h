@@ -51,6 +51,8 @@ public:
                                                 uint8_t vocation,
                                                 uint8_t sex);
 
+    static std::vector<char> buildLogoutReq(LogoutAction action);
+
     static bool parseZoneListRsp(const char* data,
                                  uint16_t len,
                                  std::vector<GameZoneEntry>& out,
@@ -70,6 +72,8 @@ public:
                               std::string& errMsg);
 
     static bool parseCreateUserRsp(const char* data, uint16_t len, Msg_S2C_CreateUserRsp& out);
+
+    static bool parseLogoutRsp(const char* data, uint16_t len, Msg_S2C_LogoutRsp& out);
 
     static bool parseSpawnEntity(const char* data, uint16_t len, Msg_S2C_SpawnEntity& out);
 

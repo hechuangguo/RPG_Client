@@ -88,10 +88,23 @@ Ensure `config/`, `script/`, `database/`, `basefile/`, `map/`, `assets/` are bes
 3. **区服状态**：列表右侧显示负载状态（畅通 / 繁忙 / 爆满 / 维护中）及在线人数（服务端 v2 协议下发时）。旧版 LoginServer 仅下发 `enabled` 时，可用区显示「畅通」，维护区显示「维护中」。
 4. **加载资源**：点击「进入游戏」后初始化 Lua 等，进入账号登录界面。
 5. **账号登录/注册**：连接 LoginServer，发送 `C2S_LOGIN_REQ` 或 `C2S_REGISTER_REQ`。
-6. **选角界面（登录后立即显示）**：点击「登录游戏」后立刻进入角色选择界面（Loading）；LoginServer 验证账号并下发 `S2C_USER_LIST` 后列表就绪。布局：右上角色列表、中下「进入游戏」、右下「创建角色」。无角色时列表显示「暂无角色」，需手动点「创建角色」进入创角表单（道号 + 职业 + 性别）；有角色时也可新建。
-7. **创角（LoginServer）**：`C2S_CREATE_USER_REQ` / `S2C_CREATE_USER_RSP` 在 **LoginServer** 连接上完成，创角成功后刷新列表并回到选角页。
-8. **进游戏（Gateway）**：仅当用户选中角色并点「进入游戏」时连接 Gateway；LoginServer 已下发 `S2C_GATEWAY_INFO` 与 `loginToken`，客户端发送 `C2S_GATEWAY_AUTH_REQ`（无票据时回退 `C2S_LOGIN_REQ` 兼容旧 Gateway），鉴权后发送 `C2S_SELECT_USER_REQ`。职业/性别 wire 值：`0=战士/男, 1=法师/女`（须与 Server 一致）。
+6. **选角界面（登录后立即显示）**：点击「登录游戏」后立刻进入角色选择界面（Loading）；LoginServer 验证账号并下发 `S2C_GATEWAY_INFO` 后，客户端连接 Gateway 鉴权并收取 `S2C_USER_LIST`，列表就绪后进入选角。布局：右上角色列表、中下「进入游戏」、右下「创建角色」。无角色时列表显示「暂无角色」，需手动点「创建角色」进入创角表单（道号 + 职业 + 性别）；有角色时也可新建。
+7. **创角（Gateway）**：`C2S_CREATE_USER_REQ` / `S2C_CREATE_USER_RSP` 在 **Gateway** 连接上完成（鉴权后），创角成功后刷新列表并回到选角页。
+8. **进游戏（Gateway）**：用户选中角色并点「进入游戏」后，在已建立的 Gateway 连接上发送 `C2S_SELECT_USER_REQ`（登录阶段已 `C2S_GATEWAY_AUTH_REQ` 鉴权）。职业/性别 wire 值：`0=战士/男, 1=法师/女`（须与 Server 一致）。
 9. **进入场景**：界面显示「正在加载地图与角色资源...」；收到 `S2C_ENTER_GAME`（含 mapID 与出生坐标）后加载地图并进入游戏世界。
+
+## 游戏中退出
+
+游戏中按 **ESC** 或点击窗口右上角 **X**，弹出二级确认框（不直接关闭客户端）：
+
+| 选项 | 行为 | 协议 |
+|------|------|------|
+| 返回选角 | 离世界，保持 Gateway 账号会话，刷新 `S2C_USER_LIST` 并回到选角界面 | `C2S_LOGOUT_REQ` action=`RETURN_CHAR_SELECT`(1) |
+| 返回登录 | 离世界并退出账号登录状态，回到账号密码登录页 | `C2S_LOGOUT_REQ` action=`RETURN_LOGIN`(2) |
+| 退出游戏 | 直接关闭整个客户端 | 无（本地关窗） |
+| 取消 / 再按 ESC | 关闭弹窗，继续游戏 | — |
+
+若 Gateway 未响应离世界请求，客户端会降级断开并返回登录页，并显示中文错误提示。
 
 **旧 Gateway 兼容**：若 Gateway 未下发角色列表而直接返回 `S2C_LOGIN_RSP` + `S2C_ENTER_GAME`，客户端跳过选角界面直接进入场景。
 

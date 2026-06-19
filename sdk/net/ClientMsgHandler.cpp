@@ -327,7 +327,20 @@ std::vector<char> ClientMsgHandler::buildCreateUserReq(const std::string& name,
     return encodeWire(body);
 }
 
+std::vector<char> ClientMsgHandler::buildLogoutReq(LogoutAction action)
+{
+    Msg_C2S_LogoutReq body{};
+    body.action = static_cast<uint8_t>(action);
+    std::memset(body.reserved, 0, sizeof(body.reserved));
+    return encodeWire(body);
+}
+
 bool ClientMsgHandler::parseCreateUserRsp(const char* data, uint16_t len, Msg_S2C_CreateUserRsp& out)
+{
+    return parseWire(data, len, out);
+}
+
+bool ClientMsgHandler::parseLogoutRsp(const char* data, uint16_t len, Msg_S2C_LogoutRsp& out)
 {
     return parseWire(data, len, out);
 }

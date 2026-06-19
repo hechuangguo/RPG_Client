@@ -10,6 +10,7 @@
 Button::Button()
     : m_theme(nullptr)
     , m_enabled(true)
+    , m_selected(false)
     , m_hovered(false)
 {
 }
@@ -32,6 +33,11 @@ void Button::setOnClick(std::function<void()> cb)
 void Button::setEnabled(bool enabled)
 {
     m_enabled = enabled;
+}
+
+void Button::setSelected(bool selected)
+{
+    m_selected = selected;
 }
 
 bool Button::isEnabled() const
@@ -85,26 +91,40 @@ void Button::draw(sf::RenderTarget& target) const
     }
     else
     {
-        rect.setFillColor(m_hovered ? m_theme->buttonHover() : m_theme->buttonNormal());
-        if (glass)
+        if (m_selected)
         {
-            rect.setOutlineThickness(0.f);
+            const sf::Color accent = m_theme->accentColor();
+            rect.setFillColor(sf::Color(accent.r, accent.g, accent.b, glass ? 90 : 140));
+            rect.setOutlineColor(accent);
+            rect.setOutlineThickness(glass ? 2.f : 2.5f);
         }
         else
         {
-            rect.setOutlineColor(m_theme->panelBorder());
-            rect.setOutlineThickness(1.5f);
+            rect.setFillColor(m_hovered ? m_theme->buttonHover() : m_theme->buttonNormal());
+            if (glass)
+            {
+                rect.setOutlineColor(sf::Color(180, 200, 190, 80));
+                rect.setOutlineThickness(1.f);
+            }
+            else
+            {
+                rect.setOutlineColor(m_theme->panelBorder());
+                rect.setOutlineThickness(1.5f);
+            }
         }
     }
     target.draw(rect);
 
+    const sf::Color textColor = !m_enabled ? sf::Color(150, 150, 150)
+                               : m_selected ? m_theme->accentColor()
+                                            : m_theme->textColor();
     m_theme->drawTextCentered(
         target,
         m_label,
         m_bounds.left + m_bounds.width / 2.f,
         m_bounds.top + m_bounds.height / 2.f,
         18,
-        m_enabled ? m_theme->textColor() : sf::Color(150, 150, 150),
+        textColor,
         true);
 }
 

@@ -43,6 +43,7 @@ LoginSession::LoginSession()
     , m_gatewayConnected(false)
     , m_gatewayPort(0)
     , m_pendingSelectUserId(0)
+    , m_highlightUserId(0)
     , m_pendingCreateVocation(0)
     , m_pendingCreateSex(0)
     , m_connectStartMs(0)
@@ -186,10 +187,6 @@ void LoginSession::createCharacter(const std::string& name, uint8_t vocation, ui
     {
         return;
     }
-    if (m_gatewayConnected)
-    {
-        return;
-    }
 
     m_pendingCreateName     = name;
     m_pendingCreateVocation = vocation;
@@ -256,6 +253,34 @@ std::unique_ptr<TcpClient> LoginSession::releaseTcpClient()
     return std::move(m_tcp);
 }
 
+void LoginSession::resumeGatewayForCharSelect(std::unique_ptr<TcpClient> tcp, uint64_t highlightUserId)
+{
+    if (!tcp || !tcp->isConnected())
+    {
+        fail(u8"无法接回游戏网关连接");
+        return;
+    }
+
+    m_tcp = std::move(tcp);
+    m_tcp->setOnMessage([this](uint8_t module, uint8_t sub, const char* data, uint16_t len) {
+        onTcpMessage(module, sub, data, len);
+    });
+    m_tcp->setOnDisconnected([this]() { onTcpDisconnected(); });
+
+    m_gatewayConnected    = true;
+    m_gotLoginRsp         = true;
+    m_gotGatewayInfo      = true;
+    m_gotUserList         = false;
+    m_highlightUserId     = highlightUserId;
+    m_characters.clear();
+    m_pendingSelectUserId = 0;
+    m_state               = State::WaitUserList;
+    m_waitResponseStartMs = TimeUtil::nowMs();
+
+    ClientLogger::instance().info("LoginSession：接回 Gateway，等待角色列表");
+    notifyStatus(u8"正在获取角色列表...");
+}
+
 const std::string& LoginSession::gatewayHost() const
 {
     return m_gatewayHost;
@@ -275,6 +300,7 @@ void LoginSession::resetToIdle()
     m_userCreated         = false;
     m_gatewayConnected    = false;
     m_pendingSelectUserId = 0;
+    m_highlightUserId     = 0;
     m_characters.clear();
     m_pendingCreateName.clear();
     m_connectStartMs      = 0;
@@ -307,11 +333,7 @@ void LoginSession::deliverUserList(uint64_t highlightUserId)
 
 void LoginSession::tryConnectGateway()
 {
-    if (!m_tcp || !m_gotLoginRsp || !m_gotGatewayInfo || !m_gotUserList)
-    {
-        return;
-    }
-    if (m_pendingSelectUserId == 0)
+    if (!m_tcp || !m_gotLoginRsp || !m_gotGatewayInfo || m_gotUserList)
     {
         return;
     }
@@ -363,8 +385,13 @@ void LoginSession::onTcpConnected()
     {
         m_gatewayConnected = true;
         sendGatewayAuthOrLogin();
+        m_state               = State::WaitUserList;
         m_waitResponseStartMs = TimeUtil::nowMs();
-        onGatewayAuthSent();
+        notifyStatus(u8"正在获取角色列表...");
+        if (m_pendingSelectUserId != 0)
+        {
+            onGatewayAuthSent();
+        }
     }
 }
 
@@ -484,11 +511,9 @@ void LoginSession::handleLoginRsp(const Msg_S2C_LoginRsp& rsp)
 
     if (!m_gotUserList)
     {
+        m_state               = State::WaitUserList;
+        m_waitResponseStartMs = TimeUtil::nowMs();
         notifyStatus(u8"正在获取角色列表...");
-    }
-
-    if (m_pendingSelectUserId != 0)
-    {
         tryConnectGateway();
     }
 }
@@ -496,14 +521,16 @@ void LoginSession::handleLoginRsp(const Msg_S2C_LoginRsp& rsp)
 void LoginSession::handleUserList()
 {
     m_gotUserList = true;
+    const uint64_t highlight = m_highlightUserId != 0 ? m_highlightUserId : m_loginRsp.userID;
+    m_highlightUserId        = 0;
     if (!m_gatewayConnected)
     {
-        deliverUserList(m_loginRsp.userID);
+        deliverUserList(highlight);
         return;
     }
     if (m_state == State::WaitUserList)
     {
-        deliverUserList(m_loginRsp.userID);
+        deliverUserList(highlight);
     }
 }
 
@@ -549,6 +576,14 @@ void LoginSession::handleGatewayInfo(const Msg_S2C_GatewayInfo& info)
         m_gatewayHost = loginHost();
         ClientLogger::instance().info("LoginSession：网关地址为回环，已替换为 %s",
                                       m_gatewayHost.c_str());
+    }
+
+    if (m_gotLoginRsp && !m_gotUserList)
+    {
+        m_state               = State::WaitUserList;
+        m_waitResponseStartMs = TimeUtil::nowMs();
+        notifyStatus(u8"正在获取角色列表...");
+        tryConnectGateway();
     }
 }
 

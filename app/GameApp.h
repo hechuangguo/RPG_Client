@@ -18,6 +18,7 @@
 #include "net/ZoneTypes.h"
 #include "ui/CharacterSelectPanel.h"
 #include "ui/AuthLoginPanel.h"
+#include "ui/GameExitDialog.h"
 #include "ui/LoginChrome.h"
 #include "ui/RegisterPanel.h"
 #include "ui/ServerListPanel.h"
@@ -72,6 +73,12 @@ private:
     void wireCallbacks();
     void onResize(const sf::Vector2u& size);
 
+    void showGameExitDialog();
+    void exitToCharacterSelect();
+    void exitToAuthLogin();
+    void quitClient();
+    void finishExitToAuthLogin(const std::string& errorMsg);
+
     ConfigLoader       m_config;
     LocalSettings      m_localSettings;
     UiTheme            m_theme;
@@ -81,6 +88,7 @@ private:
     AuthLoginPanel       m_authLoginPanel;
     RegisterPanel        m_registerPanel;
     CharacterSelectPanel m_characterSelectPanel;
+    GameExitDialog       m_gameExitDialog;
     ZoneListSession    m_zoneListSession;
     LoginSession       m_loginSession;
     GameSession        m_gameSession;
@@ -101,5 +109,6 @@ private:
     std::string        m_pendingRegisterPassword;
     bool               m_luaInitialized;
     bool               m_loadingAuthPending;
+    bool               m_suppressGameDisconnectNav;
     int64_t            m_lastLuaTickMs;
 };

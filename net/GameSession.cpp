@@ -17,6 +17,8 @@ namespace
 {
 constexpr int64_t kHeartbeatIntervalMs = 10000;
 constexpr int64_t kMoveSendIntervalMs  = 100;
+constexpr int64_t kLogoutTimeoutMs     = 15000;
+constexpr uint8_t kLoginModule         = static_cast<uint8_t>(ClientModule::LOGIN);
 }  // namespace
 
 GameSession::GameSession()
@@ -26,12 +28,16 @@ GameSession::GameSession()
     , m_lastHeartbeatMs(0)
     , m_lastMoveSendMs(0)
     , m_heartbeatSeq(0)
+    , m_inWorld(false)
     , m_moveDirty(false)
     , m_pendingX(0)
     , m_pendingY(0)
     , m_pendingZ(0)
     , m_pendingDir(0)
     , m_pendingMoveType(0)
+    , m_waitingLogoutRsp(false)
+    , m_pendingLogoutAction(LogoutAction::RETURN_CHAR_SELECT)
+    , m_logoutWaitStartMs(0)
 {
 }
 
@@ -67,25 +73,36 @@ void GameSession::setOnDisconnected(std::function<void()> cb)
     m_onDisconnected = std::move(cb);
 }
 
-void GameSession::start(std::unique_ptr<TcpClient> tcp, const Msg_S2C_EnterGame& enter)
+void GameSession::bindTcpCallbacks()
 {
-    disconnect();
-    m_tcp = std::move(tcp);
-    m_enterInfo    = enter;
-    m_localUserId  = enter.userID;
-    m_lastHeartbeatMs = TimeUtil::nowMs();
-    m_lastMoveSendMs  = m_lastHeartbeatMs;
+    if (!m_tcp)
+    {
+        return;
+    }
 
     m_tcp->setOnMessage([this](uint8_t module, uint8_t sub, const char* data, uint16_t len) {
         onTcpMessage(module, sub, data, len);
     });
     m_tcp->setOnDisconnected([this]() {
         ClientLogger::instance().warn("GameSession：连接已断开");
+        clearLogoutWait();
         if (m_onDisconnected)
         {
             m_onDisconnected();
         }
     });
+}
+
+void GameSession::start(std::unique_ptr<TcpClient> tcp, const Msg_S2C_EnterGame& enter)
+{
+    disconnect();
+    m_tcp             = std::move(tcp);
+    m_enterInfo       = enter;
+    m_localUserId     = enter.userID;
+    m_lastHeartbeatMs = TimeUtil::nowMs();
+    m_lastMoveSendMs  = m_lastHeartbeatMs;
+    m_inWorld         = true;
+    bindTcpCallbacks();
 
     ClientLogger::instance().info("GameSession：启动完成 user=%llu map=%u",
                                   static_cast<unsigned long long>(m_localUserId), enter.mapID);
@@ -101,6 +118,23 @@ void GameSession::update(float /*dt*/)
     m_tcp->poll();
 
     const int64_t now = TimeUtil::nowMs();
+    if (m_waitingLogoutRsp && m_logoutWaitStartMs > 0 &&
+        TimeUtil::elapsed(m_logoutWaitStartMs, kLogoutTimeoutMs, now))
+    {
+        ErrorCallback errCb = std::move(m_onLogoutError);
+        clearLogoutWait();
+        if (errCb)
+        {
+            errCb(u8"离开世界超时，服务器未响应");
+        }
+        return;
+    }
+
+    if (!m_inWorld)
+    {
+        return;
+    }
+
     if (TimeUtil::elapsed(m_lastHeartbeatMs, kHeartbeatIntervalMs, now))
     {
         sendHeartbeat();
@@ -112,17 +146,55 @@ void GameSession::update(float /*dt*/)
 
 void GameSession::sendMove(uint64_t userID, float x, float y, float z, float dir, uint8_t moveType)
 {
-    m_moveDirty         = true;
-    m_localUserId       = userID;
-    m_pendingX          = x;
-    m_pendingY          = y;
-    m_pendingZ          = z;
-    m_pendingDir        = dir;
-    m_pendingMoveType   = moveType;
+    if (!m_inWorld)
+    {
+        return;
+    }
+
+    m_moveDirty       = true;
+    m_localUserId     = userID;
+    m_pendingX        = x;
+    m_pendingY        = y;
+    m_pendingZ        = z;
+    m_pendingDir      = dir;
+    m_pendingMoveType = moveType;
+}
+
+void GameSession::requestLogout(LogoutAction action, LogoutCallback onSuccess, ErrorCallback onError)
+{
+    if (!m_tcp || !m_tcp->isConnected())
+    {
+        if (onError)
+        {
+            onError(u8"未连接游戏服务器");
+        }
+        return;
+    }
+
+    m_inWorld              = false;
+    m_moveDirty            = false;
+    m_waitingLogoutRsp     = true;
+    m_pendingLogoutAction  = action;
+    m_logoutWaitStartMs    = TimeUtil::nowMs();
+    m_onLogoutSuccess      = std::move(onSuccess);
+    m_onLogoutError        = std::move(onError);
+
+    const auto packet = ClientMsgHandler::buildLogoutReq(action);
+    m_tcp->sendRaw(packet);
+    ClientLogger::instance().info("GameSession：请求离世界 action=%u",
+                                  static_cast<unsigned>(action));
+}
+
+void GameSession::leaveWorld()
+{
+    m_inWorld   = false;
+    m_moveDirty = false;
 }
 
 void GameSession::disconnect()
 {
+    clearLogoutWait();
+    m_inWorld = false;
     if (m_tcp)
     {
         m_tcp->disconnect();
@@ -131,9 +203,29 @@ void GameSession::disconnect()
     m_moveDirty = false;
 }
 
+std::unique_ptr<TcpClient> GameSession::releaseTcpClient()
+{
+    clearLogoutWait();
+    m_inWorld   = false;
+    m_moveDirty = false;
+    m_scriptHost = nullptr;
+
+    if (m_tcp)
+    {
+        m_tcp->setOnMessage(nullptr);
+        m_tcp->setOnDisconnected(nullptr);
+    }
+    return std::move(m_tcp);
+}
+
 bool GameSession::isConnected() const
 {
     return m_tcp && m_tcp->isConnected();
+}
+
+bool GameSession::isWaitingLogout() const
+{
+    return m_waitingLogoutRsp;
 }
 
 uint64_t GameSession::localUserId() const
@@ -146,9 +238,17 @@ const Msg_S2C_EnterGame& GameSession::enterGameInfo() const
     return m_enterInfo;
 }
 
+void GameSession::clearLogoutWait()
+{
+    m_waitingLogoutRsp  = false;
+    m_logoutWaitStartMs = 0;
+    m_onLogoutSuccess   = nullptr;
+    m_onLogoutError     = nullptr;
+}
+
 void GameSession::sendHeartbeat()
 {
-    if (!m_tcp || !m_tcp->isConnected())
+    if (!m_tcp || !m_tcp->isConnected() || !m_inWorld)
     {
         return;
     }
@@ -159,7 +259,7 @@ void GameSession::sendHeartbeat()
 
 void GameSession::flushMoveIfNeeded()
 {
-    if (!m_moveDirty || !m_tcp || !m_tcp->isConnected())
+    if (!m_moveDirty || !m_tcp || !m_tcp->isConnected() || !m_inWorld)
     {
         return;
     }
@@ -180,6 +280,53 @@ void GameSession::flushMoveIfNeeded()
 void GameSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, uint16_t len)
 {
     const uint16_t flatId = makeMsgId(module, sub);
+
+    if (module == kLoginModule && flatId == clientMsgFlatId<Msg_S2C_LogoutRsp>())
+    {
+        Msg_S2C_LogoutRsp rsp{};
+        if (!ClientMsgHandler::parseLogoutRsp(data, len, rsp))
+        {
+            if (m_onLogoutError)
+            {
+                m_onLogoutError(u8"离世界响应解析失败");
+            }
+            clearLogoutWait();
+            return;
+        }
+
+        LogoutCallback successCb = std::move(m_onLogoutSuccess);
+        ErrorCallback errCb      = std::move(m_onLogoutError);
+        const LogoutAction action = m_pendingLogoutAction;
+        clearLogoutWait();
+
+        if (rsp.code != 0)
+        {
+            std::string err = u8"离开世界失败";
+            if (rsp.msg[0] != '\0')
+            {
+                err += u8"：";
+                err += rsp.msg;
+            }
+            if (errCb)
+            {
+                errCb(err);
+            }
+            return;
+        }
+
+        ClientLogger::instance().info("GameSession：离世界成功 action=%u",
+                                      static_cast<unsigned>(action));
+        if (successCb)
+        {
+            successCb(action);
+        }
+        return;
+    }
+
+    if (!m_inWorld)
+    {
+        return;
+    }
 
     if (flatId == clientMsgFlatId<Msg_S2C_SpawnEntity>())
     {

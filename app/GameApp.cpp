@@ -38,6 +38,7 @@ GameApp::GameApp()
     , m_pendingGameType(0)
     , m_luaInitialized(false)
     , m_loadingAuthPending(false)
+    , m_suppressGameDisconnectNav(false)
     , m_lastLuaTickMs(0)
 {
 }
@@ -106,6 +107,7 @@ bool GameApp::init()
     m_authLoginPanel.setup(&m_theme, &m_localSettings, viewSize);
     m_registerPanel.setup(&m_theme, viewSize);
     m_characterSelectPanel.setup(&m_theme, viewSize);
+    m_gameExitDialog.setup(&m_theme, viewSize);
     refreshZoneHomeDisplay();
 
     m_loginSession.setConfig(&m_config);
@@ -279,9 +281,17 @@ void GameApp::wireCallbacks()
     });
 
     m_gameSession.setOnDisconnected([this]() {
+        if (m_suppressGameDisconnectNav)
+        {
+            return;
+        }
         switchState(AppState::ZoneHome);
         m_authLoginPanel.setErrorMessage(u8"与服务器连接已断开");
     });
+
+    m_gameExitDialog.setOnReturnCharSelect([this]() { exitToCharacterSelect(); });
+    m_gameExitDialog.setOnReturnLogin([this]() { exitToAuthLogin(); });
+    m_gameExitDialog.setOnQuitClient([this]() { quitClient(); });
 }
 
 void GameApp::restoreSelectedZoneFromSettings()
@@ -359,6 +369,11 @@ void GameApp::processEvents()
     {
         if (event.type == sf::Event::Closed)
         {
+            if (m_state == AppState::Game && !m_gameExitDialog.isVisible())
+            {
+                showGameExitDialog();
+                continue;
+            }
             m_window.close();
             return;
         }
@@ -366,6 +381,31 @@ void GameApp::processEvents()
         if (event.type == sf::Event::Resized)
         {
             onResize(sf::Vector2u(event.size.width, event.size.height));
+        }
+
+        if (m_state == AppState::Game)
+        {
+            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)
+            {
+                if (m_gameExitDialog.isVisible())
+                {
+                    m_gameExitDialog.hide();
+                }
+                else
+                {
+                    showGameExitDialog();
+                }
+                continue;
+            }
+
+            if (m_gameExitDialog.isVisible())
+            {
+                m_gameExitDialog.handleEvent(event, m_window);
+                continue;
+            }
+
+            m_gameScene.handleEvent(event);
+            continue;
         }
 
         switch (m_state)
@@ -384,9 +424,6 @@ void GameApp::processEvents()
             break;
         case AppState::CharacterSelect:
             m_characterSelectPanel.handleEvent(event, m_window);
-            break;
-        case AppState::Game:
-            m_gameScene.handleEvent(event);
             break;
         default:
             break;
@@ -493,6 +530,10 @@ void GameApp::render()
 
     case AppState::Game:
         m_gameScene.draw(m_window);
+        if (m_gameExitDialog.isVisible())
+        {
+            m_gameExitDialog.draw(m_window);
+        }
         break;
     }
 
@@ -570,6 +611,90 @@ void GameApp::onResize(const sf::Vector2u& size)
     m_authLoginPanel.setup(&m_theme, &m_localSettings, size);
     m_registerPanel.setup(&m_theme, size);
     m_characterSelectPanel.setup(&m_theme, size);
+    m_gameExitDialog.setup(&m_theme, size);
     refreshZoneHomeDisplay();
     m_gameScene.setViewSize(size);
+}
+
+void GameApp::showGameExitDialog()
+{
+    if (m_state != AppState::Game || m_gameSession.isWaitingLogout())
+    {
+        return;
+    }
+    m_gameExitDialog.show();
+}
+
+void GameApp::exitToCharacterSelect()
+{
+    if (m_state != AppState::Game)
+    {
+        return;
+    }
+
+    m_suppressGameDisconnectNav = true;
+    m_gameExitDialog.setBusy(true, u8"正在离开世界...");
+
+    const uint64_t highlightUserId = m_gameSession.localUserId();
+    m_gameSession.requestLogout(
+        LogoutAction::RETURN_CHAR_SELECT,
+        [this, highlightUserId](LogoutAction /*action*/) {
+            m_gameScene.leave();
+            auto tcp = m_gameSession.releaseTcpClient();
+            m_suppressGameDisconnectNav = false;
+
+            m_characterSelectPanel.reset();
+            m_characterSelectPanel.setStatus(CharacterSelectPanel::Status::Loading,
+                                             u8"正在获取角色列表...");
+            switchState(AppState::CharacterSelect);
+            m_gameExitDialog.hide();
+
+            m_loginSession.resumeGatewayForCharSelect(std::move(tcp), highlightUserId);
+        },
+        [this](const std::string& err) {
+            m_suppressGameDisconnectNav = false;
+            m_gameExitDialog.setBusy(false);
+            ClientLogger::instance().warn("GameApp：返回选角失败，降级返回登录：%s", err.c_str());
+            finishExitToAuthLogin(err);
+        });
+}
+
+void GameApp::exitToAuthLogin()
+{
+    if (m_state != AppState::Game)
+    {
+        return;
+    }
+
+    m_suppressGameDisconnectNav = true;
+    m_gameExitDialog.setBusy(true, u8"正在离开世界...");
+
+    m_gameSession.requestLogout(
+        LogoutAction::RETURN_LOGIN,
+        [this](LogoutAction /*action*/) { finishExitToAuthLogin(""); },
+        [this](const std::string& err) {
+            ClientLogger::instance().warn("GameApp：返回登录离世界失败，强制断开：%s", err.c_str());
+            finishExitToAuthLogin(err);
+        });
+}
+
+void GameApp::finishExitToAuthLogin(const std::string& errorMsg)
+{
+    m_suppressGameDisconnectNav = true;
+    m_gameScene.leave();
+    m_gameSession.disconnect();
+    m_loginSession.cancel();
+    m_suppressGameDisconnectNav = false;
+
+    m_characterSelectPanel.reset();
+    m_gameExitDialog.hide();
+    m_authLoginPanel.setErrorMessage(errorMsg);
+    m_authLoginPanel.applyLocalSettings();
+    switchState(AppState::AuthLogin);
+}
+
+void GameApp::quitClient()
+{
+    m_gameExitDialog.hide();
+    m_window.close();
 }

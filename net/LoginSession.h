@@ -3,8 +3,8 @@
  * @brief   登录/注册/选角网络会话状态机
  *
  * 职责：
- * - LoginServer：账号登录/注册、角色列表、创角、S2C_GATEWAY_INFO
- * - Gateway：票据鉴权、选角、S2C_ENTER_GAME
+ * - LoginServer：账号登录/注册、S2C_GATEWAY_INFO
+ * - Gateway：票据鉴权、S2C_USER_LIST、创角、选角、S2C_ENTER_GAME、离世界后接回列表
  * - 每帧 update() 驱动 TcpClient::poll() 并推进状态机
  *
  * 协议见 Common/LoginMsg.h（wire v2 body 前缀 module/sub）。
@@ -75,6 +75,13 @@ public:
 
     std::unique_ptr<TcpClient> releaseTcpClient();
 
+    /**
+     * @brief 从 GameSession 接回 Gateway 连接并等待角色列表（返回选角）
+     * @param tcp              未断开的 Gateway TcpClient
+     * @param highlightUserId  高亮角色（通常为刚离世界的角色）
+     */
+    void resumeGatewayForCharSelect(std::unique_ptr<TcpClient> tcp, uint64_t highlightUserId);
+
     const std::string& gatewayHost() const;
     uint16_t gatewayPort() const;
 
@@ -144,6 +151,7 @@ private:
 
     std::vector<CharacterEntry> m_characters;
     uint64_t                m_pendingSelectUserId;
+    uint64_t                m_highlightUserId;
     std::string             m_pendingCreateName;
     uint8_t                 m_pendingCreateVocation;
     uint8_t                 m_pendingCreateSex;

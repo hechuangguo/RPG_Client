@@ -7,6 +7,7 @@
 
 #include "LoginCommon.h"
 #include "ui/UiTheme.h"
+#include "util/TextUtil.h"
 
 namespace
 {
@@ -57,6 +58,7 @@ void CharacterSelectPanel::setup(UiTheme* theme, const sf::Vector2u& viewSize)
     const float py = panel.top;
 
     m_nameInput.setup(theme, u8"角色名", px + 40.f, py + 120.f, 260.f, 36.f);
+    m_nameInput.setMaxCodepoints(MAX_ROLE_NAME_LEN);
     m_vocationWarriorBtn.setup(theme, u8"战士", px + 40.f, py + 180.f, 120.f, 36.f);
     m_vocationMageBtn.setup(theme, u8"法师", px + 180.f, py + 180.f, 120.f, 36.f);
     m_sexMaleBtn.setup(theme, u8"男", px + 40.f, py + 230.f, 120.f, 36.f);
@@ -229,6 +231,11 @@ void CharacterSelectPanel::refreshButtons()
     m_vocationMageBtn.setEnabled(ready && m_mode == Mode::Create && !loading);
     m_sexMaleBtn.setEnabled(ready && m_mode == Mode::Create && !loading);
     m_sexFemaleBtn.setEnabled(ready && m_mode == Mode::Create && !loading);
+
+    m_vocationWarriorBtn.setSelected(m_selectedVocation == CharacterDef::kVocationWarrior);
+    m_vocationMageBtn.setSelected(m_selectedVocation == CharacterDef::kVocationMage);
+    m_sexMaleBtn.setSelected(m_selectedSex == CharacterDef::kSexMale);
+    m_sexFemaleBtn.setSelected(m_selectedSex == CharacterDef::kSexFemale);
 }
 
 bool CharacterSelectPanel::validateCreate(std::string& err) const
@@ -239,12 +246,13 @@ bool CharacterSelectPanel::validateCreate(std::string& err) const
         err = u8"请输入角色名";
         return false;
     }
-    if (name.size() < MIN_ROLE_NAME_LEN)
+    const std::size_t charCount = TextUtil::utf8CodepointCount(name);
+    if (charCount < MIN_ROLE_NAME_LEN)
     {
         err = u8"角色名过短";
         return false;
     }
-    if (name.size() > MAX_ROLE_NAME_LEN)
+    if (charCount > MAX_ROLE_NAME_LEN)
     {
         err = u8"角色名过长";
         return false;

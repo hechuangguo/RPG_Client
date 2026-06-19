@@ -78,6 +78,9 @@ public:
     /** @brief 处理实体离开视野 */
     void onDespawn(const Msg_S2C_DespawnEntity& despawn);
 
+    /** @brief 离开游戏世界，清理场景状态 */
+    void leave();
+
 private:
     void updateCamera();
     void drawHud(sf::RenderTarget& target) const;

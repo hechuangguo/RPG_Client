@@ -203,6 +203,19 @@ void GameScene::onDespawn(const Msg_S2C_DespawnEntity& despawn)
     m_entities.onDespawn(despawn);
 }
 
+void GameScene::leave()
+{
+    m_active    = false;
+    m_moveUp    = false;
+    m_moveDown  = false;
+    m_moveLeft  = false;
+    m_moveRight = false;
+    m_session   = nullptr;
+    m_quests    = nullptr;
+    m_entities  = EntityManager{};
+    m_playerInfo = Msg_S2C_EnterGame{};
+}
+
 void GameScene::updateCamera()
 {
     const GameEntity* local = m_entities.localPlayer();
