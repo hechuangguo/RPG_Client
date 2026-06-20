@@ -15,7 +15,8 @@
 
 namespace
 {
-constexpr uint8_t kLoginModule = static_cast<uint8_t>(ClientModule::LOGIN);
+constexpr uint8_t kLoginModule  = static_cast<uint8_t>(ClientModule::LOGIN);
+constexpr uint8_t kSystemModule = static_cast<uint8_t>(ClientModule::SYSTEM);
 }  // namespace
 
 ZoneListSession::ZoneListSession()
@@ -223,12 +224,35 @@ uint16_t ZoneListSession::loginPort() const
 
 void ZoneListSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, uint16_t len)
 {
+    const uint16_t flatId = makeMsgId(module, sub);
+
+    if (module == kSystemModule)
+    {
+        if (flatId == clientMsgFlatId<Msg_S2C_Error>())
+        {
+            Msg_S2C_Error err{};
+            if (ClientMsgHandler::parseGatewayError(data, len, err))
+            {
+                fail(ClientErrorText::gatewayValidateText(err));
+            }
+            else
+            {
+                fail(u8"网关错误消息解析失败");
+            }
+            return;
+        }
+        if (sub == static_cast<uint8_t>(SystemMsgSub::S2C_KICK))
+        {
+            fail(u8"已被服务器踢下线");
+        }
+        return;
+    }
+
     if (module != kLoginModule)
     {
         return;
     }
 
-    const uint16_t flatId = makeMsgId(module, sub);
     if (flatId != clientMsgFlatId<Msg_S2C_ZoneListRspHeader>())
     {
         return;

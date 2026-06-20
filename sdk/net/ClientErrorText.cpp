@@ -115,6 +115,24 @@ std::string ClientErrorText::gatewayValidateText(const Msg_S2C_Error& err)
     return gatewayValidateText(static_cast<GatewayValidateCode>(err.code), err.msg);
 }
 
+std::string ClientErrorText::userListResultText(UserListResultCode code, const char* serverMsg)
+{
+    if (code == UserListResultCode::OK)
+    {
+        return {};
+    }
+    return preferServerMsg(serverMsg, u8"获取角色列表失败");
+}
+
+std::string ClientErrorText::zoneListResultText(int32_t code, const char* serverMsg)
+{
+    if (code == 0)
+    {
+        return {};
+    }
+    return preferServerMsg(serverMsg, code < 0 ? u8"区列表服务器错误" : u8"获取区列表失败");
+}
+
 std::string ClientErrorText::localErrorText(ClientLocalError err, LoginTimeoutContext ctx)
 {
     switch (err)

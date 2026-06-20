@@ -44,6 +44,7 @@ LoginSession::LoginSession()
     , m_gatewayPort(0)
     , m_pendingSelectUserId(0)
     , m_highlightUserId(0)
+    , m_nextLoginTxnId(1)
     , m_pendingCreateVocation(0)
     , m_pendingCreateSex(0)
     , m_connectStartMs(0)
@@ -480,18 +481,23 @@ void LoginSession::sendGatewayAuthOrLogin()
         return;
     }
 
-    if (hasLoginToken(m_loginRsp))
+    if (!hasLoginToken(m_loginRsp))
     {
-        const auto packet = ClientMsgHandler::buildGatewayAuthReq(
-            m_account, m_loginRsp.loginToken, m_zoneId, m_gameType);
-        m_tcp->sendRaw(packet);
-        ClientLogger::instance().info("LoginSession：发送 Gateway 票据鉴权");
+        fail(u8"登录票据缺失，请重新登录");
+        return;
     }
-    else
+
+    if (m_loginRsp.tokenExpireMs > 0 &&
+        TimeUtil::nowMs() >= static_cast<int64_t>(m_loginRsp.tokenExpireMs))
     {
-        ClientLogger::instance().warn("LoginSession：loginToken 为空，回退为账号密码登录 Gateway");
-        sendLoginReq();
+        fail(u8"登录票据已过期，请重新登录");
+        return;
     }
+
+    const auto packet = ClientMsgHandler::buildGatewayAuthReq(
+        m_account, m_loginRsp.loginToken, m_zoneId, m_gameType);
+    m_tcp->sendRaw(packet);
+    ClientLogger::instance().info("LoginSession：发送 Gateway 票据鉴权");
 }
 
 void LoginSession::sendSelectUserReq(uint64_t userID)
@@ -501,7 +507,8 @@ void LoginSession::sendSelectUserReq(uint64_t userID)
         return;
     }
 
-    const auto packet = ClientMsgHandler::buildSelectUserReq(userID, 0);
+    const uint64_t txnId = m_nextLoginTxnId++;
+    const auto packet = ClientMsgHandler::buildSelectUserReq(userID, txnId);
     m_tcp->sendRaw(packet);
     m_state               = State::WaitEnterGame;
     m_waitResponseStartMs = TimeUtil::nowMs();
@@ -537,12 +544,6 @@ void LoginSession::handleLoginRsp(const Msg_S2C_LoginRsp& rsp)
     {
         fail(ClientErrorText::loginResultText(static_cast<LoginResultCode>(rsp.code), rsp.msg));
         return;
-    }
-
-    if (m_state == State::WaitUserList && m_gatewayConnected)
-    {
-        m_state = State::WaitEnterGame;
-        ClientLogger::instance().info("LoginSession：旧版 Gateway 登录成功，等待进入游戏");
     }
 
     if (!m_gotUserList)
@@ -665,6 +666,10 @@ void LoginSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, u
         {
             handleSystemError(data, len);
         }
+        else if (sub == static_cast<uint8_t>(SystemMsgSub::S2C_KICK))
+        {
+            fail(u8"已被服务器踢下线");
+        }
         return;
     }
 
@@ -675,6 +680,11 @@ void LoginSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, u
 
     if (flatId == clientMsgFlatId<Msg_S2C_LoginRsp>())
     {
+        if (m_gatewayConnected)
+        {
+            ClientLogger::instance().warn("LoginSession：Gateway 连接收到登录响应，已忽略");
+            return;
+        }
         Msg_S2C_LoginRsp rsp{};
         if (!ClientMsgHandler::parseLoginRsp(data, len, rsp))
         {

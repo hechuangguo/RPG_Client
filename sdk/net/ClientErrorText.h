@@ -22,6 +22,8 @@ public:
     static std::string logoutResultText(LogoutResultCode code, const char* serverMsg);
     static std::string gatewayValidateText(GatewayValidateCode code, const char* serverMsg);
     static std::string gatewayValidateText(const Msg_S2C_Error& err);
+    static std::string userListResultText(UserListResultCode code, const char* serverMsg);
+    static std::string zoneListResultText(int32_t code, const char* serverMsg = nullptr);
 
     static std::string localErrorText(ClientLocalError err,
                                       LoginTimeoutContext ctx = LoginTimeoutContext::Generic);

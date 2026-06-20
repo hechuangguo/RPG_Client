@@ -53,6 +53,12 @@ public:
 
     static std::vector<char> buildLogoutReq(LogoutAction action);
 
+    static std::vector<char> buildChatReq(uint8_t channel, const std::string& content);
+
+    static std::vector<char> buildQuestAcceptReq(uint32_t questId);
+    static std::vector<char> buildQuestSubmitReq(uint32_t questId);
+    static std::vector<char> buildBagInfoReq(uint64_t userID);
+
     static bool parseZoneListRsp(const char* data,
                                  uint16_t len,
                                  std::vector<GameZoneEntry>& out,
@@ -82,6 +88,22 @@ public:
     static bool parseDespawnEntity(const char* data, uint16_t len, Msg_S2C_DespawnEntity& out);
 
     static bool parseGatewayError(const char* data, uint16_t len, Msg_S2C_Error& out);
+
+    static bool parseHeartbeat(const char* data, uint16_t len, Msg_S2C_Heartbeat& out);
+
+    static bool parseNotice(const char* data, uint16_t len, Msg_S2C_Notice& out);
+
+    static bool parseChatNotify(const char* data, uint16_t len, Msg_S2C_Chat& out);
+
+    static bool parseQuestInfo(const char* data,
+                               uint16_t len,
+                               std::vector<Msg_S2C_QuestEntryWire>& out,
+                               std::string& errMsg);
+
+    static bool parseBagInfoRsp(const char* data,
+                                uint16_t len,
+                                std::vector<Msg_S2C_BagSlotWire>& out,
+                                std::string& errMsg);
 
     static std::string gatewayErrorText(const Msg_S2C_Error& err);
 

@@ -33,6 +33,10 @@ bool ScriptBindings::registerAll(lua_State* L, GameSession* session)
     lua_register(L, "log_err", luaLogErr);
     lua_register(L, "get_user_id", luaGetUserId);
     lua_register(L, "send_packet", luaSendPacket);
+    lua_register(L, "send_chat", luaSendChat);
+    lua_register(L, "send_quest_accept", luaSendQuestAccept);
+    lua_register(L, "send_quest_submit", luaSendQuestSubmit);
+    lua_register(L, "request_bag_info", luaRequestBagInfo);
     return true;
 }
 
@@ -70,21 +74,57 @@ int ScriptBindings::luaGetUserId(lua_State* L)
 
 int ScriptBindings::luaSendPacket(lua_State* L)
 {
-    const int module = static_cast<int>(luaL_checkinteger(L, 1));
-    const int sub    = static_cast<int>(luaL_checkinteger(L, 2));
-    size_t len       = 0;
-    const char* bytes = luaL_checklstring(L, 3, &len);
+    size_t len        = 0;
+    const char* bytes = luaL_checklstring(L, 1, &len);
 
     if (s_session && s_session->isConnected())
     {
-        // Stub: real send would use TcpClient via GameSession friend API
-        ClientLogger::instance().info("【Lua】发送数据包 module=%d sub=%d len=%zu",
-                                      module, sub, len);
-        (void)bytes;
+        s_session->sendRaw(std::vector<char>(bytes, bytes + len));
     }
     else
     {
-        ClientLogger::instance().warn("【Lua】send_packet 为桩实现（未连接）");
+        ClientLogger::instance().warn("【Lua】send_packet 失败（未连接）");
+    }
+    return 0;
+}
+
+int ScriptBindings::luaSendChat(lua_State* L)
+{
+    const int channel = static_cast<int>(luaL_checkinteger(L, 1));
+    const char* text  = luaL_checkstring(L, 2);
+    if (s_session && s_session->isConnected())
+    {
+        s_session->sendChat(static_cast<uint8_t>(channel), text);
+    }
+    return 0;
+}
+
+int ScriptBindings::luaSendQuestAccept(lua_State* L)
+{
+    const uint32_t questId = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    if (s_session && s_session->isConnected())
+    {
+        s_session->sendQuestAccept(questId);
+    }
+    return 0;
+}
+
+int ScriptBindings::luaSendQuestSubmit(lua_State* L)
+{
+    const uint32_t questId = static_cast<uint32_t>(luaL_checkinteger(L, 1));
+    if (s_session && s_session->isConnected())
+    {
+        s_session->sendQuestSubmit(questId);
+    }
+    return 0;
+}
+
+int ScriptBindings::luaRequestBagInfo(lua_State* L)
+{
+    (void)L;
+    if (s_session && s_session->isConnected())
+    {
+        s_session->requestBagInfo();
     }
     return 0;
 }

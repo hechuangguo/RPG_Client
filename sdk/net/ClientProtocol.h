@@ -8,6 +8,8 @@
 #pragma once
 
 #include "ClientMsgBody.h"
+#include "ChatCommon.h"
+#include "ChatMsg.h"
 #include "ClientTypes.h"
 #include "EquipCommon.h"
 #include "LoginCommon.h"
@@ -17,5 +19,7 @@
 #include "MsgId.h"
 #include "NetDefine.h"
 #include "PropertyCommon.h"
+#include "PropertyMsg.h"
+#include "EquipMsg.h"
 #include "ZoneCommon.h"
 #include "ZoneMsg.h"

@@ -19,7 +19,9 @@
 
 namespace
 {
-constexpr uint8_t kLoginModule = static_cast<uint8_t>(ClientModule::LOGIN);
+constexpr uint8_t kLoginModule  = static_cast<uint8_t>(ClientModule::LOGIN);
+constexpr uint8_t kSystemModule = static_cast<uint8_t>(ClientModule::SYSTEM);
+constexpr uint8_t kChatModule   = static_cast<uint8_t>(ClientModule::CHAT);
 }  // namespace
 
 GameSession::GameSession()
@@ -40,6 +42,7 @@ GameSession::GameSession()
     , m_waitingLogoutRsp(false)
     , m_pendingLogoutAction(LogoutAction::RETURN_CHAR_SELECT)
     , m_logoutWaitStartMs(0)
+    , m_serverTimeMs(0)
 {
 }
 
@@ -261,6 +264,55 @@ const Msg_S2C_EnterGame& GameSession::enterGameInfo() const
     return m_enterInfo;
 }
 
+uint64_t GameSession::serverTimeMs() const
+{
+    return m_serverTimeMs;
+}
+
+void GameSession::sendRaw(const std::vector<char>& packet)
+{
+    if (m_tcp && m_tcp->isConnected())
+    {
+        m_tcp->sendRaw(packet);
+    }
+}
+
+void GameSession::sendChat(uint8_t channel, const std::string& content)
+{
+    if (!m_inWorld || !m_tcp || !m_tcp->isConnected())
+    {
+        return;
+    }
+    m_tcp->sendRaw(ClientMsgHandler::buildChatReq(channel, content));
+}
+
+void GameSession::sendQuestAccept(uint32_t questId)
+{
+    if (!m_inWorld || !m_tcp || !m_tcp->isConnected())
+    {
+        return;
+    }
+    m_tcp->sendRaw(ClientMsgHandler::buildQuestAcceptReq(questId));
+}
+
+void GameSession::sendQuestSubmit(uint32_t questId)
+{
+    if (!m_inWorld || !m_tcp || !m_tcp->isConnected())
+    {
+        return;
+    }
+    m_tcp->sendRaw(ClientMsgHandler::buildQuestSubmitReq(questId));
+}
+
+void GameSession::requestBagInfo()
+{
+    if (!m_inWorld || !m_tcp || !m_tcp->isConnected())
+    {
+        return;
+    }
+    m_tcp->sendRaw(ClientMsgHandler::buildBagInfoReq(m_localUserId));
+}
+
 void GameSession::clearLogoutWait()
 {
     m_waitingLogoutRsp  = false;
@@ -303,6 +355,47 @@ void GameSession::flushMoveIfNeeded()
 void GameSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, uint16_t len)
 {
     const uint16_t flatId = makeMsgId(module, sub);
+
+    if (module == kSystemModule)
+    {
+        if (flatId == clientMsgFlatId<Msg_S2C_Error>())
+        {
+            Msg_S2C_Error err{};
+            if (ClientMsgHandler::parseGatewayError(data, len, err) && m_onError)
+            {
+                m_onError(ClientErrorText::gatewayValidateText(err));
+            }
+            return;
+        }
+        if (sub == static_cast<uint8_t>(SystemMsgSub::S2C_KICK))
+        {
+            ClientLogger::instance().warn("GameSession：收到踢线通知");
+            if (m_onError)
+            {
+                m_onError(u8"已被服务器踢下线");
+            }
+            disconnect();
+            return;
+        }
+        if (flatId == clientMsgFlatId<Msg_S2C_Heartbeat>())
+        {
+            Msg_S2C_Heartbeat hb{};
+            if (ClientMsgHandler::parseHeartbeat(data, len, hb))
+            {
+                m_serverTimeMs = hb.serverTime;
+            }
+            return;
+        }
+        if (flatId == clientMsgFlatId<Msg_S2C_Notice>())
+        {
+            Msg_S2C_Notice notice{};
+            if (ClientMsgHandler::parseNotice(data, len, notice) && m_scriptHost)
+            {
+                m_scriptHost->onNotice(notice.content);
+            }
+            return;
+        }
+    }
 
     if (module == kLoginModule && flatId == clientMsgFlatId<Msg_S2C_LogoutRsp>())
     {
@@ -372,7 +465,25 @@ void GameSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, ui
     }
     else if (flatId == clientMsgFlatId<Msg_S2C_Heartbeat>())
     {
-        // echo ack, no action
+        Msg_S2C_Heartbeat hb{};
+        if (ClientMsgHandler::parseHeartbeat(data, len, hb))
+        {
+            m_serverTimeMs = hb.serverTime;
+        }
+    }
+    else if (module == kChatModule && flatId == clientMsgFlatId<Msg_S2C_Chat>())
+    {
+        Msg_S2C_Chat chat{};
+        if (ClientMsgHandler::parseChatNotify(data, len, chat) && m_scriptHost)
+        {
+            m_scriptHost->onChat(chat);
+        }
+    }
+    else if (module == kChatModule &&
+             (sub == static_cast<uint8_t>(ChatMsgSub::C2S_WHISPER_REQ) ||
+              sub == static_cast<uint8_t>(ChatMsgSub::S2C_WHISPER_NOTIFY)))
+    {
+        ClientLogger::instance().info("GameSession：私聊消息暂未实现 sub=%u", sub);
     }
     else if (flatId == clientMsgFlatId<Msg_S2C_Error>())
     {

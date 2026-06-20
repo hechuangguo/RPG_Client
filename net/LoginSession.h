@@ -158,6 +158,7 @@ private:
     std::vector<CharacterEntry> m_characters;
     uint64_t                m_pendingSelectUserId;
     uint64_t                m_highlightUserId;
+    uint64_t                m_nextLoginTxnId;
     std::string             m_pendingCreateName;
     uint8_t                 m_pendingCreateVocation;
     uint8_t                 m_pendingCreateSex;

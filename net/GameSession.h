@@ -102,6 +102,15 @@ public:
     /** @brief 进入游戏快照 */
     const Msg_S2C_EnterGame& enterGameInfo() const;
 
+    /** @brief 服务端心跳时间（毫秒，Unix epoch） */
+    uint64_t serverTimeMs() const;
+
+    void sendRaw(const std::vector<char>& packet);
+    void sendChat(uint8_t channel, const std::string& content);
+    void sendQuestAccept(uint32_t questId);
+    void sendQuestSubmit(uint32_t questId);
+    void requestBagInfo();
+
 private:
     void bindTcpCallbacks();
     void onTcpMessage(uint8_t module, uint8_t sub, const char* data, uint16_t len);
@@ -143,4 +152,6 @@ private:
     DespawnCallback            m_onDespawn;
     ErrorCallback              m_onError;
     std::function<void()>      m_onDisconnected;
+
+    uint64_t                   m_serverTimeMs;
 };

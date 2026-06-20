@@ -6,16 +6,15 @@
 #include "ClientMsgHandler.h"
 
 #include "ProtocolCodec.h"
+#include "log/ClientLogger.h"
 #include "net/ClientErrorText.h"
 #include "net/ZoneTypes.h"
+#include "util/PasswordDigest.h"
 
 #include <cstring>
 
 namespace
 {
-/** @brief 区列表 wire v1 单条大小（无 onlineCount/loadLevel 扩展字段） */
-constexpr size_t kZoneEntryWireV1Size = 104;
-
 ZoneLoadStatus loadStatusFromWire(uint8_t enabled, uint8_t loadLevel)
 {
     if (enabled == 0)
@@ -42,8 +41,14 @@ std::vector<char> encodeWire(MsgT& body)
 template<typename MsgT>
 bool parseWire(const char* data, uint16_t len, MsgT& out)
 {
-    if (!data || len < sizeof(MsgT))
+    if (!data || len != sizeof(MsgT))
     {
+        ClientLogger::instance().warn(
+            "ClientMsgHandler：固定包长度不符 module=%u sub=%u len=%u expected=%zu",
+            static_cast<unsigned>(MsgT::kModule),
+            static_cast<unsigned>(MsgT::kSub),
+            static_cast<unsigned>(len),
+            sizeof(MsgT));
         return false;
     }
     if (!clientMsgBodyMatches(MsgT::kModule, MsgT::kSub, data, len))
@@ -76,7 +81,8 @@ std::vector<char> ClientMsgHandler::buildLoginReq(const std::string& account,
 {
     Msg_C2S_LoginReq body{};
     copyFixedString(body.account, sizeof(body.account), account);
-    copyFixedString(body.password, sizeof(body.password), password);
+    std::memset(body.passwordDigest, 0, sizeof(body.passwordDigest));
+    PasswordDigest::sha256Utf8Password(password, body.passwordDigest);
     body.zoneId   = zoneId;
     body.gameType = gameType;
     std::memset(body.reserved, 0, sizeof(body.reserved));
@@ -91,8 +97,10 @@ std::vector<char> ClientMsgHandler::buildRegisterReq(const std::string& account,
 {
     Msg_C2S_RegisterReq body{};
     copyFixedString(body.account, sizeof(body.account), account);
-    copyFixedString(body.password, sizeof(body.password), password);
-    copyFixedString(body.confirmPassword, sizeof(body.confirmPassword), confirmPassword);
+    std::memset(body.passwordDigest, 0, sizeof(body.passwordDigest));
+    std::memset(body.confirmPasswordDigest, 0, sizeof(body.confirmPasswordDigest));
+    PasswordDigest::sha256Utf8Password(password, body.passwordDigest);
+    PasswordDigest::sha256Utf8Password(confirmPassword, body.confirmPasswordDigest);
     body.zoneId   = zoneId;
     body.gameType = gameType;
     std::memset(body.reserved, 0, sizeof(body.reserved));
@@ -129,7 +137,7 @@ bool ClientMsgHandler::parseZoneListRsp(const char* data,
 
     if (hdr.code != 0)
     {
-        errMsg = u8"获取区列表失败";
+        errMsg = ClientErrorText::zoneListResultText(hdr.code, nullptr);
         return false;
     }
 
@@ -148,7 +156,7 @@ bool ClientMsgHandler::parseZoneListRsp(const char* data,
     const size_t bodyLen = len - sizeof(Msg_S2C_ZoneListRspHeader);
     const size_t entrySize = bodyLen / hdr.count;
     const bool wireV2      = entrySize == sizeof(Msg_S2C_ZoneEntryWire);
-    const bool wireV1      = entrySize == kZoneEntryWireV1Size;
+    const bool wireV1      = entrySize == sizeof(Msg_S2C_ZoneEntryWireV1);
     if (!wireV1 && !wireV2)
     {
         errMsg = u8"区列表条目格式未知";
@@ -174,17 +182,7 @@ bool ClientMsgHandler::parseZoneListRsp(const char* data,
         }
         else
         {
-            struct ZoneEntryWireV1
-            {
-                uint32_t zoneId;
-                uint8_t  gameType;
-                uint8_t  enabled;
-                char     name[32];
-                char     ip[64];
-                uint16_t superPort;
-            };
-
-            ZoneEntryWireV1 entry{};
+            Msg_S2C_ZoneEntryWireV1 entry{};
             std::memcpy(&entry, p, sizeof(entry));
 
             zone.zoneId   = entry.zoneId;
@@ -278,9 +276,10 @@ bool ClientMsgHandler::parseUserList(const char* data,
         return false;
     }
 
-    if (hdr.code != 0)
+    if (static_cast<UserListResultCode>(hdr.code) != UserListResultCode::OK)
     {
-        errMsg = u8"获取角色列表失败";
+        errMsg = ClientErrorText::userListResultText(static_cast<UserListResultCode>(hdr.code),
+                                                     nullptr);
         return false;
     }
 
@@ -369,4 +368,136 @@ bool ClientMsgHandler::parseGatewayError(const char* data, uint16_t len, Msg_S2C
 std::string ClientMsgHandler::gatewayErrorText(const Msg_S2C_Error& err)
 {
     return ClientErrorText::gatewayValidateText(err);
+}
+
+std::vector<char> ClientMsgHandler::buildChatReq(uint8_t channel, const std::string& content)
+{
+    Msg_C2S_Chat body{};
+    body.channel = channel;
+    copyFixedString(body.content, sizeof(body.content), content);
+    return encodeWire(body);
+}
+
+std::vector<char> ClientMsgHandler::buildQuestAcceptReq(uint32_t questId)
+{
+    Msg_C2S_QuestAcceptReq body{};
+    body.questId = questId;
+    return encodeWire(body);
+}
+
+std::vector<char> ClientMsgHandler::buildQuestSubmitReq(uint32_t questId)
+{
+    Msg_C2S_QuestSubmitReq body{};
+    body.questId = questId;
+    return encodeWire(body);
+}
+
+std::vector<char> ClientMsgHandler::buildBagInfoReq(uint64_t userID)
+{
+    Msg_C2S_BagInfoReq body{};
+    body.userID = userID;
+    return encodeWire(body);
+}
+
+bool ClientMsgHandler::parseHeartbeat(const char* data, uint16_t len, Msg_S2C_Heartbeat& out)
+{
+    return parseWire(data, len, out);
+}
+
+bool ClientMsgHandler::parseNotice(const char* data, uint16_t len, Msg_S2C_Notice& out)
+{
+    return parseWire(data, len, out);
+}
+
+bool ClientMsgHandler::parseChatNotify(const char* data, uint16_t len, Msg_S2C_Chat& out)
+{
+    return parseWire(data, len, out);
+}
+
+bool ClientMsgHandler::parseQuestInfo(const char* data,
+                                      uint16_t len,
+                                      std::vector<Msg_S2C_QuestEntryWire>& out,
+                                      std::string& errMsg)
+{
+    out.clear();
+    errMsg.clear();
+
+    if (!data || len < sizeof(Msg_S2C_QuestInfoHeader))
+    {
+        errMsg = u8"任务同步响应过短";
+        return false;
+    }
+
+    Msg_S2C_QuestInfoHeader hdr{};
+    if (!parseWire(data, len, hdr))
+    {
+        errMsg = u8"任务同步响应格式错误";
+        return false;
+    }
+
+    if (hdr.code != 0)
+    {
+        errMsg = u8"任务同步失败";
+        return false;
+    }
+
+    if (len != questInfoBodyLen(hdr.count))
+    {
+        errMsg = u8"任务同步数据不完整";
+        return false;
+    }
+
+    const char* p = data + sizeof(Msg_S2C_QuestInfoHeader);
+    for (uint16_t i = 0; i < hdr.count; ++i)
+    {
+        Msg_S2C_QuestEntryWire wire{};
+        std::memcpy(&wire, p, sizeof(wire));
+        out.push_back(wire);
+        p += sizeof(wire);
+    }
+    return true;
+}
+
+bool ClientMsgHandler::parseBagInfoRsp(const char* data,
+                                       uint16_t len,
+                                       std::vector<Msg_S2C_BagSlotWire>& out,
+                                       std::string& errMsg)
+{
+    out.clear();
+    errMsg.clear();
+
+    if (!data || len < sizeof(Msg_S2C_BagInfoRspHeader))
+    {
+        errMsg = u8"背包同步响应过短";
+        return false;
+    }
+
+    Msg_S2C_BagInfoRspHeader hdr{};
+    if (!parseWire(data, len, hdr))
+    {
+        errMsg = u8"背包同步响应格式错误";
+        return false;
+    }
+
+    if (hdr.code != 0)
+    {
+        errMsg = u8"背包同步失败";
+        return false;
+    }
+
+    if (len != bagInfoBodyLen(hdr.slotCount))
+    {
+        errMsg = u8"背包同步数据不完整";
+        return false;
+    }
+
+    const char* p = data + sizeof(Msg_S2C_BagInfoRspHeader);
+    for (uint16_t i = 0; i < hdr.slotCount; ++i)
+    {
+        Msg_S2C_BagSlotWire wire{};
+        std::memcpy(&wire, p, sizeof(wire));
+        out.push_back(wire);
+        p += sizeof(wire);
+    }
+    return true;
 }

@@ -243,18 +243,28 @@ git submodule update --init --recursive
 
 | 消息 | module | sub | 扁平 ID | 处理方 | 说明 |
 |------|--------|-----|---------|--------|------|
-| `C2S_LOGIN_REQ` | 0x00 | 0x01 | 0x0001 | LoginServer | 账号密码登录 |
-| `S2C_LOGIN_RSP` | 0x00 | 0x02 | 0x0002 | LoginServer | 含 `userID`（上次角色）、`loginToken` |
+| `C2S_LOGIN_REQ` | 0x00 | 0x01 | 0x0001 | LoginServer | 账号 + `passwordDigest`（SHA-256 UTF-8 密码） |
+| `S2C_LOGIN_RSP` | 0x00 | 0x02 | 0x0002 | LoginServer | 含 `userID`、`loginToken`、`tokenExpireMs` |
 | `C2S_REGISTER_REQ` | 0x00 | 0x03 | 0x0003 | LoginServer | 注册 |
 | `S2C_REGISTER_RSP` | 0x00 | 0x04 | 0x0004 | LoginServer | 0=成功；1=账号已存在；-1=系统错误 |
-| `C2S_SELECT_USER_REQ` | 0x00 | 0x05 | 0x0005 | Gateway | 选择角色进入游戏 |
+| `C2S_SELECT_USER_REQ` | 0x00 | 0x05 | 0x0005 | Gateway | 选择角色进世界（含 `loginTxnId` 幂等） |
 | `S2C_USER_LIST` | 0x00 | 0x06 | 0x0006 | LoginServer | 角色列表（变长，header 8B） |
-| `C2S_CREATE_USER_REQ` | 0x00 | 0x07 | 0x0007 | LoginServer | 创建角色（角色名 2–16 字符） |
+| `C2S_CREATE_USER_REQ` | 0x00 | 0x07 | 0x0007 | Gateway | 创建角色（角色名 2–12 **码点**） |
 | `S2C_CREATE_USER_RSP` | 0x00 | 0x08 | 0x0008 | LoginServer | 0=成功；1=重名；-1=系统错误 |
 | `S2C_ENTER_GAME` | 0x00 | 0x09 | 0x0009 | Gateway | 进入场景（mapID、坐标、属性） |
 | `S2C_GATEWAY_INFO` | 0x00 | 0x0A | 0x000A | LoginServer | Gateway 地址 |
-| `C2S_GATEWAY_AUTH_REQ` | 0x00 | 0x0D | 0x000D | Gateway | Gateway 票据鉴权 |
+| `C2S_GATEWAY_AUTH_REQ` | 0x00 | 0x0D | 0x000D | Gateway | Gateway 首包票据鉴权（**必须**，不再回退账号密码） |
 | `S2C_ERROR` | **0x0F** | **0x05** | 0x0F05 | Gateway | 网关校验失败（SYSTEM 域，非 LOGIN） |
+
+客户端各域实现状态（wire v2，`ClientMsgHandler` + Session 路由）：
+
+| 域 | 状态 |
+|----|------|
+| LOGIN / ZONE | 登录、注册、区列表、票据鉴权、选角、创角 |
+| SCENE | 移动、视野实体、心跳 |
+| SYSTEM | 心跳 `serverTime`、踢线、公告、网关错误 |
+| CHAT | 频道聊天收发（私聊 sub-id 已预留） |
+| QUEST / BAG | `PropertyMsg.h` / `EquipMsg.h` 变长同步 + Lua 绑定 |
 
 `Msg_S2C_ZoneEntryWire` 扩展字段（v2，单条 112 字节；旧版 v1 为 104 字节，客户端自动兼容）：
 
