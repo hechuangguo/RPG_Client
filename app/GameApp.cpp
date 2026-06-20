@@ -347,6 +347,7 @@ void GameApp::wireCallbacks()
         {
             return;
         }
+        ClientLogger::instance().warn("GameApp：游戏中连接断开，返回区服主页");
         switchState(AppState::ZoneHome);
         m_authLoginPanel.setErrorMessage(u8"与服务器连接已断开");
     });
@@ -703,6 +704,7 @@ void GameApp::showGameExitDialog()
     {
         return;
     }
+    ClientLogger::instance().info("GameApp：打开退出确认框");
     m_gameExitDialog.show();
 }
 
@@ -717,6 +719,8 @@ void GameApp::exitToCharacterSelect()
     m_gameExitDialog.setBusy(true, u8"正在离开世界...");
 
     const uint64_t highlightUserId = m_gameSession.localUserId();
+    ClientLogger::instance().info("GameApp：开始返回选角 角色=%llu",
+                                  static_cast<unsigned long long>(highlightUserId));
     m_gameSession.requestLogout(
         LogoutAction::RETURN_CHAR_SELECT,
         [this, highlightUserId](LogoutAction /*action*/) {
@@ -752,6 +756,8 @@ void GameApp::exitToAuthLogin()
     m_suppressGameDisconnectNav = true;
     m_gameExitDialog.setBusy(true, u8"正在离开世界...");
 
+    ClientLogger::instance().info("GameApp：开始返回登录 角色=%llu",
+                                  static_cast<unsigned long long>(m_gameSession.localUserId()));
     m_gameSession.requestLogout(
         LogoutAction::RETURN_LOGIN,
         [this](LogoutAction /*action*/) { finishExitToAuthLogin(""); },
@@ -774,10 +780,19 @@ void GameApp::finishExitToAuthLogin(const std::string& errorMsg)
     m_authLoginPanel.setErrorMessage(errorMsg);
     m_authLoginPanel.applyLocalSettings();
     switchState(AppState::AuthLogin);
+    if (errorMsg.empty())
+    {
+        ClientLogger::instance().info("GameApp：已返回账号登录");
+    }
+    else
+    {
+        ClientLogger::instance().warn("GameApp：已返回账号登录（降级） 原因=%s", errorMsg.c_str());
+    }
 }
 
 void GameApp::quitClient()
 {
+    ClientLogger::instance().info("GameApp：退出游戏客户端");
     m_gameExitDialog.hide();
     m_window.close();
 }

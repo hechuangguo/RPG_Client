@@ -22,6 +22,19 @@ namespace
 constexpr uint8_t kLoginModule  = static_cast<uint8_t>(ClientModule::LOGIN);
 constexpr uint8_t kSystemModule = static_cast<uint8_t>(ClientModule::SYSTEM);
 constexpr uint8_t kChatModule   = static_cast<uint8_t>(ClientModule::CHAT);
+
+const char* logoutActionLabel(LogoutAction action)
+{
+    switch (action)
+    {
+    case LogoutAction::RETURN_CHAR_SELECT:
+        return "返回选角";
+    case LogoutAction::RETURN_LOGIN:
+        return "返回登录";
+    default:
+        return "未知";
+    }
+}
 }  // namespace
 
 GameSession::GameSession()
@@ -129,7 +142,7 @@ void GameSession::start(std::unique_ptr<TcpClient> tcp, const Msg_S2C_EnterGame&
     m_inWorld         = true;
     bindTcpCallbacks();
 
-    ClientLogger::instance().info("GameSession：启动完成 user=%llu map=%u",
+    ClientLogger::instance().info("GameSession：启动完成 角色=%llu 地图=%u",
                                   static_cast<unsigned long long>(m_localUserId), enter.mapID);
 }
 
@@ -146,6 +159,9 @@ void GameSession::update(float /*dt*/)
     if (m_waitingLogoutRsp && m_logoutWaitStartMs > 0 &&
         TimeUtil::elapsed(m_logoutWaitStartMs, logoutTimeoutMs(), now))
     {
+        const LogoutAction action = m_pendingLogoutAction;
+        ClientLogger::instance().warn("GameSession：离世界响应超时 意图=%s",
+                                      logoutActionLabel(action));
         ErrorCallback errCb = std::move(m_onLogoutError);
         clearLogoutWait();
         if (errCb)
@@ -207,8 +223,9 @@ void GameSession::requestLogout(LogoutAction action, LogoutCallback onSuccess, E
 
     const auto packet = ClientMsgHandler::buildLogoutReq(action);
     m_tcp->sendRaw(packet);
-    ClientLogger::instance().info("GameSession：请求离世界 action=%u",
-                                  static_cast<unsigned>(action));
+    ClientLogger::instance().info("GameSession：请求离世界 意图=%s 角色=%llu",
+                                  logoutActionLabel(action),
+                                  static_cast<unsigned long long>(m_localUserId));
 }
 
 void GameSession::leaveWorld()
@@ -219,6 +236,7 @@ void GameSession::leaveWorld()
 
 void GameSession::disconnect()
 {
+    const bool hadConnection = m_tcp != nullptr;
     clearLogoutWait();
     m_inWorld = false;
     if (m_tcp)
@@ -227,6 +245,10 @@ void GameSession::disconnect()
         m_tcp.reset();
     }
     m_moveDirty = false;
+    if (hadConnection)
+    {
+        ClientLogger::instance().info("GameSession：断开连接");
+    }
 }
 
 std::unique_ptr<TcpClient> GameSession::releaseTcpClient()
@@ -241,6 +263,8 @@ std::unique_ptr<TcpClient> GameSession::releaseTcpClient()
         m_tcp->setOnMessage(nullptr);
         m_tcp->setOnDisconnected(nullptr);
     }
+    ClientLogger::instance().info("GameSession：移交 Gateway 连接 角色=%llu",
+                                  static_cast<unsigned long long>(m_localUserId));
     return std::move(m_tcp);
 }
 
@@ -402,6 +426,7 @@ void GameSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, ui
         Msg_S2C_LogoutRsp rsp{};
         if (!ClientMsgHandler::parseLogoutRsp(data, len, rsp))
         {
+            ClientLogger::instance().warn("GameSession：离世界响应解析失败");
             if (m_onLogoutError)
             {
                 m_onLogoutError(u8"离世界响应解析失败");
@@ -417,6 +442,8 @@ void GameSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, ui
 
         if (static_cast<LogoutResultCode>(rsp.code) != LogoutResultCode::OK)
         {
+            ClientLogger::instance().warn("GameSession：离世界失败 意图=%s 错误码=%d",
+                                          logoutActionLabel(action), rsp.code);
             if (errCb)
             {
                 errCb(ClientErrorText::logoutResultText(static_cast<LogoutResultCode>(rsp.code),
@@ -425,8 +452,8 @@ void GameSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, ui
             return;
         }
 
-        ClientLogger::instance().info("GameSession：离世界成功 action=%u",
-                                      static_cast<unsigned>(action));
+        ClientLogger::instance().info("GameSession：离世界成功 意图=%s",
+                                      logoutActionLabel(action));
         if (successCb)
         {
             successCb(action);
