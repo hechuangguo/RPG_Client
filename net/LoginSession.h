@@ -116,6 +116,7 @@ private:
     void tryConnectGateway();
     void onGatewayAuthSent();
     void handleLoginRsp(const Msg_S2C_LoginRsp& rsp);
+    void handleGatewayLoginRsp(const Msg_S2C_LoginRsp& rsp);
     void handleUserList();
     void handleCreateUserRsp(const Msg_S2C_CreateUserRsp& rsp);
     void handleGatewayInfo(const Msg_S2C_GatewayInfo& info);

@@ -9,13 +9,33 @@
 
 #include <cstring>
 
+namespace
+{
+constexpr size_t kWireMsgCap = 64;
+
+std::string boundedWireMsg(const char* wireMsg, size_t cap = kWireMsgCap)
+{
+    if (!wireMsg || cap == 0)
+    {
+        return {};
+    }
+    const size_t len = strnlen(wireMsg, cap);
+    if (len == 0)
+    {
+        return {};
+    }
+    return std::string(wireMsg, len);
+}
+}  // namespace
+
 std::string ClientErrorText::preferServerMsg(const char* serverMsg, const std::string& fallback)
 {
-    if (serverMsg && serverMsg[0] != '\0')
+    const std::string msg = boundedWireMsg(serverMsg);
+    if (msg.empty())
     {
-        return serverMsg;
+        return fallback;
     }
-    return fallback;
+    return msg;
 }
 
 std::string ClientErrorText::loginResultText(LoginResultCode code, const char* serverMsg)
@@ -62,10 +82,11 @@ std::string ClientErrorText::gatewayInfoText(GatewayInfoResultCode code, const c
         return {};
     }
     std::string err = u8"无可用网关";
-    if (serverMsg && serverMsg[0] != '\0')
+    const std::string detail = boundedWireMsg(serverMsg);
+    if (!detail.empty())
     {
         err += u8"：";
-        err += serverMsg;
+        err += detail;
     }
     return err;
 }
@@ -77,19 +98,21 @@ std::string ClientErrorText::logoutResultText(LogoutResultCode code, const char*
         return {};
     }
     std::string err = u8"离开世界失败";
-    if (serverMsg && serverMsg[0] != '\0')
+    const std::string detail = boundedWireMsg(serverMsg);
+    if (!detail.empty())
     {
         err += u8"：";
-        err += serverMsg;
+        err += detail;
     }
     return err;
 }
 
 std::string ClientErrorText::gatewayValidateText(GatewayValidateCode code, const char* serverMsg)
 {
-    if (serverMsg && serverMsg[0] != '\0')
+    const std::string detail = boundedWireMsg(serverMsg);
+    if (!detail.empty())
     {
-        return serverMsg;
+        return detail;
     }
 
     switch (code)

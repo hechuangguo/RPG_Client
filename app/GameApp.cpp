@@ -277,6 +277,8 @@ void GameApp::wireCallbacks()
     });
 
     m_characterSelectPanel.setOnEnterGame([this](uint64_t userId) {
+        ClientLogger::instance().info("GameApp：请求进入游戏 角色=%llu",
+                                      static_cast<unsigned long long>(userId));
         m_characterSelectPanel.setStatus(CharacterSelectPanel::Status::Loading,
                                          u8"正在加载地图与角色资源...");
         m_loginSession.selectCharacter(userId);
@@ -285,11 +287,13 @@ void GameApp::wireCallbacks()
     m_characterSelectPanel.setOnCreateCharacter([this](const std::string& name,
                                                          uint8_t vocation,
                                                          uint8_t sex) {
+        ClientLogger::instance().info("GameApp：请求创建角色 名称=%s", name.c_str());
         m_characterSelectPanel.setStatus(CharacterSelectPanel::Status::Loading, u8"正在创建角色...");
         m_loginSession.createCharacter(name, vocation, sex);
     });
 
     m_characterSelectPanel.setOnBack([this]() {
+        ClientLogger::instance().info("GameApp：取消选角，返回账号登录");
         m_loginSession.cancel();
         m_characterSelectPanel.reset();
         switchState(AppState::AuthLogin);
@@ -370,6 +374,7 @@ void GameApp::refreshZoneHomeDisplay()
 
 void GameApp::beginFetchZoneList()
 {
+    ClientLogger::instance().info("GameApp：开始拉取区列表");
     switchState(AppState::ServerList);
     m_serverListPanel.setStatus(ServerListPanel::Status::Loading, u8"正在连接 LoginServer...");
     m_zoneListSession.fetchZoneList(ZONE_LIST_ALL_GAME_TYPES);
@@ -377,6 +382,10 @@ void GameApp::beginFetchZoneList()
 
 void GameApp::applySelectedZone(const GameZoneEntry& zone)
 {
+    ClientLogger::instance().info("GameApp：选中区服 区服=%u 类型=%u 名称=%s",
+                                  zone.zoneId,
+                                  static_cast<unsigned>(zone.gameType),
+                                  zone.name.c_str());
     m_selectedZone.zoneId   = zone.zoneId;
     m_selectedZone.gameType = zone.gameType;
     m_selectedZone.name     = zone.name;
@@ -395,6 +404,7 @@ void GameApp::beginEnterAuth()
     {
         return;
     }
+    ClientLogger::instance().info("GameApp：进入账号登录界面 区服=%u", m_selectedZone.zoneId);
     m_loadingMessage       = u8"正在加载资源...";
     m_loadingAuthPending   = true;
     switchState(AppState::LoadingAuth);
@@ -417,6 +427,7 @@ void GameApp::finishLoadingAuth()
 
     m_authLoginPanel.setErrorMessage("");
     m_authLoginPanel.applyLocalSettings();
+    ClientLogger::instance().info("GameApp：登录资源加载完成，进入账号界面");
     switchState(AppState::AuthLogin);
 }
 
@@ -631,6 +642,9 @@ void GameApp::beginLogin(const AuthLoginPanel::LoginRequest& req)
     m_characterSelectPanel.reset();
     m_characterSelectPanel.setStatus(CharacterSelectPanel::Status::Loading, u8"正在验证账号...");
     switchState(AppState::CharacterSelect);
+    ClientLogger::instance().info("GameApp：开始登录 账号=%s 区服=%u",
+                                  req.account.c_str(),
+                                  m_pendingZoneId);
     m_loginSession.startLogin(req.account, req.password, m_pendingZoneId, m_pendingGameType);
 }
 
@@ -642,6 +656,9 @@ void GameApp::beginRegister(const RegisterPanel::RegisterRequest& req)
     m_pendingRegisterPassword    = req.password;
 
     m_registerPanel.setMessage(u8"正在注册...", false);
+    ClientLogger::instance().info("GameApp：开始注册 账号=%s 区服=%u",
+                                  req.account.c_str(),
+                                  req.zoneId);
     m_loginSession.startRegister(
         req.account, req.password, req.confirmPassword, req.zoneId, req.gameType);
 }
@@ -662,7 +679,9 @@ void GameApp::onEnterGame(const Msg_S2C_EnterGame& enter)
     m_gameScene.setViewSize(m_window.getSize());
 
     switchState(AppState::Game);
-    ClientLogger::instance().info("GameApp：进入游戏成功，地图=%u", enter.mapID);
+    ClientLogger::instance().info("GameApp：进入游戏成功 角色=%llu 地图=%u",
+                                  static_cast<unsigned long long>(enter.userID),
+                                  enter.mapID);
 }
 
 void GameApp::onResize(const sf::Vector2u& size)
@@ -711,6 +730,8 @@ void GameApp::exitToCharacterSelect()
             switchState(AppState::CharacterSelect);
             m_gameExitDialog.hide();
 
+            ClientLogger::instance().info("GameApp：返回选角 高亮角色=%llu",
+                                            static_cast<unsigned long long>(highlightUserId));
             m_loginSession.resumeGatewayForCharSelect(std::move(tcp), highlightUserId);
         },
         [this](const std::string& err) {

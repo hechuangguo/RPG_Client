@@ -163,6 +163,7 @@ void ZoneListSession::onTcpConnected()
 {
     if (m_state == State::Connecting)
     {
+        ClientLogger::instance().info("ZoneListSession：LoginServer 连接已建立");
         m_waitResponseStartMs = TimeUtil::nowMs();
         notifyStatus(u8"正在获取区列表...");
         sendZoneListReq();
@@ -176,6 +177,9 @@ void ZoneListSession::onTcpDisconnected()
     {
         return;
     }
+
+    const char* phase = m_state == State::Connecting ? "连接中" : "等待响应";
+    ClientLogger::instance().warn("ZoneListSession：连接已断开 阶段=%s", phase);
 
     if (m_state == State::Connecting)
     {
@@ -202,6 +206,8 @@ void ZoneListSession::sendZoneListReq()
     }
     const auto packet = ClientMsgHandler::buildZoneListReq(m_gameType);
     m_tcp->sendRaw(packet);
+    ClientLogger::instance().info("ZoneListSession：发送区列表请求 类型=%u",
+                                  static_cast<unsigned>(m_gameType));
 }
 
 std::string ZoneListSession::loginHost() const
@@ -262,7 +268,9 @@ void ZoneListSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data
     std::string errMsg;
     if (!ClientMsgHandler::parseZoneListRsp(data, len, zones, errMsg))
     {
-        fail(errMsg.empty() ? u8"区列表解析失败" : errMsg);
+        const std::string logMsg = errMsg.empty() ? u8"区列表解析失败" : errMsg;
+        ClientLogger::instance().warn("ZoneListSession：区列表解析失败 %s", logMsg.c_str());
+        fail(logMsg);
         return;
     }
 
@@ -272,7 +280,7 @@ void ZoneListSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data
     }
     resetToIdle();
 
-    ClientLogger::instance().info("ZoneListSession：收到 %zu 个区服", zones.size());
+    ClientLogger::instance().info("ZoneListSession：收到区列表 数量=%zu", zones.size());
     if (m_onSuccess)
     {
         m_onSuccess(zones);

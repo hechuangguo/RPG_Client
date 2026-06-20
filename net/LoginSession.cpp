@@ -13,6 +13,8 @@
 #include "time/TimeUtil.h"
 #include "util/ConfigLoader.h"
 
+#include <cstring>
+
 namespace
 {
 constexpr uint8_t kLoginModule  = static_cast<uint8_t>(ClientModule::LOGIN);
@@ -27,6 +29,9 @@ bool isLoopbackGatewayHost(const std::string& host)
 {
     return host == "127.0.0.1" || host == "localhost" || host == "::1";
 }
+
+/** wire tokenExpireMs 为 Unix 毫秒时通常 >= 1e12；旧服 steady 绝对值远小于此，跳过本地过期校验 */
+constexpr uint64_t kWireTokenExpireUnixMinMs = 1'000'000'000'000ULL;
 }  // namespace
 
 LoginSession::LoginSession()
@@ -197,7 +202,7 @@ void LoginSession::createCharacter(const std::string& name, uint8_t vocation, ui
     m_tcp->sendRaw(packet);
     m_state               = State::WaitCreateUserRsp;
     m_waitResponseStartMs = TimeUtil::nowMs();
-    ClientLogger::instance().info("LoginSession：创建角色 name=%s", name.c_str());
+    ClientLogger::instance().info("LoginSession：创建角色 名称=%s", name.c_str());
 }
 
 void LoginSession::update()
@@ -235,6 +240,10 @@ bool LoginSession::gatewayConnected() const
 
 void LoginSession::cancel()
 {
+    if (m_state != State::Idle)
+    {
+        ClientLogger::instance().info("LoginSession：取消会话");
+    }
     if (m_tcp)
     {
         m_tcp->disconnect();
@@ -271,7 +280,8 @@ void LoginSession::resumeGatewayForCharSelect(std::unique_ptr<TcpClient> tcp, ui
     m_state               = State::WaitUserList;
     m_waitResponseStartMs = TimeUtil::nowMs();
 
-    ClientLogger::instance().info("LoginSession：接回 Gateway，等待角色列表");
+    ClientLogger::instance().info("LoginSession：接回 Gateway，等待角色列表 高亮角色=%llu",
+                                  static_cast<unsigned long long>(highlightUserId));
     notifyStatus(u8"正在获取角色列表...");
 }
 
@@ -361,7 +371,9 @@ LoginTimeoutContext LoginSession::timeoutContextForState() const
 void LoginSession::deliverUserList(uint64_t highlightUserId)
 {
     m_state = State::WaitUserAction;
-    ClientLogger::instance().info("LoginSession：收到 %zu 个角色", m_characters.size());
+    ClientLogger::instance().info("LoginSession：交付角色列表 数量=%zu 高亮=%llu",
+                                  m_characters.size(),
+                                  static_cast<unsigned long long>(highlightUserId));
     if (m_onUserList)
     {
         m_onUserList(m_characters, highlightUserId);
@@ -381,6 +393,7 @@ void LoginSession::tryConnectGateway()
     }
 
     m_state = State::SwitchingGateway;
+    ClientLogger::instance().info("LoginSession：断开 LoginServer，切换 Gateway");
     ClientLogger::instance().info("LoginSession：连接 Gateway %s:%u",
                                   m_gatewayHost.c_str(), m_gatewayPort);
     notifyStatus(u8"正在连接游戏网关...");
@@ -405,6 +418,7 @@ void LoginSession::onTcpConnected()
 {
     if (m_state == State::ConnectLogin || m_state == State::RegisterConnect)
     {
+        ClientLogger::instance().info("LoginSession：LoginServer 连接已建立");
         m_waitResponseStartMs = TimeUtil::nowMs();
         if (m_isRegisterFlow)
         {
@@ -420,8 +434,13 @@ void LoginSession::onTcpConnected()
     }
     else if (m_state == State::ConnectGateway)
     {
+        ClientLogger::instance().info("LoginSession：Gateway 连接已建立");
         m_gatewayConnected = true;
         sendGatewayAuthOrLogin();
+        if (m_state == State::Idle)
+        {
+            return;
+        }
         m_state               = State::WaitUserList;
         m_waitResponseStartMs = TimeUtil::nowMs();
         notifyStatus(u8"正在获取角色列表...");
@@ -461,6 +480,9 @@ void LoginSession::sendLoginReq()
     }
     const auto packet = ClientMsgHandler::buildLoginReq(m_account, m_password, m_zoneId, m_gameType);
     m_tcp->sendRaw(packet);
+    ClientLogger::instance().info("LoginSession：发送登录请求 账号=%s 区服=%u",
+                                  m_account.c_str(),
+                                  m_zoneId);
 }
 
 void LoginSession::sendRegisterReq()
@@ -472,6 +494,9 @@ void LoginSession::sendRegisterReq()
     const auto packet = ClientMsgHandler::buildRegisterReq(
         m_account, m_password, m_confirmPassword, m_zoneId, m_gameType);
     m_tcp->sendRaw(packet);
+    ClientLogger::instance().info("LoginSession：发送注册请求 账号=%s 区服=%u",
+                                  m_account.c_str(),
+                                  m_zoneId);
 }
 
 void LoginSession::sendGatewayAuthOrLogin()
@@ -487,9 +512,13 @@ void LoginSession::sendGatewayAuthOrLogin()
         return;
     }
 
-    if (m_loginRsp.tokenExpireMs > 0 &&
-        TimeUtil::nowMs() >= static_cast<int64_t>(m_loginRsp.tokenExpireMs))
+    if (m_loginRsp.tokenExpireMs >= kWireTokenExpireUnixMinMs &&
+        TimeUtil::wallNowMs() >= static_cast<int64_t>(m_loginRsp.tokenExpireMs))
     {
+        ClientLogger::instance().warn(
+            "LoginSession：票据本地校验失败 过期时间=%llu 当前墙钟=%lld",
+            static_cast<unsigned long long>(m_loginRsp.tokenExpireMs),
+            static_cast<long long>(TimeUtil::wallNowMs()));
         fail(u8"登录票据已过期，请重新登录");
         return;
     }
@@ -497,7 +526,11 @@ void LoginSession::sendGatewayAuthOrLogin()
     const auto packet = ClientMsgHandler::buildGatewayAuthReq(
         m_account, m_loginRsp.loginToken, m_zoneId, m_gameType);
     m_tcp->sendRaw(packet);
-    ClientLogger::instance().info("LoginSession：发送 Gateway 票据鉴权");
+    ClientLogger::instance().info("LoginSession：发送 Gateway 票据鉴权 账号=%s 区服=%u %s:%u",
+                                  m_account.c_str(),
+                                  m_zoneId,
+                                  m_gatewayHost.c_str(),
+                                  static_cast<unsigned>(m_gatewayPort));
 }
 
 void LoginSession::sendSelectUserReq(uint64_t userID)
@@ -513,7 +546,7 @@ void LoginSession::sendSelectUserReq(uint64_t userID)
     m_state               = State::WaitEnterGame;
     m_waitResponseStartMs = TimeUtil::nowMs();
     notifyStatus(u8"正在加载地图与角色资源...");
-    ClientLogger::instance().info("LoginSession：选择角色 user=%llu",
+    ClientLogger::instance().info("LoginSession：选择角色 角色=%llu",
                                   static_cast<unsigned long long>(userID));
 }
 
@@ -546,6 +579,12 @@ void LoginSession::handleLoginRsp(const Msg_S2C_LoginRsp& rsp)
         return;
     }
 
+    ClientLogger::instance().info(
+        "LoginSession：登录成功 账号ID=%llu 角色=%llu 过期时间=%llu",
+        static_cast<unsigned long long>(rsp.accid),
+        static_cast<unsigned long long>(rsp.userID),
+        static_cast<unsigned long long>(rsp.tokenExpireMs));
+
     if (!m_gotUserList)
     {
         m_state               = State::WaitUserList;
@@ -555,9 +594,29 @@ void LoginSession::handleLoginRsp(const Msg_S2C_LoginRsp& rsp)
     }
 }
 
+void LoginSession::handleGatewayLoginRsp(const Msg_S2C_LoginRsp& rsp)
+{
+    if (static_cast<LoginResultCode>(rsp.code) != LoginResultCode::OK)
+    {
+        const std::string errMsg =
+            ClientErrorText::loginResultText(static_cast<LoginResultCode>(rsp.code), rsp.msg);
+        const std::string serverMsg(rsp.msg, strnlen(rsp.msg, sizeof(rsp.msg)));
+        ClientLogger::instance().warn("LoginSession：Gateway 鉴权失败 错误码=%d 消息=%s",
+                                      rsp.code,
+                                      serverMsg.c_str());
+        fail(errMsg);
+        return;
+    }
+
+    ClientLogger::instance().info("LoginSession：Gateway 鉴权成功，等待角色列表");
+}
+
 void LoginSession::handleUserList()
 {
     m_gotUserList = true;
+    ClientLogger::instance().info("LoginSession：收到角色列表响应 数量=%zu 网关=%d",
+                                  m_characters.size(),
+                                  m_gatewayConnected ? 1 : 0);
     const uint64_t highlight = m_highlightUserId != 0 ? m_highlightUserId : m_loginRsp.userID;
     m_highlightUserId        = 0;
     if (!m_gatewayConnected)
@@ -594,6 +653,9 @@ void LoginSession::handleCreateUserRsp(const Msg_S2C_CreateUserRsp& rsp)
     created.sex      = m_pendingCreateSex;
     m_characters.push_back(created);
     m_userCreated = true;
+    ClientLogger::instance().info("LoginSession：创建角色成功 角色=%llu 名称=%s",
+                                  static_cast<unsigned long long>(rsp.userID),
+                                  m_pendingCreateName.c_str());
     deliverUserList(rsp.userID);
 }
 
@@ -618,6 +680,10 @@ void LoginSession::handleGatewayInfo(const Msg_S2C_GatewayInfo& info)
                                       m_gatewayHost.c_str());
     }
 
+    ClientLogger::instance().info("LoginSession：收到网关信息 地址=%s:%u",
+                                  m_gatewayHost.c_str(),
+                                  static_cast<unsigned>(m_gatewayPort));
+
     if (m_gotLoginRsp && !m_gotUserList)
     {
         m_state               = State::WaitUserList;
@@ -636,7 +702,7 @@ void LoginSession::handleEnterGame(const char* data, uint16_t len)
         return;
     }
 
-    ClientLogger::instance().info("LoginSession：进入游戏 user=%llu map=%u",
+    ClientLogger::instance().info("LoginSession：进入游戏 角色=%llu 地图=%u",
                                   static_cast<unsigned long long>(enter.userID), enter.mapID);
     resetToIdle();
     if (m_onEnterGame)
@@ -653,6 +719,7 @@ void LoginSession::handleSystemError(const char* data, uint16_t len)
         fail(u8"网关错误消息解析失败");
         return;
     }
+    ClientLogger::instance().warn("LoginSession：收到网关系统错误 错误码=%d", err.code);
     fail(ClientErrorText::gatewayValidateText(err));
 }
 
@@ -668,6 +735,7 @@ void LoginSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, u
         }
         else if (sub == static_cast<uint8_t>(SystemMsgSub::S2C_KICK))
         {
+            ClientLogger::instance().warn("LoginSession：收到服务器踢下线");
             fail(u8"已被服务器踢下线");
         }
         return;
@@ -680,15 +748,21 @@ void LoginSession::onTcpMessage(uint8_t module, uint8_t sub, const char* data, u
 
     if (flatId == clientMsgFlatId<Msg_S2C_LoginRsp>())
     {
-        if (m_gatewayConnected)
-        {
-            ClientLogger::instance().warn("LoginSession：Gateway 连接收到登录响应，已忽略");
-            return;
-        }
         Msg_S2C_LoginRsp rsp{};
         if (!ClientMsgHandler::parseLoginRsp(data, len, rsp))
         {
             fail(u8"登录响应解析失败");
+            return;
+        }
+        if (m_gatewayConnected && m_state == State::WaitUserList)
+        {
+            handleGatewayLoginRsp(rsp);
+            return;
+        }
+        if (m_gatewayConnected)
+        {
+            ClientLogger::instance().warn(
+                "LoginSession：Gateway 连接收到登录响应（非等待列表阶段），已忽略");
             return;
         }
         handleLoginRsp(rsp);

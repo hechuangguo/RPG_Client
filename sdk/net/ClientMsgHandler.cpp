@@ -58,6 +58,21 @@ bool parseWire(const char* data, uint16_t len, MsgT& out)
     std::memcpy(&out, data, sizeof(out));
     return true;
 }
+
+template<typename MsgT>
+bool parseMsgHeader(const char* data, uint16_t len, MsgT& out)
+{
+    if (!data || len < sizeof(MsgT))
+    {
+        return false;
+    }
+    if (!clientMsgBodyMatches(MsgT::kModule, MsgT::kSub, data, len))
+    {
+        return false;
+    }
+    std::memcpy(&out, data, sizeof(MsgT));
+    return true;
+}
 }  // namespace
 
 void ClientMsgHandler::copyFixedString(char* dest, size_t destSize, const std::string& src)
@@ -129,7 +144,7 @@ bool ClientMsgHandler::parseZoneListRsp(const char* data,
     }
 
     Msg_S2C_ZoneListRspHeader hdr{};
-    if (!parseWire(data, len, hdr))
+    if (!parseMsgHeader(data, len, hdr))
     {
         errMsg = u8"区列表响应格式错误";
         return false;
@@ -141,28 +156,27 @@ bool ClientMsgHandler::parseZoneListRsp(const char* data,
         return false;
     }
 
-    if (len != zoneListBodyLen(hdr.count))
+    if (hdr.count == 0)
+    {
+        if (len != zoneListBodyLen(0))
+        {
+            errMsg = u8"区列表数据不完整";
+            return false;
+        }
+        return true;
+    }
+
+    const bool wireV2 = len == zoneListBodyLen(hdr.count);
+    const bool wireV1 = len == zoneListBodyLenV1(hdr.count);
+    if (!wireV1 && !wireV2)
     {
         errMsg = u8"区列表数据不完整";
         return false;
     }
 
-    if (hdr.count == 0)
-    {
-        return true;
-    }
-
+    const size_t entrySize =
+        wireV2 ? sizeof(Msg_S2C_ZoneEntryWire) : sizeof(Msg_S2C_ZoneEntryWireV1);
     const char* p = data + sizeof(Msg_S2C_ZoneListRspHeader);
-    const size_t bodyLen = len - sizeof(Msg_S2C_ZoneListRspHeader);
-    const size_t entrySize = bodyLen / hdr.count;
-    const bool wireV2      = entrySize == sizeof(Msg_S2C_ZoneEntryWire);
-    const bool wireV1      = entrySize == sizeof(Msg_S2C_ZoneEntryWireV1);
-    if (!wireV1 && !wireV2)
-    {
-        errMsg = u8"区列表条目格式未知";
-        return false;
-    }
-
     for (uint16_t i = 0; i < hdr.count; ++i)
     {
         GameZoneEntry zone{};
@@ -270,7 +284,7 @@ bool ClientMsgHandler::parseUserList(const char* data,
     }
 
     Msg_S2C_UserListHeader hdr{};
-    if (!parseWire(data, len, hdr))
+    if (!parseMsgHeader(data, len, hdr))
     {
         errMsg = u8"角色列表响应格式错误";
         return false;
@@ -429,7 +443,7 @@ bool ClientMsgHandler::parseQuestInfo(const char* data,
     }
 
     Msg_S2C_QuestInfoHeader hdr{};
-    if (!parseWire(data, len, hdr))
+    if (!parseMsgHeader(data, len, hdr))
     {
         errMsg = u8"任务同步响应格式错误";
         return false;
@@ -473,7 +487,7 @@ bool ClientMsgHandler::parseBagInfoRsp(const char* data,
     }
 
     Msg_S2C_BagInfoRspHeader hdr{};
-    if (!parseWire(data, len, hdr))
+    if (!parseMsgHeader(data, len, hdr))
     {
         errMsg = u8"背包同步响应格式错误";
         return false;
