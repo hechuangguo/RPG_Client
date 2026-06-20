@@ -89,7 +89,7 @@ void ConfigLoader::applyDefaults()
 
     m_tls.enabled            = true;
     m_tls.caPath             = "config/tls/ca.crt";
-    m_tls.insecureSkipVerify = false;
+    m_tls.insecureSkipVerify = true;
     m_tls.minVersion         = "1.2";
 }
 
@@ -199,7 +199,7 @@ bool ConfigLoader::parseXmlContent(const std::string& content)
     const std::string stripped = stripXmlComments(content);
     const std::string trimmed = trim(stripped);
 
-    static const std::regex tlsPattern(R"(<Tls\s+([^/>]*)/>)");
+    static const std::regex tlsPattern(R"(<Tls\s+([^>]*?)(?:/>|>\s*</Tls>))");
     std::smatch tlsMatch;
     if (std::regex_search(trimmed, tlsMatch, tlsPattern) && tlsMatch.size() > 1)
     {

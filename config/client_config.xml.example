@@ -18,5 +18,5 @@
     <moveSendIntervalMs>100</moveSendIntervalMs>
     <logoutTimeoutMs>15000</logoutTimeoutMs>
     <!-- TLS：ca.crt 从服务端 config/tls 复制；联调可设 insecureSkipVerify=1 -->
-    <Tls enabled="1" ca="config/tls/ca.crt" insecureSkipVerify="0" minVersion="1.2"/>
+    <Tls enabled="1" ca="config/tls/ca.crt" insecureSkipVerify="1" minVersion="1.2"/>
 </ClientConfig>

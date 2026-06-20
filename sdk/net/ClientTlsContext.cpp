@@ -6,11 +6,13 @@
 #include "net/ClientTlsContext.h"
 
 #include "log/ClientLogger.h"
+#include "util/PathUtil.h"
 
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
 #include <cstdio>
+#include <filesystem>
 #include <string>
 
 namespace
@@ -24,6 +26,22 @@ bool fileExists(const std::string& path)
     }
     std::fclose(f);
     return true;
+}
+
+std::string resolveCaPath(const std::string& caPath)
+{
+    if (caPath.empty())
+    {
+        return caPath;
+    }
+
+    const std::filesystem::path p(caPath);
+    if (p.is_absolute())
+    {
+        return caPath;
+    }
+
+    return PathUtil::joinPath(PathUtil::getExeDir(), caPath);
 }
 
 int tlsMinVersion(const std::string& ver)
@@ -85,12 +103,15 @@ bool ClientTlsContext::init(const ClientTlsConfig& cfg, std::string* errOut)
         return true;
     }
 
-    if (!cfg.insecureSkipVerify && !fileExists(cfg.caPath))
+    const std::string caPath = resolveCaPath(cfg.caPath);
+    m_config.caPath          = caPath;
+
+    if (!cfg.insecureSkipVerify && !fileExists(caPath))
     {
         if (errOut)
         {
-            *errOut = "CA 证书文件缺失：" + cfg.caPath
-                      + "（请从服务端 config/tls 复制 ca.crt）";
+            *errOut = "CA 证书文件缺失：" + caPath
+                      + "（请从服务端 config/tls 复制 ca.crt，或联调时设 insecureSkipVerify=1）";
         }
         return false;
     }

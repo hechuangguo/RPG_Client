@@ -13,8 +13,56 @@
 #include "util/PathUtil.h"
 #include "util/TextUtil.h"
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+
+#include <cstdio>
+
 namespace
 {
+bool configFileExists(const std::string& path)
+{
+    FILE* f = std::fopen(path.c_str(), "rb");
+    if (!f)
+    {
+        return false;
+    }
+    std::fclose(f);
+    return true;
+}
+
+std::string resolveClientConfigPath(const std::string& exeDir)
+{
+    const std::string primary = PathUtil::joinPath(exeDir, "config/client_config.xml");
+    if (configFileExists(primary))
+    {
+        return primary;
+    }
+
+    const std::string parent = PathUtil::joinPath(
+        PathUtil::joinPath(exeDir, ".."), "config/client_config.xml");
+    if (configFileExists(parent))
+    {
+        return parent;
+    }
+
+    return primary;
+}
+
+void showFatalInitError(const std::string& utf8Msg)
+{
+    const int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8Msg.c_str(), -1, nullptr, 0);
+    if (wlen <= 0)
+    {
+        return;
+    }
+
+    std::wstring wmsg(static_cast<size_t>(wlen - 1), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, utf8Msg.c_str(), -1, wmsg.data(), wlen);
+    MessageBoxW(nullptr, wmsg.c_str(), L"RPGClient 启动失败", MB_OK | MB_ICONERROR);
+}
 bool isPreGameState(AppState state)
 {
     switch (state)
@@ -71,8 +119,8 @@ int GameApp::run()
 
 bool GameApp::init()
 {
-    const std::string exeDir = PathUtil::getExeDir();
-    const std::string configPath = PathUtil::joinPath(exeDir, "config/client_config.xml");
+    const std::string exeDir     = PathUtil::getExeDir();
+    const std::string configPath = resolveClientConfigPath(exeDir);
     if (!m_config.load(configPath))
     {
         ClientLogger::instance().warn("GameApp：%s，使用默认配置", m_config.lastError().c_str());
@@ -82,6 +130,7 @@ bool GameApp::init()
     if (!ClientTlsContext::instance().init(m_config.tls(), &tlsErr))
     {
         ClientLogger::instance().err("GameApp：TLS 初始化失败：%s", tlsErr.c_str());
+        showFatalInitError(tlsErr);
         return false;
     }
 
