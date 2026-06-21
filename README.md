@@ -94,6 +94,8 @@ git add Common
 git commit -m "chore: bump Common submodule"
 ```
 
+**客户端仅使用 Protobuf wire**：线上帧为 4 字节 `MsgHeader` + Protobuf body；**不再使用**旧定长 struct（如已归档的 `LoginMsg.h`）。更新协议：`git submodule update` → `.\scripts\sync_protobuf.ps1` → 在 `ClientMsgHandler` 增加 Build/TryParse（见 [`Protobuf/README.md`](Protobuf/README.md) checklist）。
+
 `Protobuf/` 为本地生成目录，**不提交**；clone 后须运行 `.\scripts\sync_protobuf.ps1`（或 `sync_all.bat`）。
 
 | 脚本 | 说明 |

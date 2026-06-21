@@ -1,5 +1,6 @@
 /// <summary>
 /// 客户端 Protobuf 消息构造与解析。
+/// 全部 Build/TryParse 均对应 Common/*Msg.proto 生成类型，禁止手写定长 struct body。
 /// </summary>
 using System.Collections.Generic;
 using Google.Protobuf;
@@ -24,7 +25,7 @@ namespace Rpg.Client.Net
         private static readonly byte QuestModule = (byte)ClientModule.Quest;
         private static readonly byte BagModule = (byte)ClientModule.Bag;
 
-        public static byte[] BuildLoginReq(string account, string password, uint zoneId, byte gameType)
+        public static byte[] BuildLoginReq(string account, string password, uint zoneId, uint gameType)
         {
             var req = new C2SLoginReq
             {
@@ -37,7 +38,7 @@ namespace Rpg.Client.Net
             return PacketCodec.Encode(LoginModule, (byte)LoginMsgSub.C2SLoginReq, req);
         }
 
-        public static byte[] BuildRegisterReq(string account, string password, string confirm, uint zoneId, byte gameType)
+        public static byte[] BuildRegisterReq(string account, string password, string confirm, uint zoneId, uint gameType)
         {
             var req = new C2SRegisterReq
             {
@@ -57,7 +58,7 @@ namespace Rpg.Client.Net
             return PacketCodec.Encode(LoginModule, (byte)ZoneMsgSub.C2SZoneListReq, req);
         }
 
-        public static byte[] BuildGatewayAuthReq(string account, string loginToken, uint zoneId, byte gameType)
+        public static byte[] BuildGatewayAuthReq(string account, string loginToken, uint zoneId, uint gameType)
         {
             var req = new C2SGatewayAuthReq
             {
@@ -143,42 +144,59 @@ namespace Rpg.Client.Net
             return PacketCodec.Encode(BagModule, (byte)BagMsgSub.C2SBagInfoReq, req);
         }
 
-        public static bool TryParseZoneListRsp(byte[] body, out S2CZoneListRsp rsp)
-        {
-            rsp = null;
-            if (body == null || body.Length == 0)
-            {
-                return false;
-            }
+        public static bool TryParseZoneListRsp(byte[] body, out S2CZoneListRsp rsp) =>
+            ProtoParse.TryParse(body, S2CZoneListRsp.Parser, out rsp);
 
-            try
-            {
-                rsp = S2CZoneListRsp.Parser.ParseFrom(body);
-                return rsp != null;
-            }
-            catch
-            {
-                return false;
-            }
-        }
+        public static bool TryParseLoginRsp(byte[] body, out S2CLoginRsp rsp) =>
+            ProtoParse.TryParse(body, S2CLoginRsp.Parser, out rsp);
 
-        public static bool TryParseLoginRsp(byte[] body, out S2CLoginRsp rsp) { rsp = null; try { rsp = S2CLoginRsp.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseRegisterRsp(byte[] body, out S2CRegisterRsp rsp) { rsp = null; try { rsp = S2CRegisterRsp.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseGatewayInfo(byte[] body, out S2CGatewayInfo info) { info = null; try { info = S2CGatewayInfo.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseEnterGame(byte[] body, out S2CEnterGame enter) { enter = null; try { enter = S2CEnterGame.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseUserList(byte[] body, out S2CUserList list) { list = null; try { list = S2CUserList.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseCreateUserRsp(byte[] body, out S2CCreateUserRsp rsp) { rsp = null; try { rsp = S2CCreateUserRsp.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseLogoutRsp(byte[] body, out S2CLogoutRsp rsp) { rsp = null; try { rsp = S2CLogoutRsp.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseSpawnEntity(byte[] body, out S2CSpawnEntity spawn) { spawn = null; try { spawn = S2CSpawnEntity.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseMoveNotify(byte[] body, out S2CMoveNotify notify) { notify = null; try { notify = S2CMoveNotify.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseDespawnEntity(byte[] body, out S2CDespawnEntity despawn) { despawn = null; try { despawn = S2CDespawnEntity.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseGatewayError(byte[] body, out S2CError err) { err = null; try { err = S2CError.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseHeartbeat(byte[] body, out S2CHeartbeat hb) { hb = null; try { hb = S2CHeartbeat.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseNotice(byte[] body, out S2CNotice notice) { notice = null; try { notice = S2CNotice.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseKick(byte[] body, out S2CKick kick) { kick = null; try { kick = S2CKick.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseChatNotify(byte[] body, out S2CChatNotify chat) { chat = null; try { chat = S2CChatNotify.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseQuestInfo(byte[] body, out S2CQuestInfo info) { info = null; try { info = S2CQuestInfo.Parser.ParseFrom(body); return true; } catch { return false; } }
-        public static bool TryParseBagInfoRsp(byte[] body, out S2CBagInfoRsp rsp) { rsp = null; try { rsp = S2CBagInfoRsp.Parser.ParseFrom(body); return true; } catch { return false; } }
+        public static bool TryParseRegisterRsp(byte[] body, out S2CRegisterRsp rsp) =>
+            ProtoParse.TryParse(body, S2CRegisterRsp.Parser, out rsp);
+
+        public static bool TryParseGatewayInfo(byte[] body, out S2CGatewayInfo info) =>
+            ProtoParse.TryParse(body, S2CGatewayInfo.Parser, out info);
+
+        public static bool TryParseEnterGame(byte[] body, out S2CEnterGame enter) =>
+            ProtoParse.TryParse(body, S2CEnterGame.Parser, out enter);
+
+        public static bool TryParseUserList(byte[] body, out S2CUserList list) =>
+            ProtoParse.TryParse(body, S2CUserList.Parser, out list);
+
+        public static bool TryParseCreateUserRsp(byte[] body, out S2CCreateUserRsp rsp) =>
+            ProtoParse.TryParse(body, S2CCreateUserRsp.Parser, out rsp);
+
+        public static bool TryParseLogoutRsp(byte[] body, out S2CLogoutRsp rsp) =>
+            ProtoParse.TryParse(body, S2CLogoutRsp.Parser, out rsp);
+
+        public static bool TryParseSpawnEntity(byte[] body, out S2CSpawnEntity spawn) =>
+            ProtoParse.TryParse(body, S2CSpawnEntity.Parser, out spawn);
+
+        public static bool TryParseMoveNotify(byte[] body, out S2CMoveNotify notify) =>
+            ProtoParse.TryParse(body, S2CMoveNotify.Parser, out notify);
+
+        public static bool TryParseDespawnEntity(byte[] body, out S2CDespawnEntity despawn) =>
+            ProtoParse.TryParse(body, S2CDespawnEntity.Parser, out despawn);
+
+        public static bool TryParseGatewayError(byte[] body, out S2CError err) =>
+            ProtoParse.TryParse(body, S2CError.Parser, out err);
+
+        public static bool TryParseHeartbeat(byte[] body, out S2CHeartbeat hb) =>
+            ProtoParse.TryParse(body, S2CHeartbeat.Parser, out hb);
+
+        public static bool TryParseNotice(byte[] body, out S2CNotice notice) =>
+            ProtoParse.TryParse(body, S2CNotice.Parser, out notice);
+
+        public static bool TryParseKick(byte[] body, out S2CKick kick) =>
+            ProtoParse.TryParse(body, S2CKick.Parser, out kick);
+
+        public static bool TryParseChatNotify(byte[] body, out S2CChatNotify chat) =>
+            ProtoParse.TryParse(body, S2CChatNotify.Parser, out chat);
+
+        public static bool TryParseQuestInfo(byte[] body, out S2CQuestInfo info) =>
+            ProtoParse.TryParse(body, S2CQuestInfo.Parser, out info);
+
+        public static bool TryParseBagInfoRsp(byte[] body, out S2CBagInfoRsp rsp) =>
+            ProtoParse.TryParse(body, S2CBagInfoRsp.Parser, out rsp);
 
         public static List<GameZoneEntry> ToZoneEntries(S2CZoneListRsp rsp)
         {

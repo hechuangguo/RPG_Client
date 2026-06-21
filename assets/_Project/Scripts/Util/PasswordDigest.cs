@@ -1,5 +1,5 @@
 /// <summary>
-/// 登录 wire 密码摘要 SHA-256(UTF-8)。
+/// 登录 Protobuf 密码摘要 SHA-256(UTF-8)，用于 C2SLoginReq / C2SRegisterReq 的 password_digest 字段。
 /// </summary>
 using System.Security.Cryptography;
 using System.Text;

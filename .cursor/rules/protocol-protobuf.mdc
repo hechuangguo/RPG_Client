@@ -1,0 +1,36 @@
+---
+description: 客户端网络协议 Protobuf-only 约束
+globs:
+  - assets/_Project/Scripts/Net/**
+  - Protobuf/**
+alwaysApply: false
+---
+
+# 客户端协议 Protobuf 规范
+
+## 帧格式
+
+- 线上：`MsgHeader(4B)` + Protobuf body
+- body **不含** module/sub 前缀（路由在帧头）
+- LoginServer 与 Gateway **同一套** Protobuf wire
+
+## 必须
+
+- C→S / S→C 业务消息使用 `Common/*Msg.proto` 生成的 `IMessage` 类型
+- 发送：`PacketCodec.Encode(module, sub, message)` 或 `ClientMsgHandler.Build*`
+- 接收：`ProtoParse.TryParse` / `ClientMsgHandler.TryParse*`
+- 登录/注册/Gateway 鉴权 C→S 须带 `ProtocolVersion`（见 `WireConstants.CurrentProtocolVersion`）
+
+## 禁止
+
+- 手写定长 struct body（旧 `LoginMsg.h` 风格）
+- `EncodeRaw` 或 body 内重复 module/sub 前缀
+- 对业务 payload 使用 `BinaryPrimitives` 手工布局字段
+- 手改 `Protobuf/*.cs` 生成文件
+
+## 新增消息
+
+1. 服务端更新 `Common/*.proto` 并推送 submodule
+2. `sync_protobuf.ps1` → `ClientMsgHandler` Build/TryParse → Session 分发 → `Net/README.md` 登记
+
+日志文案仍遵守 [`log-language.mdc`](log-language.mdc)。

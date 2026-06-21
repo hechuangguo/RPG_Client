@@ -2,9 +2,55 @@
 
 引用 `Assets/_Project/Protobuf/`（联接至根 `Protobuf/`）。
 
-帧格式：`MsgHeader(4B)` + Protobuf body（body **不含** module/sub 前缀）。
+## 协议约定
 
-`PacketCodec.TryDecode` 使用 `byte[]` + 长度索引拆帧，避免每帧额外分配；`GameTcpClient` 复用 8KB 读缓冲。
+线上帧格式（LoginServer 与 Gateway **同一套**）：
+
+```text
+┌────────────────────────────────────────┐
+│ MsgHeader (4B, little-endian packed)   │
+│   bodyLen : uint16  — Protobuf 字节数   │
+│   module  : uint8   — ClientModule      │
+│   sub     : uint8   — 域内 *MsgSub      │
+├────────────────────────────────────────┤
+│ Body: protobuf serialized message      │
+│   （不含 body 内 module/sub 前缀）       │
+└────────────────────────────────────────┘
+```
+
+- 编解码入口：[`PacketCodec.cs`](PacketCodec.cs)（`Encode` / `TryDecode`）、[`ClientMsgHandler.cs`](ClientMsgHandler.cs)（Build / TryParse）
+- 解析 helper：[`ProtoParse.cs`](ProtoParse.cs)
+- **禁止**手写定长 struct body 或旧 `LoginMsg.h` 风格字段布局
+
+**ProtocolVersion**：以下 C→S 首包须携带 `rpg.client.ProtocolVersion`（当前 major=1 minor=0，见 [`WireConstants.cs`](WireConstants.cs)）：
+
+| 消息 | proto |
+|------|-------|
+| `C2SLoginReq` | `LoginMsg.proto` |
+| `C2SRegisterReq` | `LoginMsg.proto` |
+| `C2SGatewayAuthReq` | `LoginMsg.proto` |
+
+`PacketCodec.TryDecode` 使用 `byte[]` + 长度索引拆帧；`GameTcpClient` 复用 8KB 读缓冲。
+
+## 已实现消息清单
+
+| 域 | Module | C→S | S→C | proto 文件 |
+|----|--------|-----|-----|-----------|
+| Login | 0x00 | `C2SLoginReq` | `S2CLoginRsp` | `LoginMsg.proto` |
+| Login | 0x00 | `C2SRegisterReq` | `S2CRegisterRsp` | `LoginMsg.proto` |
+| Login | 0x00 | `C2SGatewayAuthReq` | — | `LoginMsg.proto` |
+| Login | 0x00 | `C2SSelectUserReq` | `S2CEnterGame` | `LoginMsg.proto` |
+| Login | 0x00 | `C2SCreateUserReq` | `S2CCreateUserRsp` | `LoginMsg.proto` |
+| Login | 0x00 | `C2SLogoutReq` | `S2CLogoutRsp` | `LoginMsg.proto` |
+| Login | 0x00 | — | `S2CGatewayInfo` | `LoginMsg.proto` |
+| Login | 0x00 | — | `S2CUserList` | `LoginMsg.proto` |
+| Zone | 0x00 | `C2SZoneListReq` | `S2CZoneListRsp` | `ZoneMsg.proto` |
+| Scene | 0x01 | `C2SMoveReq` | `S2CSpawnEntity` / `S2CMoveNotify` / `S2CDespawnEntity` | `MapDataMsg.proto` |
+| Chat | 0x05 | `C2SChatReq` | `S2CChatNotify` | `ChatMsg.proto` |
+| Quest | 0x07 | `C2SQuestAcceptReq` / `C2SQuestSubmitReq` | `S2CQuestInfo` | `QuestMsg.proto` |
+| Bag | 0x03 | `C2SBagInfoReq` | `S2CBagInfoRsp` | `BagMsg.proto` |
+| System | 0x0F | `C2SHeartbeat` | `S2CHeartbeat` / `S2CError` / `S2CKick` / `S2CNotice` | `SystemMsg.proto` |
+| NPC | 0x08 | — | — | `NpcMsg.proto`（**未实现**） |
 
 ## 登录五步流程
 
