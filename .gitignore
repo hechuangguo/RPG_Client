@@ -45,3 +45,7 @@ assets/_Project/Protobuf/
 # Unity Addressables local build (optional)
 [Ss]erver[Dd]ata/
 [Aa]ssets/AddressableAssetsData/*/*.bin*
+
+# Codely Unity LSP 本地运行时状态（心跳/端口会频繁更新，勿提交）
+.com-unity-codely.json
+.codely-cli/
