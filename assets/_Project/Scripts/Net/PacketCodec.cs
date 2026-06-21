@@ -1,8 +1,5 @@
 /// <summary>
-/// 协议封包与拆包（对标 sdk/net/ProtocolCodec.h）。
-/// 职责：MsgHeader + Protobuf body 编解码；不含 TLS。
-/// 协作：TcpClient、LoginSession、GameSession。
-/// 线程：Unity 主线程。
+/// 协议封包与拆包（MsgHeader + Protobuf body）。
 /// </summary>
 using System;
 using Google.Protobuf;
@@ -27,6 +24,27 @@ namespace Rpg.Client.Net
             if (payload.Length > 0)
             {
                 Buffer.BlockCopy(payload, 0, frame, MsgHeader.Size, payload.Length);
+            }
+
+            return frame;
+        }
+
+        /// <summary>编码 wire v2 定长 body（已含 module/sub 前缀）。</summary>
+        public static byte[] EncodeRaw(byte module, byte sub, byte[] body)
+        {
+            body ??= Array.Empty<byte>();
+            if (body.Length > MsgHeader.MaxPacketSize)
+            {
+                throw new InvalidOperationException(
+                    $"wire body 过长：{body.Length} > {MsgHeader.MaxPacketSize}");
+            }
+
+            var frame = new byte[MsgHeader.Size + body.Length];
+            var header = new MsgHeader((ushort)body.Length, module, sub);
+            header.WriteTo(frame.AsSpan(0, MsgHeader.Size));
+            if (body.Length > 0)
+            {
+                Buffer.BlockCopy(body, 0, frame, MsgHeader.Size, body.Length);
             }
 
             return frame;

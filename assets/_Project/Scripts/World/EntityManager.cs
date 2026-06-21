@@ -1,6 +1,5 @@
 /// <summary>
-/// 实体管理（对标 game/EntityManager）。
-/// 职责：Spawn/Move/Despawn 3D 实体。
+/// 实体管理。职责：本地/远程玩家 spawn 与 despawn。
 /// </summary>
 using System.Collections.Generic;
 using Rpg.Client.Log;

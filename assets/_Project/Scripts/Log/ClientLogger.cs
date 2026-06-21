@@ -1,7 +1,5 @@
 /// <summary>
-/// 客户端日志（对标 sdk/log/ClientLogger）。
-/// 职责：写入仓库根 logs/client_YYYYMMDD.log；固定文案须中文。
-/// 线程：Unity 主线程。
+/// 客户端日志（文件 + Unity Console）。
 /// </summary>
 using System;
 using System.IO;

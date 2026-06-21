@@ -1,5 +1,5 @@
 /// <summary>
-/// 任务状态（对标 game/QuestModel）。
+/// 任务运行时状态。
 /// </summary>
 using System.Collections.Generic;
 

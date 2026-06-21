@@ -1,7 +1,5 @@
 /// <summary>
-/// 世界场景控制器（对标 game/GameScene）。
-/// 职责：加载 mapId 场景、驱动 EntityManager、本地玩家移动输入。
-/// 协作：GameSession、EntityManager。
+/// 世界场景控制器。职责：绑定 GameSession、加载地图、驱动 EntityManager。
 /// </summary>
 using Rpg.Client.Net;
 using Rpg.Proto.Login;

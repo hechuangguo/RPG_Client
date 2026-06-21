@@ -1,5 +1,5 @@
 /// <summary>
-/// 区列表短会话（对标 net/ZoneListSession）。
+/// 区列表短会话。
 /// 职责：连接 LoginServer，发送 C2SZoneListReq，解析 S2CZoneListRsp 后断开。
 /// </summary>
 using System;
@@ -21,6 +21,9 @@ namespace Rpg.Client.Net
         private ClientConfigLoader _config;
         private State _state = State.Idle;
         private long _waitStartMs;
+        private long _connectStartMs;
+        private int _fetchToken;
+        private int _activeFetchToken;
 
         public Action<List<GameZoneEntry>> OnSuccess;
         public Action<string> OnError;
@@ -39,28 +42,47 @@ namespace Rpg.Client.Net
         public void FetchZoneList(byte gameType = WireConstants.ZoneListAllGameTypes)
         {
             Cancel();
+            _activeFetchToken = ++_fetchToken;
             _state = State.Connecting;
-            _waitStartMs = TimeUtil.NowMs();
-            if (!_tcp.Connect(_config.LoginHost, _config.LoginPort, _config.Tls))
-            {
-                Fail(ClientLocalError.ConnectTimeout);
-            }
+            _connectStartMs = TimeUtil.NowMs();
+            _waitStartMs = _connectStartMs;
+            _tcp.Connect(_config.LoginHost, _config.LoginPort, _config.Tls);
         }
 
         public void Update()
         {
             _tcp.Poll();
-            if (_state == State.WaitResponse &&
-                TimeUtil.NowMs() - _waitStartMs > (_config?.ZoneListResponseTimeoutMs ?? ClientTimingDefaults.ZoneListResponseTimeoutMs))
-            {
-                Fail(ClientLocalError.ZoneListTimeout);
-            }
+            CheckTimeouts();
         }
 
         public void Cancel()
         {
+            if (_activeFetchToken != 0)
+            {
+                _fetchToken++;
+                _activeFetchToken = 0;
+            }
+
             _state = State.Idle;
             _tcp.Disconnect();
+        }
+
+        private void CheckTimeouts()
+        {
+            var now = TimeUtil.NowMs();
+            var connectTimeout = _config?.ConnectTimeoutMs ?? ClientTimingDefaults.ConnectTimeoutMs;
+
+            if (_state == State.Connecting && now - _connectStartMs > connectTimeout)
+            {
+                Fail(ClientLocalError.ConnectTimeout);
+                return;
+            }
+
+            if (_state == State.WaitResponse &&
+                now - _waitStartMs > (_config?.ZoneListResponseTimeoutMs ?? ClientTimingDefaults.ZoneListResponseTimeoutMs))
+            {
+                Fail(ClientLocalError.ZoneListTimeout);
+            }
         }
 
         private void OnConnected()
@@ -80,6 +102,11 @@ namespace Rpg.Client.Net
 
         private void OnMessage(byte module, byte sub, byte[] body)
         {
+            if (_activeFetchToken == 0)
+            {
+                return;
+            }
+
             if (module == (byte)ClientModule.System && sub == (byte)SystemMsgSub.S2CError)
             {
                 if (ClientMsgHandler.TryParseGatewayError(body, out var err))
@@ -92,6 +119,13 @@ namespace Rpg.Client.Net
 
             if (module != (byte)ClientModule.Login || sub != (byte)ZoneMsgSub.S2CZoneListRsp)
             {
+                if (_state == State.WaitResponse)
+                {
+                    ClientLogger.Instance.WarnFormat(
+                        "ZoneListSession：等待区列表时忽略未知消息 module=0x{0:X2} sub=0x{1:X2}",
+                        module, sub);
+                }
+
                 return;
             }
 
@@ -101,9 +135,25 @@ namespace Rpg.Client.Net
                 return;
             }
 
+            var entries = ClientMsgHandler.ToZoneEntries(rsp);
+            var errText = ClientErrorText.ZoneListResultText(rsp.Code, string.Empty);
+            if (!string.IsNullOrEmpty(errText))
+            {
+                ClientLogger.Instance.WarnFormat(
+                    "ZoneListSession：区列表失败 code={0} 条目={1}",
+                    rsp.Code, entries.Count);
+                Fail(errText);
+                return;
+            }
+
+            if (_activeFetchToken == 0 || _activeFetchToken != _fetchToken)
+            {
+                return;
+            }
+
+            _activeFetchToken = 0;
             _state = State.Idle;
             _tcp.Disconnect();
-            var entries = ClientMsgHandler.ToZoneEntries(rsp);
             ClientLogger.Instance.InfoFormat("ZoneListSession：收到区列表 {0} 条", entries.Count);
             OnSuccess?.Invoke(entries);
         }
@@ -112,6 +162,7 @@ namespace Rpg.Client.Net
 
         private void Fail(string msg)
         {
+            _activeFetchToken = 0;
             _state = State.Idle;
             _tcp.Disconnect();
             ClientLogger.Instance.WarnFormat("ZoneListSession：{0}", msg);

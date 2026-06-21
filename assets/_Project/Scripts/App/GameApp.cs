@@ -1,5 +1,5 @@
 /// <summary>
-/// 游戏主控制器（对标 app/GameApp + game/GameScene）。
+/// 游戏主控制器。
 /// 职责：AppState 状态机、Session 生命周期、UI 切换。
 /// 协作：LoginSession、GameSession、ZoneListSession、GameUiController、WorldController。
 /// </summary>
@@ -35,8 +35,10 @@ namespace Rpg.Client.App
         private string _pendingAccount = string.Empty;
         private string _pendingPassword = string.Empty;
         private List<CharacterEntry> _characters = new List<CharacterEntry>();
+        private List<GameZoneEntry> _cachedZones = new List<GameZoneEntry>();
         private bool _suppressDisconnectNav;
         private bool _exitDialogVisible;
+        private bool _registerInProgress;
         private LogoutAction? _pendingExitAction;
 
         private void Awake()
@@ -75,31 +77,68 @@ namespace Rpg.Client.App
 
         private void WireCallbacks()
         {
-            _zoneList.OnSuccess = zones => _ui.ShowServerList(zones, _selectedZoneId);
-            _zoneList.OnError = msg => _ui.ShowError(msg);
+            _zoneList.OnSuccess = zones =>
+            {
+                _cachedZones = zones ?? new List<GameZoneEntry>();
+                SyncSelectedZoneFromList(_cachedZones);
+                SetState(AppState.ServerList);
+                _ui.ShowServerList(_cachedZones, _selectedZoneId);
+            };
+            _zoneList.OnError = msg =>
+            {
+                _ui.ShowError(msg);
+                _ui.SetServerListHint(msg);
+            };
 
             _login.OnStatus = msg => _ui.SetStatus(msg);
             _login.OnError = msg =>
             {
                 _ui.ShowError(msg);
-                if (_state is AppState.CharacterSelect or AppState.Connecting)
+                _ui.SetStatus(msg);
+                _ui.SetRegisterBusy(false);
+                _ui.SetCharacterBusy(false);
+
+                if (_registerInProgress)
+                {
+                    _registerInProgress = false;
+                    SetState(AppState.Register);
+                    return;
+                }
+
+                if (_state == AppState.Connecting)
                 {
                     SetState(AppState.AuthLogin);
+                }
+                else if (_state == AppState.CharacterSelect)
+                {
+                    SetState(AppState.CharacterSelect);
                 }
             };
             _login.OnRegisterSuccess = () =>
             {
+                _registerInProgress = false;
+                _ui.SetRegisterBusy(false);
                 _ui.ShowMessage("注册成功，请登录");
                 SetState(AppState.AuthLogin);
             };
             _login.OnUserList = (chars, highlight) =>
             {
                 _characters = chars;
+                _ui.SetCharacterBusy(false);
                 _ui.ShowCharacterSelect(chars, highlight);
                 SetState(AppState.CharacterSelect);
             };
             _login.OnEnterGame = enter =>
             {
+                if (enter.UserId == 0 || enter.MapId == 0)
+                {
+                    ClientLogger.Instance.Err("GameApp：进世界数据无效，拒绝启动 GameSession");
+                    _ui.ShowError("进世界失败：服务器返回数据无效");
+                    SetState(AppState.AuthLogin);
+                    return;
+                }
+
+                _ui.SetCharacterBusy(false);
                 var tcp = _login.TakeTcpClient();
                 _game.Start(tcp, enter);
                 _scriptHost.OnEnterGame(enter.UserId, enter.MapId);
@@ -156,6 +195,7 @@ namespace Rpg.Client.App
             _ui.OnSelectServerClicked = () =>
             {
                 _ui.SetStatus("正在连接 LoginServer...");
+                _ui.SetServerListHint("正在拉取区列表…");
                 _ui.ShowError(string.Empty);
                 _zoneList.FetchZoneList();
                 SetState(AppState.ServerList);
@@ -172,15 +212,56 @@ namespace Rpg.Client.App
                 _selectedZoneId = zoneId;
                 _selectedGameType = gameType;
                 _selectedZoneName = name;
-                _localSettings.SetLastZoneId(zoneId);
-                _localSettings.SetLastGameType(gameType);
-                _localSettings.SetLastZoneName(name);
+                SyncSelectedZoneFromList(_cachedZones);
+                _localSettings.SetLastZoneId(_selectedZoneId);
+                _localSettings.SetLastGameType(_selectedGameType);
+                _localSettings.SetLastZoneName(_selectedZoneName);
                 _localSettings.Save();
                 SetState(AppState.ZoneHome);
             };
-            _ui.OnEnterGameFromHome = () => SetState(AppState.AuthLogin);
+            _ui.OnEnterGameFromHome = () =>
+            {
+                if (!ClientInputValidator.TryValidateZoneSelected(_selectedZoneId, out var err))
+                {
+                    _ui.ShowError(err);
+                    return;
+                }
+
+                SetState(AppState.AuthLogin);
+            };
             _ui.OnLoginClicked = (account, password, remember) =>
             {
+                SyncSelectedZoneFromList(_cachedZones);
+
+                if (_cachedZones.Count > 0)
+                {
+                    if (!ClientInputValidator.TryValidateZoneForLogin(
+                            _selectedZoneId, _selectedGameType, _cachedZones, out var zoneErr))
+                    {
+                        _ui.ShowError(zoneErr);
+                        _ui.SetStatus(zoneErr);
+                        return;
+                    }
+                }
+                else if (!ClientInputValidator.TryValidateZoneSelected(_selectedZoneId, out var staleZoneErr))
+                {
+                    _ui.ShowError(staleZoneErr);
+                    _ui.SetStatus(staleZoneErr);
+                    return;
+                }
+
+                if (!ClientInputValidator.TryValidateAccount(account, out var accountErr))
+                {
+                    _ui.ShowError(accountErr);
+                    return;
+                }
+
+                if (!ClientInputValidator.TryValidatePassword(password, out var passwordErr))
+                {
+                    _ui.ShowError(passwordErr);
+                    return;
+                }
+
                 _pendingAccount = account;
                 _pendingPassword = password;
                 _localSettings.SetRememberAccount(remember);
@@ -197,10 +278,61 @@ namespace Rpg.Client.App
             };
             _ui.OnRegisterClicked = (account, password, confirm) =>
             {
+                SyncSelectedZoneFromList(_cachedZones);
+
+                if (_cachedZones.Count > 0)
+                {
+                    if (!ClientInputValidator.TryValidateZoneForLogin(
+                            _selectedZoneId, _selectedGameType, _cachedZones, out var zoneErr))
+                    {
+                        _ui.ShowError(zoneErr);
+                        _ui.SetStatus(zoneErr);
+                        return;
+                    }
+                }
+                else if (!ClientInputValidator.TryValidateZoneSelected(_selectedZoneId, out var staleZoneErr))
+                {
+                    _ui.ShowError(staleZoneErr);
+                    _ui.SetStatus(staleZoneErr);
+                    return;
+                }
+
+                if (!ClientInputValidator.TryValidateAccount(account, out var accountErr))
+                {
+                    _ui.ShowError(accountErr);
+                    return;
+                }
+
+                if (!ClientInputValidator.TryValidatePasswordMatch(password, confirm, out var passwordErr))
+                {
+                    _ui.ShowError(passwordErr);
+                    return;
+                }
+
+                _registerInProgress = true;
+                _ui.SetRegisterBusy(true);
+                _ui.ShowError(string.Empty);
+                _ui.SetStatus("正在注册...");
                 _login.StartRegister(account, password, confirm, _selectedZoneId, _selectedGameType);
+                SetState(AppState.Connecting);
             };
-            _ui.OnSelectCharacter = userId => _login.SelectCharacter(userId);
-            _ui.OnCreateCharacter = (name, voc, sex) => _login.CreateCharacter(name, voc, sex);
+            _ui.OnSelectCharacter = userId =>
+            {
+                _ui.SetCharacterBusy(true);
+                _login.SelectCharacter(userId);
+            };
+            _ui.OnCreateCharacter = (name, voc, sex) =>
+            {
+                if (!ClientInputValidator.TryValidateCharacterName(name, out var err))
+                {
+                    _ui.ShowError(err);
+                    return;
+                }
+
+                _ui.SetCharacterBusy(true);
+                _ui.ShowError(string.Empty);
+                _login.CreateCharacter(name.Trim(), voc, sex);
+            };
             _ui.OnExitGameAction = action =>
             {
                 if (action == LogoutAction.Unspecified)
@@ -220,6 +352,31 @@ namespace Rpg.Client.App
             _selectedZoneId = _localSettings.LastZoneId;
             _selectedGameType = _localSettings.LastGameType;
             _selectedZoneName = _localSettings.LastZoneName;
+        }
+
+        /// <summary>用最新区列表校正 zoneId/gameType，避免本地缓存与服务端不一致。</summary>
+        private void SyncSelectedZoneFromList(IReadOnlyList<GameZoneEntry> zones)
+        {
+            if (_selectedZoneId == 0 || zones == null)
+            {
+                return;
+            }
+
+            foreach (var zone in zones)
+            {
+                if (zone.ZoneId != _selectedZoneId)
+                {
+                    continue;
+                }
+
+                _selectedGameType = zone.GameType;
+                if (!string.IsNullOrEmpty(zone.Name))
+                {
+                    _selectedZoneName = zone.Name;
+                }
+
+                return;
+            }
         }
 
         private void SetState(AppState state)

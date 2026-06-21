@@ -1,17 +1,26 @@
 # Net（Unity C#）
 
-对标原 `net/`、`sdk/net/`。引用 `Assets/_Project/Protobuf/`（联接至根 `Protobuf/`）。
-
-| 文件 | 对标 C++ |
-|------|----------|
-| `MsgHeader.cs` | `Common/NetDefine.h` |
-| `PacketCodec.cs` | `sdk/net/ProtocolCodec.h` |
-| `ClientModule.cs` | `Common/ClientTypes.h` |
-| `GameSession.cs` | `net/GameSession` |
+引用 `Assets/_Project/Protobuf/`（联接至根 `Protobuf/`）。
 
 帧格式：`MsgHeader(4B)` + Protobuf body（body **不含** module/sub 前缀）。
 
-`PacketCodec.TryDecode` 使用 `byte[]` + 长度索引拆帧，避免 `List<byte>.ToArray()` 每帧分配；`GameTcpClient` 复用 8KB 读缓冲。
+`PacketCodec.TryDecode` 使用 `byte[]` + 长度索引拆帧，避免每帧额外分配；`GameTcpClient` 复用 8KB 读缓冲。
+
+## 登录五步流程
+
+| 步骤 | 会话 | 关键消息 | code 校验 |
+|------|------|----------|-----------|
+| 1 区列表 | `ZoneListSession` | `C2SZoneListReq` → `S2CZoneListRsp` | `S2CZoneListRsp.code == 0` |
+| 2 注册 | `LoginSession` | `C2SRegisterReq` → `S2CRegisterRsp` | `RegisterResultCode` |
+| 3 登录 | `LoginSession` | `C2SLoginReq` → `S2CLoginRsp` + `S2CGatewayInfo` → `C2SGatewayAuthReq` | 登录与 Gateway 鉴权均解析 `S2CLoginRsp.code` |
+| 4 创角 | `LoginSession` | `C2SCreateUserReq` → `S2CCreateUserRsp` | `CreateCharacterResultCode` |
+| 5 进世界 | `LoginSession` → `GameSession` | `C2SSelectUserReq` → `S2CEnterGame`；TCP 移交后心跳/Scene | `userId/mapId` 非零；`S2CUserList.code` 在选角前校验 |
+
+**Gateway 鉴权**：连接 Gateway 后服务端可能再次下发 `S2CLoginRsp`；`code != 0` 须立即 `Fail` 展示登录失败文案，不可静默等待角色列表超时。
+
+**返回选角**：`ResumeGatewayForCharSelect` 等待 `S2CUserList`；超时且 TCP 仍连接时会重发一次 `C2SGatewayAuthReq`。
+
+客户端输入校验见 `Util/ClientInputValidator`（区服必选、账号/密码、角色名 2–12 码点）。
 
 ## GameSession 入站分发
 

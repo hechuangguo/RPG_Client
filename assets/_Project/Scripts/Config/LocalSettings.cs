@@ -1,6 +1,5 @@
 /// <summary>
-/// 用户偏好持久化（对标 util/LocalSettings）。
-/// Windows：%APPDATA%/RPGClient/settings.json
+/// 用户偏好持久化（记住账号、上次区服）。
 /// </summary>
 using System;
 using System.IO;

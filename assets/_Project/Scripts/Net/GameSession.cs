@@ -1,8 +1,5 @@
 /// <summary>
-/// 游戏内网络会话（对标 net/GameSession）。
-/// 职责：Gateway 心跳、移动同步、离世界、实体与脚本消息分发。
-/// 协作：WorldController、GameScriptHost、GameTcpClient。
-/// 线程：Unity 主线程。
+/// 游戏内网络会话。职责：Gateway 心跳、移动同步、离世界、实体与脚本消息分发。
 /// </summary>
 using System;
 using Rpg.Client.Config;

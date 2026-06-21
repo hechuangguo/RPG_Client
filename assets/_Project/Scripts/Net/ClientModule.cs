@@ -1,5 +1,5 @@
 /// <summary>
-/// 客户端功能模块号（对标 Common/ClientTypes.h ClientModule）。
+/// 客户端功能模块号（与 Common ClientModule 一致）。
 /// </summary>
 namespace Rpg.Client.Net
 {

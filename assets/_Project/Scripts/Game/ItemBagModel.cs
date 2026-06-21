@@ -1,5 +1,5 @@
 /// <summary>
-/// 背包状态（对标 game/ItemBagModel）。
+/// 背包运行时状态。
 /// </summary>
 using System.Collections.Generic;
 

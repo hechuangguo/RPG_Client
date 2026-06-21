@@ -11,7 +11,7 @@ Hub 打开本仓**根目录**（非子目录）。
 ```
 RPG_Client/
   Common/              # Submodule → RPG_Common（*.proto 只读真源）
-  Protobuf/            # protoc 生成 *.cs
+  Protobuf/            # protoc 生成 *.cs（gitignore，clone 后 sync_protobuf.ps1）
   3Party/              # protoc、Google.Protobuf（离线 bundle）
   assets/_Project/     # Unity 脚本、场景、Editor
   assets/StreamingAssets/  # config/script/database（sync_streaming_assets.ps1）
@@ -42,7 +42,17 @@ Hub 打开工程 → 等待 Package Manager 解析 URP / Addressables / InputSys
 
 菜单 **RPG → Setup Boot Scene**（或 `.\scripts\setup_boot_scene.ps1`）生成 Boot 场景（含区服列表 ScrollView UI）。
 
-## 区服选择
+## 区服选择与登录流程
+
+1. **区服首页** →「选择区服」→ `ZoneListSession` 拉取列表 → 选中并「确认」（须 `enabled` 且非维护）
+2. **进入游戏** → 登录/注册（须已选区；账号 4–32 字符、密码 6–32 字符）
+3. **LoginServer** 登录成功 → 连接 **Gateway** 鉴权 → 角色列表
+4. **选角** → 点击角色行 →「进入世界」；无角色时先创角（名称 2–12 字符，可选职业/性别）
+5. **进世界** → `GameSession` 接管 TCP，WASD 移动；ESC 可返回选角/登录
+
+客户端会在发送前校验区服与表单；Gateway 鉴权失败会立即显示登录错误，而非等待角色列表超时。详见 [`assets/_Project/Scripts/Net/README.md`](assets/_Project/Scripts/Net/README.md)。
+
+## 区服选择（简要）
 
 点击「选择区服」→ 拉取区列表 → 在列表中选中区服并点「确认」。维护中区不可选；上次所选区会预高亮。
 
@@ -80,9 +90,11 @@ Hub 打开工程 → 等待 Package Manager 解析 URP / Addressables / InputSys
 ```powershell
 .\sync_all.bat
 # 或 -Offline 仅本地
-git add Common Protobuf
-git commit -m "chore: bump Common and sync Protobuf"
+git add Common
+git commit -m "chore: bump Common submodule"
 ```
+
+`Protobuf/` 为本地生成目录，**不提交**；clone 后须运行 `.\scripts\sync_protobuf.ps1`（或 `sync_all.bat`）。
 
 | 脚本 | 说明 |
 |------|------|
@@ -100,4 +112,4 @@ git commit -m "chore: bump Common and sync Protobuf"
 
 - [`docs/SCOPE.md`](docs/SCOPE.md) — 实施范围
 - [`docs/LUA_BRIDGE.md`](docs/LUA_BRIDGE.md) — Lua 桥接（Phase 3）
-- [`Protobuf/README.md`](Protobuf/README.md) — 生成物说明
+- `scripts/sync_protobuf.ps1` — 从 Common 生成 `Protobuf/*.cs`（本地，不提交）

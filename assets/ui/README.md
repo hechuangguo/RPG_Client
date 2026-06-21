@@ -28,4 +28,4 @@ Sheet width must be divisible by `frames`. Each frame should be a full-bleed lan
 
 If the sheet and JSON are missing, the client tries `login_bg.png`, then falls back to a gradient.
 
-Replace assets and rebuild, or copy to `build/bin/assets/ui/` to test without rebuilding.
+Assets live under `assets/ui/` in the Unity project; assign or copy into Boot Canvas as needed.

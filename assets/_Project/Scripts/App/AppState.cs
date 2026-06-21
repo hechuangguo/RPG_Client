@@ -1,5 +1,5 @@
 /// <summary>
-/// 客户端顶层应用状态（对标 app/AppState.h）。
+/// 客户端顶层应用状态枚举。
 /// </summary>
 namespace Rpg.Client.App
 {

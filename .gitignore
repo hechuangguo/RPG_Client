@@ -13,6 +13,14 @@ vs_modify.log
 _sizeof_test.*
 config/client_config.xml
 
+# protoc 生成物（scripts/sync_protobuf.ps1 生成，勿提交）
+Protobuf/
+assets/_Project/Protobuf/
+!Protobuf/RpgProto.asmdef
+!Protobuf/RpgProto.asmdef.meta
+!assets/_Project/Protobuf/RpgProto.asmdef
+!assets/_Project/Protobuf/RpgProto.asmdef.meta
+
 # Unity generated
 [Ll]ibrary/
 [Tt]emp/

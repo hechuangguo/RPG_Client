@@ -14,10 +14,22 @@ Boot 流程场景：`assets/_Project/Scenes/Boot.unity`（挂载 GameApp + GameU
 Setup 会生成：
 
 - `ServerListPanel`：ScrollView 区列表 + 确认/取消
+- `CharacterSelectPanel`：ScrollView 角色列表 + 职业/性别 + 创角/进入世界
 - `assets/_Project/Prefabs/UI/ZoneListItem.prefab`：区服行模板
+- `assets/_Project/Prefabs/UI/CharacterListItem.prefab`：角色行模板
 
-区服选择流程：点击「选择区服」→ 列表展示 → 选中行 → 点「确认」返回区服首页。维护中区不可选。
+## 区服选择
 
-Addressables 分组：`Map_1002`（见计划 §3.3）。
+点击「选择区服」→ 列表展示 → 选中行 → 点「确认」返回区服首页。维护中区不可选。
+
+## 选角与进世界
+
+- 登录成功后进入 **CharacterSelectPanel**
+- 点击角色行高亮选中；多角色可切换
+- **进入世界**：仅当已选中有效角色（`userId != 0`）时可点
+- **创建角色**：输入 2–12 字符名称，选择职业（战士/法师）与性别（男/女）后提交
+- 创角或进世界请求进行中，相关按钮会禁用直至服务器响应
+
+Addressables 分组：`Map_1002`（见 World 数据文档）。
 
 **EntityManager**：Setup 后须在 Inspector 为 `EntityManager` 指定 `_playerPrefab`（可为 Capsule 预制体）；未配置时不会静默创建 Primitive。

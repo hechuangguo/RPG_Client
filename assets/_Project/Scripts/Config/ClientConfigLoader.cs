@@ -1,8 +1,5 @@
 /// <summary>
-/// client_config.xml 加载器（对标 util/ConfigLoader）。
-/// 职责：窗口、日志、LoginServer 地址、网络时序、TLS。
-/// 协作：GameApp、各 Session。
-/// 线程：Unity 主线程。
+/// client_config.xml 加载器。
 /// </summary>
 using System;
 using System.IO;

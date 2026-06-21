@@ -1,6 +1,5 @@
 /// <summary>
-/// 启动入口（对标 main.cpp）。
-/// 职责：初始化 ClientLogger；GameApp 由 Boot 场景挂载。
+/// 启动入口（挂载 GameApp 的场景引导）。
 /// </summary>
 using Rpg.Client.Log;
 using UnityEngine;

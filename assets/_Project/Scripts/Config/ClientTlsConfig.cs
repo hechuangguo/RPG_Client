@@ -1,6 +1,5 @@
 /// <summary>
-/// TLS 传输层配置（对标 sdk/net/ClientTlsConfig.h）。
-/// 从 client_config.xml 的 Tls 段解析。
+/// TLS 传输层配置。
 /// </summary>
 namespace Rpg.Client.Config
 {

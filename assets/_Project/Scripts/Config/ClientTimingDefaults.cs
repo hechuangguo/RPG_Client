@@ -1,6 +1,5 @@
 /// <summary>
-/// 网络时序默认值（对标 sdk/net/ClientTimingDefaults.h）。
-/// client_config.xml 缺失项时回退到此。
+/// 网络时序默认值。
 /// </summary>
 namespace Rpg.Client.Config
 {

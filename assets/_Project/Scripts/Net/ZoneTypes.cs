@@ -1,5 +1,5 @@
 /// <summary>
-/// 区服列表条目（对标 net/ZoneTypes.h GameZoneEntry）。
+/// 区服列表条目与负载状态枚举。
 /// </summary>
 namespace Rpg.Client.Net
 {

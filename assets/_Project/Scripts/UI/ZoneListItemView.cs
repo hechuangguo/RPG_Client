@@ -22,10 +22,25 @@ namespace Rpg.Client.UI
         public GameZoneEntry Entry { get; private set; }
         public bool Selectable { get; private set; }
 
+        /// <summary>检查子控件引用是否已有效绑定（用于检测 Prefab 绑定丢失）。</summary>
+        public bool HasValidVisuals() => _nameText != null && _statusText != null && _background != null && _button != null;
+
+        /// <summary>供运行时代码创建列表项后绑定子控件引用。</summary>
+        public void InitVisuals(Text nameText, Text statusText, Text onlineText, Image background, Button button)
+        {
+            _nameText = nameText;
+            _statusText = statusText;
+            _onlineText = onlineText;
+            _background = background;
+            _button = button;
+        }
+
         public void Bind(GameZoneEntry entry, bool selected, System.Action<ZoneListItemView> onClick)
         {
             Entry = entry;
-            Selectable = entry.Enabled && entry.LoadStatus != ZoneLoadStatus.Maintenance;
+            Selectable = entry.Enabled
+                         && entry.LoadStatus != ZoneLoadStatus.Maintenance
+                         && entry.GatewayCount > 0;
 
             if (_nameText != null)
             {
@@ -65,6 +80,11 @@ namespace Rpg.Client.UI
             if (!entry.Enabled || entry.LoadStatus == ZoneLoadStatus.Maintenance)
             {
                 return "维护中";
+            }
+
+            if (entry.GatewayCount == 0)
+            {
+                return "无网关";
             }
 
             return entry.LoadStatus switch

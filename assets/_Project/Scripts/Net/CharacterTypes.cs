@@ -1,5 +1,5 @@
 /// <summary>
-/// 角色列表条目（对标 net/CharacterTypes.h CharacterEntry）。
+/// 角色列表条目与职业/性别常量。
 /// </summary>
 namespace Rpg.Client.Net
 {

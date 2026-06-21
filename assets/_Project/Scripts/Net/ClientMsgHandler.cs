@@ -1,6 +1,5 @@
 /// <summary>
-/// 客户端 Protobuf 消息构造与解析（对标 sdk/net/ClientMsgHandler）。
-/// 协作：PacketCodec、LoginSession、GameSession、ZoneListSession。
+/// 客户端 Protobuf 消息构造与解析。
 /// </summary>
 using System.Collections.Generic;
 using Google.Protobuf;
@@ -73,7 +72,11 @@ namespace Rpg.Client.Net
 
         public static byte[] BuildSelectUserReq(ulong userId, ulong loginTxnId)
         {
-            var req = new C2SSelectUserReq { UserId = userId, LoginTxnId = loginTxnId };
+            var req = new C2SSelectUserReq
+            {
+                UserId = userId,
+                LoginTxnId = loginTxnId
+            };
             return PacketCodec.Encode(LoginModule, (byte)LoginMsgSub.C2SSelectUserReq, req);
         }
 
@@ -142,8 +145,21 @@ namespace Rpg.Client.Net
 
         public static bool TryParseZoneListRsp(byte[] body, out S2CZoneListRsp rsp)
         {
-            rsp = S2CZoneListRsp.Parser.ParseFrom(body);
-            return rsp != null;
+            rsp = null;
+            if (body == null || body.Length == 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                rsp = S2CZoneListRsp.Parser.ParseFrom(body);
+                return rsp != null;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public static bool TryParseLoginRsp(byte[] body, out S2CLoginRsp rsp) { rsp = null; try { rsp = S2CLoginRsp.Parser.ParseFrom(body); return true; } catch { return false; } }

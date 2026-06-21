@@ -1,5 +1,5 @@
 /// <summary>
-/// 登录/注册/选角网络会话（对标 net/LoginSession）。
+/// 登录/注册/选角网络会话。
 /// 职责：LoginServer 登录 → Gateway 鉴权 → 角色列表 → 进世界。
 /// 协作：GameApp、ClientMsgHandler、GameSession。
 /// 线程：Unity 主线程 Update 驱动 poll。
@@ -26,7 +26,6 @@ namespace Rpg.Client.Net
         private GameTcpClient _tcp;
         private ClientConfigLoader _config;
         private State _state = State.Idle;
-        private bool _registerFlow;
         private string _account = string.Empty;
         private string _password = string.Empty;
         private string _confirmPassword = string.Empty;
@@ -48,6 +47,8 @@ namespace Rpg.Client.Net
         private bool _gotLoginRsp;
         private bool _gotGatewayInfo;
         private bool _gotUserList;
+        private bool _intentionalDisconnect;
+        private bool _userListRetried;
         private readonly List<CharacterEntry> _cachedCharacters = new List<CharacterEntry>();
 
         public Action<S2CEnterGame> OnEnterGame;
@@ -69,21 +70,20 @@ namespace Rpg.Client.Net
         public void StartLogin(string account, string password, uint zoneId, byte gameType)
         {
             Cancel();
-            _registerFlow = false;
             _account = account;
             _password = password;
             _zoneId = zoneId;
             _gameType = gameType;
             _state = State.ConnectLogin;
             _connectStartMs = TimeUtil.NowMs();
-            ClientLogger.Instance.Info("LoginSession：开始登录");
+            ClientLogger.Instance.InfoFormat(
+                "LoginSession：开始登录 zoneId={0} gameType={1}", zoneId, gameType);
             _tcp.Connect(_config.LoginHost, _config.LoginPort, _config.Tls);
         }
 
         public void StartRegister(string account, string password, string confirm, uint zoneId, byte gameType)
         {
             Cancel();
-            _registerFlow = true;
             _account = account;
             _password = password;
             _confirmPassword = confirm;
@@ -96,6 +96,19 @@ namespace Rpg.Client.Net
 
         public void SelectCharacter(ulong userId)
         {
+            if (userId == 0)
+            {
+                ClientLogger.Instance.Warn("LoginSession：无效角色 ID，拒绝进世界");
+                OnError?.Invoke("请先选择或创建角色");
+                return;
+            }
+
+            if (!CanSendUserAction())
+            {
+                ClientLogger.Instance.WarnFormat("LoginSession：当前状态 {0} 不允许选角进世界", _state);
+                return;
+            }
+
             _pendingSelectUserId = userId;
             _tcp.SendRaw(ClientMsgHandler.BuildSelectUserReq(userId, _nextLoginTxnId++));
             _state = State.WaitEnterGame;
@@ -105,6 +118,12 @@ namespace Rpg.Client.Net
 
         public void CreateCharacter(string name, byte vocation, byte sex)
         {
+            if (!CanSendUserAction())
+            {
+                ClientLogger.Instance.WarnFormat("LoginSession：当前状态 {0} 不允许创角", _state);
+                return;
+            }
+
             _pendingCreateName = name;
             _pendingCreateVocation = vocation;
             _pendingCreateSex = sex;
@@ -124,6 +143,8 @@ namespace Rpg.Client.Net
             _state = State.Idle;
             _gatewayConnected = false;
             _gotLoginRsp = _gotGatewayInfo = _gotUserList = false;
+            _userListRetried = false;
+            _intentionalDisconnect = false;
             _cachedCharacters.Clear();
             _tcp.Disconnect();
         }
@@ -156,10 +177,14 @@ namespace Rpg.Client.Net
             _highlightUserId = highlightUserId;
             _gatewayConnected = true;
             _gotUserList = false;
+            _userListRetried = false;
             _state = State.WaitUserList;
             _waitStartMs = TimeUtil.NowMs();
             NotifyStatus("正在刷新角色列表...");
         }
+
+        private bool CanSendUserAction() =>
+            _state == State.WaitUserAction && _gatewayConnected;
 
         private void CheckTimeouts()
         {
@@ -171,11 +196,34 @@ namespace Rpg.Client.Net
                 return;
             }
 
-            if (IsWaitingResponse() &&
-                now - _waitStartMs > (_config?.ResponseTimeoutMs ?? ClientTimingDefaults.ResponseTimeoutMs))
+            if (!IsWaitingResponse())
             {
-                Fail(ClientLocalError.ResponseTimeout);
+                return;
             }
+
+            if (now - _waitStartMs <= (_config?.ResponseTimeoutMs ?? ClientTimingDefaults.ResponseTimeoutMs))
+            {
+                return;
+            }
+
+            if (_state == State.WaitUserList && !_userListRetried && _gatewayConnected &&
+                _loginRsp != null && !string.IsNullOrEmpty(_loginRsp.LoginToken))
+            {
+                ClientLogger.Instance.Info("LoginSession：角色列表超时，尝试重发 Gateway 鉴权");
+                _userListRetried = true;
+                _waitStartMs = now;
+                _tcp.SendRaw(ClientMsgHandler.BuildGatewayAuthReq(
+                    _account, _loginRsp.LoginToken, _zoneId, _gameType));
+                return;
+            }
+
+            var ctx = _state switch
+            {
+                State.WaitUserList => LoginTimeoutContext.UserList,
+                State.RegisterWaitRsp => LoginTimeoutContext.Register,
+                _ => LoginTimeoutContext.Generic
+            };
+            Fail(ClientErrorText.LocalErrorText(ClientLocalError.ResponseTimeout, ctx));
         }
 
         private bool IsWaitingResponse() =>
@@ -197,7 +245,10 @@ namespace Rpg.Client.Net
                     _waitStartMs = TimeUtil.NowMs();
                     break;
                 case State.ConnectGateway:
-                    _tcp.SendRaw(ClientMsgHandler.BuildGatewayAuthReq(_account, _loginRsp.LoginToken, _zoneId, _gameType));
+                    ClientLogger.Instance.InfoFormat(
+                        "LoginSession：发送 Gateway 票据鉴权 账号={0} 区服={1}", _account, _zoneId);
+                    _tcp.SendRaw(ClientMsgHandler.BuildGatewayAuthReq(
+                        _account, _loginRsp.LoginToken, _zoneId, _gameType));
                     _state = State.WaitUserList;
                     _waitStartMs = TimeUtil.NowMs();
                     _gatewayConnected = true;
@@ -207,6 +258,12 @@ namespace Rpg.Client.Net
 
         private void OnDisconnected()
         {
+            if (_intentionalDisconnect)
+            {
+                _intentionalDisconnect = false;
+                return;
+            }
+
             if (_state != State.Idle)
             {
                 Fail(ClientLocalError.Disconnected);
@@ -217,9 +274,12 @@ namespace Rpg.Client.Net
         {
             if (module == (byte)ClientModule.System)
             {
-                if (sub == (byte)SystemMsgSub.S2CError && ClientMsgHandler.TryParseGatewayError(body, out var err))
+                if (sub == (byte)SystemMsgSub.S2CError)
                 {
-                    Fail(ClientErrorText.GatewayErrorText(err));
+                    if (ClientMsgHandler.TryParseGatewayError(body, out var err))
+                    {
+                        Fail(ClientErrorText.GatewayErrorText(err));
+                    }
                 }
 
                 return;
@@ -255,15 +315,28 @@ namespace Rpg.Client.Net
 
         private void HandleLoginRsp(byte[] body)
         {
-            if (!ClientMsgHandler.TryParseLoginRsp(body, out var rsp))
+            if (_gatewayConnected && _state == State.WaitUserList)
             {
-                Fail(ClientLocalError.ParseError);
+                if (!ClientMsgHandler.TryParseLoginRsp(body, out var gwRsp))
+                {
+                    Fail(ClientLocalError.ParseError);
+                    return;
+                }
+
+                var gatewayErr = ClientErrorText.LoginResultText(gwRsp.Code, gwRsp.Msg);
+                if (!string.IsNullOrEmpty(gatewayErr))
+                {
+                    Fail(gatewayErr);
+                    return;
+                }
+
+                ClientLogger.Instance.Info("LoginSession：Gateway 鉴权成功");
                 return;
             }
 
-            if (_gatewayConnected && _state == State.WaitUserList)
+            if (!ClientMsgHandler.TryParseLoginRsp(body, out var rsp))
             {
-                ClientLogger.Instance.Info("LoginSession：Gateway 鉴权成功");
+                Fail(ClientLocalError.ParseError);
                 return;
             }
 
@@ -300,6 +373,7 @@ namespace Rpg.Client.Net
 
             ClientLogger.Instance.InfoFormat("LoginSession：连接 Gateway {0}:{1}", _gatewayHost, _gatewayPort);
             _state = State.SwitchingGateway;
+            _intentionalDisconnect = true;
             _tcp.Disconnect();
             _state = State.ConnectGateway;
             _connectStartMs = TimeUtil.NowMs();
@@ -336,7 +410,11 @@ namespace Rpg.Client.Net
 
             if (info.Code != (int)GatewayInfoResultCode.GatewayInfoOk)
             {
-                Fail("网关信息错误：" + info.Msg);
+                var err = ClientErrorText.GatewayInfoResultText(info.Code, info.Msg);
+                ClientLogger.Instance.WarnFormat(
+                    "LoginSession：网关信息失败 code={0} zoneId={1} gameType={2} msg={3}",
+                    info.Code, _zoneId, _gameType, info.Msg);
+                Fail(err);
                 return;
             }
 
@@ -360,14 +438,23 @@ namespace Rpg.Client.Net
                 return;
             }
 
-            _gotUserList = true;
-            _state = State.WaitUserAction;
+            var err = ClientErrorText.UserListResultText(list.Code, string.Empty);
             var chars = ClientMsgHandler.ToCharacterEntries(list);
+            if (!string.IsNullOrEmpty(err))
+            {
+                Fail(err);
+                return;
+            }
+
+            _gotUserList = true;
+            _userListRetried = false;
+            _state = State.WaitUserAction;
             _cachedCharacters.Clear();
             _cachedCharacters.AddRange(chars);
             var highlight = _highlightUserId != 0 ? _highlightUserId : _loginRsp?.UserId ?? 0;
             _highlightUserId = 0;
-            OnUserList?.Invoke(chars, highlight);
+            ClientLogger.Instance.InfoFormat("LoginSession：收到角色列表 数量={0}", chars.Count);
+            OnUserList?.Invoke(new List<CharacterEntry>(_cachedCharacters), highlight);
         }
 
         private void HandleCreateUserRsp(byte[] body)
@@ -379,6 +466,7 @@ namespace Rpg.Client.Net
             }
 
             var err = ClientErrorText.CreateCharacterText(rsp.Code, rsp.Msg);
+            var userId = rsp.UserId;
             if (!string.IsNullOrEmpty(err))
             {
                 Fail(err);
@@ -386,17 +474,17 @@ namespace Rpg.Client.Net
             }
 
             _state = State.WaitUserAction;
-            if (rsp.UserId != 0)
+            if (userId != 0)
             {
                 _cachedCharacters.Add(new CharacterEntry
                 {
-                    UserId = rsp.UserId,
+                    UserId = userId,
                     Name = _pendingCreateName,
                     Level = 1,
                     Vocation = _pendingCreateVocation,
                     Sex = _pendingCreateSex
                 });
-                OnUserList?.Invoke(new List<CharacterEntry>(_cachedCharacters), rsp.UserId);
+                OnUserList?.Invoke(new List<CharacterEntry>(_cachedCharacters), userId);
             }
 
             NotifyStatus("创角成功");
@@ -407,6 +495,12 @@ namespace Rpg.Client.Net
             if (!ClientMsgHandler.TryParseEnterGame(body, out var enter))
             {
                 Fail(ClientLocalError.ParseError);
+                return;
+            }
+
+            if (enter.UserId == 0 || enter.MapId == 0)
+            {
+                Fail("进世界数据无效");
                 return;
             }
 
@@ -424,6 +518,7 @@ namespace Rpg.Client.Net
         {
             _state = State.Idle;
             _gatewayConnected = false;
+            _intentionalDisconnect = false;
             _tcp.Disconnect();
             ClientLogger.Instance.WarnFormat("LoginSession：{0}", msg);
             OnError?.Invoke(msg);

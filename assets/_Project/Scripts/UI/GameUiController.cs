@@ -1,10 +1,11 @@
 /// <summary>
-/// UI 流程控制器（对标 ui/* Panel 聚合）。
+/// UI 流程控制器。
 /// 职责：根据 AppState 显示/隐藏 Canvas 面板；绑定按钮事件。
 /// </summary>
 using System;
 using System.Collections.Generic;
 using Rpg.Client.App;
+using Rpg.Client.Log;
 using Rpg.Client.Net;
 using Rpg.Proto.Login;
 using UnityEngine;
@@ -21,6 +22,7 @@ namespace Rpg.Client.UI
         [SerializeField] private GameObject _authPanel;
         [SerializeField] private GameObject _registerPanel;
         [SerializeField] private GameObject _characterPanel;
+        [SerializeField] private CharacterSelectPanel _characterSelect;
         [SerializeField] private GameObject _gameHudPanel;
         [SerializeField] private GameObject _exitDialog;
 
@@ -43,12 +45,6 @@ namespace Rpg.Client.UI
         [SerializeField] private Button _registerBtn;
         [SerializeField] private Button _backToLoginBtn;
 
-        [Header("Character")]
-        [SerializeField] private Text _charListText;
-        [SerializeField] private InputField _createNameInput;
-        [SerializeField] private Button _enterWorldBtn;
-        [SerializeField] private Button _createCharBtn;
-
         [Header("Exit Dialog")]
         [SerializeField] private Button _exitReturnCharBtn;
         [SerializeField] private Button _exitReturnLoginBtn;
@@ -70,10 +66,12 @@ namespace Rpg.Client.UI
         public Action<string, byte, byte> OnCreateCharacter;
         public Action<LogoutAction> OnExitGameAction;
 
-        private ulong _selectedUserId;
+        private bool _registerBusy;
 
         private void Awake()
         {
+            ResolveServerList();
+            ResolveCharacterSelect();
             _selectServerBtn?.onClick.AddListener(() => OnSelectServerClicked?.Invoke());
             _enterGameBtn?.onClick.AddListener(() => OnEnterGameFromHome?.Invoke());
             _loginBtn?.onClick.AddListener(() =>
@@ -93,6 +91,9 @@ namespace Rpg.Client.UI
             _serverList?.SetCallbacks(
                 (zoneId, gameType, name) => OnZoneConfirmed?.Invoke(zoneId, gameType, name),
                 () => OnCancelServerList?.Invoke());
+            _characterSelect?.SetCallbacks(
+                userId => OnSelectCharacter?.Invoke(userId),
+                (name, voc, sex) => OnCreateCharacter?.Invoke(name, voc, sex));
             _exitReturnCharBtn?.onClick.AddListener(() =>
             {
                 ShowExitDialog(false);
@@ -108,9 +109,6 @@ namespace Rpg.Client.UI
                 ShowExitDialog(false);
                 OnExitGameAction?.Invoke(LogoutAction.Unspecified);
             });
-            _enterWorldBtn?.onClick.AddListener(() => OnSelectCharacter?.Invoke(_selectedUserId));
-            _createCharBtn?.onClick.AddListener(() =>
-                OnCreateCharacter?.Invoke(_createNameInput.text, CharacterDef.VocationWarrior, CharacterDef.SexMale));
         }
 
         public void SetAppState(AppState state, string zoneName, string lastAccount, bool remember)
@@ -122,11 +120,6 @@ namespace Rpg.Client.UI
             _characterPanel?.SetActive(state == AppState.CharacterSelect);
             _gameHudPanel?.SetActive(state == AppState.Game);
             _exitDialog?.SetActive(false);
-
-            if (state == AppState.ServerList && _serverList != null)
-            {
-                _serverList.SetHint("正在拉取区列表…");
-            }
 
             if (_zoneNameText != null)
             {
@@ -143,10 +136,7 @@ namespace Rpg.Client.UI
                 _accountInput.text = lastAccount;
             }
 
-            if (_loginBtn != null)
-            {
-                _loginBtn.interactable = state != AppState.Connecting;
-            }
+            ApplyConnectingLock(state == AppState.Connecting);
 
             if (_rememberToggle != null)
             {
@@ -156,9 +146,13 @@ namespace Rpg.Client.UI
 
         public void ShowServerList(List<GameZoneEntry> zones, uint selectedZoneId)
         {
+            ResolveServerList();
+            _serverListPanel?.SetActive(true);
+
             if (_serverList == null)
             {
-                ShowError("没有可用区服");
+                ClientLogger.Instance.Err("GameUiController：ServerListPanel 未绑定，无法显示区列表");
+                ShowError("区列表 UI 未就绪，请执行 RPG → Setup Boot Scene");
                 return;
             }
 
@@ -170,7 +164,7 @@ namespace Rpg.Client.UI
             {
                 foreach (var z in zones)
                 {
-                    if (z.Enabled && z.LoadStatus != ZoneLoadStatus.Maintenance)
+                    if (z.Enabled && z.LoadStatus != ZoneLoadStatus.Maintenance && z.GatewayCount > 0)
                     {
                         hasSelectable = true;
                         break;
@@ -186,18 +180,31 @@ namespace Rpg.Client.UI
 
         public void ShowCharacterSelect(List<CharacterEntry> chars, ulong highlightUserId)
         {
-            _selectedUserId = highlightUserId != 0 ? highlightUserId : (chars.Count > 0 ? chars[0].UserId : 0);
-            if (_charListText != null)
+            ResolveCharacterSelect();
+            _characterPanel?.SetActive(true);
+            if (_characterSelect == null)
             {
-                if (chars.Count == 0)
-                {
-                    _charListText.text = "暂无角色";
-                }
-                else
-                {
-                    _charListText.text = string.Join("\n", chars.ConvertAll(c => $"{c.Name} Lv{c.Level}"));
-                }
+                ClientLogger.Instance.Err("GameUiController：CharacterSelectPanel 未绑定，无法显示角色列表");
+                ShowError("选角 UI 未就绪，请执行 RPG → Setup Boot Scene");
+                return;
             }
+
+            _characterSelect.SetBusy(false);
+            _characterSelect.ShowCharacters(chars, highlightUserId);
+        }
+
+        public void SetRegisterBusy(bool busy)
+        {
+            _registerBusy = busy;
+            if (_registerBtn != null)
+            {
+                _registerBtn.interactable = !busy;
+            }
+        }
+
+        public void SetCharacterBusy(bool busy)
+        {
+            _characterSelect?.SetBusy(busy);
         }
 
         public void ShowRegister(bool show)
@@ -225,5 +232,67 @@ namespace Rpg.Client.UI
         public void ShowMessage(string msg) => SetStatus(msg);
 
         public void ShowExitDialog(bool show) => _exitDialog?.SetActive(show);
+
+        public void SetServerListHint(string message) => _serverList?.SetHint(message ?? string.Empty);
+
+        private void ResolveServerList()
+        {
+            if (_serverList != null)
+            {
+                return;
+            }
+
+            if (_serverListPanel != null)
+            {
+                _serverList = _serverListPanel.GetComponent<ServerListPanel>();
+                if (_serverList == null)
+                {
+                    _serverList = _serverListPanel.GetComponentInChildren<ServerListPanel>(true);
+                }
+            }
+
+            if (_serverList == null)
+            {
+                _serverList = GetComponentInChildren<ServerListPanel>(true);
+            }
+        }
+
+        private void ResolveCharacterSelect()
+        {
+            if (_characterSelect != null)
+            {
+                _characterSelect.TryEnsureRuntimeLayout();
+                return;
+            }
+
+            if (_characterPanel != null)
+            {
+                _characterSelect = _characterPanel.GetComponent<CharacterSelectPanel>();
+                if (_characterSelect == null)
+                {
+                    _characterSelect = _characterPanel.AddComponent<CharacterSelectPanel>();
+                }
+            }
+
+            if (_characterSelect == null)
+            {
+                _characterSelect = GetComponentInChildren<CharacterSelectPanel>(true);
+            }
+
+            _characterSelect?.TryEnsureRuntimeLayout();
+        }
+
+        private void ApplyConnectingLock(bool connecting)
+        {
+            if (_loginBtn != null)
+            {
+                _loginBtn.interactable = !connecting;
+            }
+
+            if (_registerBtn != null)
+            {
+                _registerBtn.interactable = !connecting && !_registerBusy;
+            }
+        }
     }
 }

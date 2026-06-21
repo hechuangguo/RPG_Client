@@ -1,12 +1,11 @@
 /// <summary>
-/// 游戏脚本宿主（对标 lua/ClientScriptHost）。
-/// 职责：接收 GameSession 消息，更新 C# 模型；XLua 绑定见 docs/LUA_BRIDGE.md。
+/// 游戏脚本宿主。职责：接收 GameSession 消息并更新 Quest/Bag 模型；XLua 对接预留。
 /// </summary>
 using Rpg.Client.Game;
 using Rpg.Client.Log;
 using Rpg.Proto.Bag;
 using Rpg.Proto.Chat;
-using Rpg.Proto.Quest;
+using QuestProto = Rpg.Proto.Quest;
 
 namespace Rpg.Client.Scripting
 {
@@ -47,7 +46,7 @@ namespace Rpg.Client.Scripting
             ClientLogger.Instance.InfoFormat("GameScriptHost：公告 {0}", content ?? string.Empty);
         }
 
-        public void OnQuestInfo(S2CQuestInfo info)
+        public void OnQuestInfo(QuestProto.S2CQuestInfo info)
         {
             if (info == null)
             {
@@ -65,7 +64,7 @@ namespace Rpg.Client.Scripting
             {
                 foreach (var e in info.Entries)
                 {
-                    _quests.Upsert(new QuestEntry
+                    _quests.Upsert(new Game.QuestEntry
                     {
                         QuestId = e.QuestId,
                         Name = e.Name ?? string.Empty,

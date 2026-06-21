@@ -1,5 +1,5 @@
 /// <summary>
-/// 4 字节定长帧头（对标 Common/WireCommon.proto WireMsgHeader）。
+/// 4 字节定长帧头（与 Common/WireCommon.proto WireMsgHeader 一致）。
 /// wire：bodyLen(2) + module(1) + sub(1)，小端 packed。
 /// </summary>
 using System;

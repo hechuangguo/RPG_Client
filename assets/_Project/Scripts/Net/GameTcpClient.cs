@@ -1,7 +1,5 @@
 /// <summary>
-/// 非阻塞 TCP + 可选 TLS（对标 sdk/net/TcpClient）。
-/// 职责：connect/poll/send；MsgHeader 切帧后回调。
-/// 线程：Unity 主线程 poll；连接在后台 Task 完成。
+/// 非阻塞 TCP + 可选 TLS。职责：connect/poll/send；MsgHeader 切帧后回调。
 /// </summary>
 using System;
 using System.Collections.Generic;
@@ -39,6 +37,7 @@ namespace Rpg.Client.Net
         private volatile bool _connecting;
         private volatile bool _connected;
         private volatile bool _disposed;
+        private int _connectGeneration;
         private ClientTlsConfig _tls;
         private string _host;
 
@@ -57,8 +56,9 @@ namespace Rpg.Client.Net
             _host = host;
             _connecting = true;
             _connected = false;
+            var generation = ++_connectGeneration;
 
-            Task.Run(() => ConnectBackground(host, port));
+            Task.Run(() => ConnectBackground(host, port, generation));
             return true;
         }
 
@@ -95,9 +95,9 @@ namespace Rpg.Client.Net
 
             try
             {
-                FlushSend();
                 ReadAvailable();
                 DecodeFrames();
+                FlushSend();
             }
             catch (Exception ex)
             {
@@ -134,7 +134,7 @@ namespace Rpg.Client.Net
 
         public void Dispose() => Disconnect();
 
-        private void ConnectBackground(string host, ushort port)
+        private void ConnectBackground(string host, ushort port, int generation)
         {
             try
             {
@@ -150,19 +150,58 @@ namespace Rpg.Client.Net
                     stream = ssl;
                     EnqueueMain(() =>
                     {
+                        if (generation != _connectGeneration)
+                        {
+                            try
+                            {
+                                ssl.Dispose();
+                                stream.Dispose();
+                                tcp.Close();
+                            }
+                            catch
+                            {
+                                // ignore stale connect cleanup
+                            }
+
+                            return;
+                        }
+
                         _ssl = ssl;
                         FinishConnect(tcp, stream);
                     });
                 }
                 else
                 {
-                    EnqueueMain(() => FinishConnect(tcp, stream));
+                    EnqueueMain(() =>
+                    {
+                        if (generation != _connectGeneration)
+                        {
+                            try
+                            {
+                                stream.Dispose();
+                                tcp.Close();
+                            }
+                            catch
+                            {
+                                // ignore stale connect cleanup
+                            }
+
+                            return;
+                        }
+
+                        FinishConnect(tcp, stream);
+                    });
                 }
             }
             catch (Exception ex)
             {
                 EnqueueMain(() =>
                 {
+                    if (generation != _connectGeneration)
+                    {
+                        return;
+                    }
+
                     _connecting = false;
                     ClientLogger.Instance.ErrFormat("GameTcpClient：连接失败：{0}", ex.Message);
                     NotifyDisconnected();

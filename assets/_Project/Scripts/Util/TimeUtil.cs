@@ -1,5 +1,5 @@
 /// <summary>
-/// 时间工具（对标 sdk/time/TimeUtil）。
+/// 时间工具（毫秒墙钟）。
 /// </summary>
 namespace Rpg.Client.Util
 {

@@ -2,6 +2,7 @@
 /// Boot 场景一键生成（菜单 RPG → Setup Boot Scene）。
 /// 职责：创建 Canvas 层级、绑定 GameApp/GameUiController SerializeField、注册 Build Settings。
 /// </summary>
+using System.Collections.Generic;
 using System.IO;
 using Rpg.Client.App;
 using Rpg.Client.UI;
@@ -19,6 +20,7 @@ namespace Rpg.Client.EditorTools
     {
         private const string ScenePath = "assets/_Project/Scenes/Boot.unity";
         private const string ZoneListItemPrefabPath = "assets/_Project/Prefabs/UI/ZoneListItem.prefab";
+        private const string CharacterListItemPrefabPath = "assets/_Project/Prefabs/UI/CharacterListItem.prefab";
         private const float RefWidth = 1280f;
         private const float RefHeight = 720f;
 
@@ -153,15 +155,27 @@ namespace Rpg.Client.EditorTools
             SetAnchored(backToLoginBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.24f), new Vector2(200, 44));
 
             var characterPanel = CreatePanel(canvasGo.transform, "CharacterPanel", false);
-            var charListText = CreateText(characterPanel.transform, "CharListText", "暂无角色", font, 18,
-                TextAnchor.UpperLeft, new Vector2(20, -20), new Vector2(-40, -120));
-            SetAnchored(charListText.rectTransform, new Vector2(0.5f, 0.65f), new Vector2(400, 160));
+            var characterSelect = characterPanel.AddComponent<CharacterSelectPanel>();
+            var charHint = CreateText(characterPanel.transform, "HintText", "请选择角色", font, 18,
+                TextAnchor.MiddleCenter, Vector2.zero, new Vector2(400, 32));
+            SetAnchored(charHint.rectTransform, new Vector2(0.5f, 0.88f), new Vector2(420, 32));
+            var charScroll = CreateScrollView(characterPanel.transform, "CharacterScrollView", out var charListContent);
+            SetAnchored(charScroll.GetComponent<RectTransform>(), new Vector2(0.5f, 0.62f), new Vector2(420, 180));
+            var charListItemPrefab = EnsureCharacterListItemPrefab(font);
             var createNameInput = CreateInputField(characterPanel.transform, "CreateNameInput", "角色名", font);
             SetAnchored(createNameInput.GetComponent<RectTransform>(), new Vector2(0.5f, 0.38f), new Vector2(280, 40));
-            var enterWorldBtn = CreateButton(characterPanel.transform, "EnterWorldBtn", "进入世界", font);
-            SetAnchored(enterWorldBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.28f), new Vector2(200, 44));
+            var vocationDropdown = CreateDropdown(characterPanel.transform, "VocationDropdown", font,
+                new List<string> { "战士", "法师" });
+            SetAnchored(vocationDropdown.GetComponent<RectTransform>(), new Vector2(0.35f, 0.3f), new Vector2(140, 36));
+            var sexDropdown = CreateDropdown(characterPanel.transform, "SexDropdown", font,
+                new List<string> { "男", "女" });
+            SetAnchored(sexDropdown.GetComponent<RectTransform>(), new Vector2(0.65f, 0.3f), new Vector2(140, 36));
             var createCharBtn = CreateButton(characterPanel.transform, "CreateCharBtn", "创建角色", font);
             SetAnchored(createCharBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.2f), new Vector2(200, 44));
+            var enterWorldBtn = CreateButton(characterPanel.transform, "EnterWorldBtn", "进入世界", font);
+            SetAnchored(enterWorldBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.1f), new Vector2(200, 44));
+            WireCharacterSelectPanel(characterSelect, charHint, charListContent, charListItemPrefab,
+                createNameInput, vocationDropdown, sexDropdown, createCharBtn, enterWorldBtn);
 
             var gameHudPanel = CreatePanel(canvasGo.transform, "GameHudPanel", false);
             CreateText(gameHudPanel.transform, "HudHint", "游戏中 — WASD 移动，ESC 退出", font, 18,
@@ -184,10 +198,9 @@ namespace Rpg.Client.EditorTools
             SetAnchored(exitQuitBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.21f), new Vector2(260, 40));
 
             WireUiController(ui, zoneHomePanel, serverListPanelGo, serverList, authPanel, registerPanel, characterPanel,
-                gameHudPanel, exitDialog, zoneNameText, selectServerBtn, enterGameBtn, accountInput,
+                characterSelect, gameHudPanel, exitDialog, zoneNameText, selectServerBtn, enterGameBtn, accountInput,
                 passwordInput, rememberToggle, loginBtn, gotoRegisterBtn, regAccount, regPassword, regConfirm,
-                registerBtn, backToLoginBtn, charListText, createNameInput, enterWorldBtn,
-                createCharBtn, statusText, errorText, exitReturnCharBtn, exitReturnLoginBtn, exitQuitBtn);
+                registerBtn, backToLoginBtn, statusText, errorText, exitReturnCharBtn, exitReturnLoginBtn, exitQuitBtn);
 
             WireGameApp(gameApp, ui, world);
             WireWorld(world, entityManager);
@@ -392,6 +405,154 @@ namespace Rpg.Client.EditorTools
             return toggle;
         }
 
+        private static CharacterListItemView EnsureCharacterListItemPrefab(Font font)
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<CharacterListItemView>(CharacterListItemPrefabPath);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var dir = Path.GetDirectoryName(CharacterListItemPrefabPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            var go = new GameObject("CharacterListItem", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image),
+                typeof(CharacterListItemView), typeof(Button), typeof(LayoutElement));
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.sizeDelta = new Vector2(0f, 44f);
+            var layout = go.GetComponent<LayoutElement>();
+            layout.minHeight = 44f;
+            layout.preferredHeight = 44f;
+            layout.flexibleWidth = 1f;
+            go.GetComponent<Image>().color = new Color(0.14f, 0.16f, 0.2f, 0.95f);
+
+            var nameText = CreateText(go.transform, "NameText", "角色名", font, 18,
+                TextAnchor.MiddleLeft, new Vector2(12, 0), new Vector2(-80, 0));
+            var levelText = CreateText(go.transform, "LevelText", "Lv1", font, 16,
+                TextAnchor.MiddleRight, new Vector2(12, 0), new Vector2(-12, 0));
+
+            var item = go.GetComponent<CharacterListItemView>();
+            item.InitVisuals(nameText, levelText, go.GetComponent<Image>(), go.GetComponent<Button>());
+
+            var btn = go.GetComponent<Button>();
+            btn.targetGraphic = go.GetComponent<Image>();
+
+            PrefabUtility.SaveAsPrefabAsset(go, CharacterListItemPrefabPath);
+            Object.DestroyImmediate(go);
+            return AssetDatabase.LoadAssetAtPath<CharacterListItemView>(CharacterListItemPrefabPath);
+        }
+
+        private static Dropdown CreateDropdown(Transform parent, string name, Font font, List<string> options)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Dropdown));
+            go.transform.SetParent(parent, false);
+            go.GetComponent<Image>().color = new Color(0.1f, 0.12f, 0.16f);
+
+            var labelGo = new GameObject("Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+            labelGo.transform.SetParent(go.transform, false);
+            var labelRt = labelGo.GetComponent<RectTransform>();
+            labelRt.anchorMin = Vector2.zero;
+            labelRt.anchorMax = Vector2.one;
+            labelRt.offsetMin = new Vector2(8, 2);
+            labelRt.offsetMax = new Vector2(-24, -2);
+            var label = labelGo.GetComponent<Text>();
+            label.font = font;
+            label.fontSize = 16;
+            label.color = Color.white;
+            label.alignment = TextAnchor.MiddleLeft;
+
+            var arrowGo = new GameObject("Arrow", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+            arrowGo.transform.SetParent(go.transform, false);
+            var arrowRt = arrowGo.GetComponent<RectTransform>();
+            arrowRt.anchorMin = new Vector2(1, 0.5f);
+            arrowRt.anchorMax = new Vector2(1, 0.5f);
+            arrowRt.sizeDelta = new Vector2(20, 20);
+            arrowRt.anchoredPosition = new Vector2(-12, 0);
+            var arrow = arrowGo.GetComponent<Text>();
+            arrow.font = font;
+            arrow.text = "▼";
+            arrow.fontSize = 12;
+            arrow.alignment = TextAnchor.MiddleCenter;
+
+            var template = new GameObject("Template", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image),
+                typeof(ScrollRect));
+            template.transform.SetParent(go.transform, false);
+            template.SetActive(false);
+            var templateRt = template.GetComponent<RectTransform>();
+            templateRt.anchorMin = new Vector2(0, 0);
+            templateRt.anchorMax = new Vector2(1, 0);
+            templateRt.pivot = new Vector2(0.5f, 1);
+            templateRt.anchoredPosition = new Vector2(0, 2);
+            templateRt.sizeDelta = new Vector2(0, 120);
+            template.GetComponent<Image>().color = new Color(0.08f, 0.1f, 0.14f);
+
+            var viewport = CreateStretchPanel(template.transform, "Viewport", new Color(0, 0, 0, 0));
+            viewport.AddComponent<RectMask2D>();
+
+            var contentGo = new GameObject("Content", typeof(RectTransform));
+            contentGo.transform.SetParent(viewport.transform, false);
+            var contentRt = contentGo.GetComponent<RectTransform>();
+            contentRt.anchorMin = new Vector2(0, 1);
+            contentRt.anchorMax = new Vector2(1, 1);
+            contentRt.pivot = new Vector2(0.5f, 1);
+            contentRt.sizeDelta = new Vector2(0, 28);
+
+            var itemGo = new GameObject("Item", typeof(RectTransform), typeof(Toggle));
+            itemGo.transform.SetParent(contentGo.transform, false);
+            var itemRt = itemGo.GetComponent<RectTransform>();
+            itemRt.anchorMin = new Vector2(0, 0.5f);
+            itemRt.anchorMax = new Vector2(1, 0.5f);
+            itemRt.sizeDelta = new Vector2(0, 28);
+            var itemBg = new GameObject("Item Background", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            itemBg.transform.SetParent(itemGo.transform, false);
+            var itemBgRt = itemBg.GetComponent<RectTransform>();
+            itemBgRt.anchorMin = Vector2.zero;
+            itemBgRt.anchorMax = Vector2.one;
+            itemBgRt.offsetMin = Vector2.zero;
+            itemBgRt.offsetMax = Vector2.zero;
+            itemBg.GetComponent<Image>().color = new Color(0.12f, 0.14f, 0.18f);
+            var itemLabel = CreateText(itemGo.transform, "Item Label", string.Empty, font, 14,
+                TextAnchor.MiddleLeft, new Vector2(8, 0), new Vector2(-8, 0));
+            var toggle = itemGo.GetComponent<Toggle>();
+            toggle.targetGraphic = itemBg.GetComponent<Image>();
+            toggle.graphic = null;
+
+            var scroll = template.GetComponent<ScrollRect>();
+            scroll.viewport = viewport.GetComponent<RectTransform>();
+            scroll.content = contentRt;
+            scroll.horizontal = false;
+
+            var dropdown = go.GetComponent<Dropdown>();
+            dropdown.targetGraphic = go.GetComponent<Image>();
+            dropdown.template = templateRt;
+            dropdown.captionText = label;
+            dropdown.itemText = itemLabel;
+            dropdown.options = options.ConvertAll(o => new Dropdown.OptionData(o));
+            return dropdown;
+        }
+
+        private static void WireCharacterSelectPanel(CharacterSelectPanel panel, Text hint, Transform content,
+            CharacterListItemView itemPrefab, InputField createName, Dropdown vocation, Dropdown sex,
+            Button createBtn, Button enterBtn)
+        {
+            var so = new SerializedObject(panel);
+            so.FindProperty("_hintText").objectReferenceValue = hint;
+            so.FindProperty("_listContent").objectReferenceValue = content;
+            so.FindProperty("_itemPrefab").objectReferenceValue = itemPrefab;
+            so.FindProperty("_createNameInput").objectReferenceValue = createName;
+            so.FindProperty("_vocationDropdown").objectReferenceValue = vocation;
+            so.FindProperty("_sexDropdown").objectReferenceValue = sex;
+            so.FindProperty("_createCharBtn").objectReferenceValue = createBtn;
+            so.FindProperty("_enterWorldBtn").objectReferenceValue = enterBtn;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         private static ZoneListItemView EnsureZoneListItemPrefab(Font font)
         {
             var existing = AssetDatabase.LoadAssetAtPath<ZoneListItemView>(ZoneListItemPrefabPath);
@@ -407,9 +568,16 @@ namespace Rpg.Client.EditorTools
             }
 
             var go = new GameObject("ZoneListItem", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image),
-                typeof(ZoneListItemView), typeof(Button));
+                typeof(ZoneListItemView), typeof(Button), typeof(LayoutElement));
             var rt = go.GetComponent<RectTransform>();
-            rt.sizeDelta = new Vector2(500, 48);
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.sizeDelta = new Vector2(0f, 48f);
+            var layout = go.GetComponent<LayoutElement>();
+            layout.minHeight = 48f;
+            layout.preferredHeight = 48f;
+            layout.flexibleWidth = 1f;
             go.GetComponent<Image>().color = new Color(0.14f, 0.16f, 0.2f, 0.95f);
 
             var nameText = CreateText(go.transform, "NameText", "区服名", font, 18,
@@ -421,13 +589,8 @@ namespace Rpg.Client.EditorTools
                 TextAnchor.MiddleRight, new Vector2(12, 0), new Vector2(-12, 0));
 
             var item = go.GetComponent<ZoneListItemView>();
-            var so = new SerializedObject(item);
-            so.FindProperty("_nameText").objectReferenceValue = nameText;
-            so.FindProperty("_statusText").objectReferenceValue = statusText;
-            so.FindProperty("_onlineText").objectReferenceValue = onlineText;
-            so.FindProperty("_background").objectReferenceValue = go.GetComponent<Image>();
-            so.FindProperty("_button").objectReferenceValue = go.GetComponent<Button>();
-            so.ApplyModifiedPropertiesWithoutUndo();
+            item.InitVisuals(nameText, statusText, onlineText,
+                go.GetComponent<Image>(), go.GetComponent<Button>());
 
             var btn = go.GetComponent<Button>();
             btn.targetGraphic = go.GetComponent<Image>();
@@ -445,7 +608,7 @@ namespace Rpg.Client.EditorTools
             scrollGo.GetComponent<Image>().color = new Color(0.06f, 0.08f, 0.1f, 0.9f);
 
             var viewport = CreateStretchPanel(scrollGo.transform, "Viewport", new Color(0, 0, 0, 0));
-            viewport.AddComponent<Mask>().showMaskGraphic = false;
+            viewport.AddComponent<RectMask2D>();
 
             var contentGo = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup),
                 typeof(ContentSizeFitter));
@@ -493,12 +656,12 @@ namespace Rpg.Client.EditorTools
 
         private static void WireUiController(GameUiController ui, GameObject zoneHomePanel,
             GameObject serverListPanel, ServerListPanel serverList, GameObject authPanel, GameObject registerPanel,
-            GameObject characterPanel, GameObject gameHudPanel, GameObject exitDialog,
+            GameObject characterPanel, CharacterSelectPanel characterSelect, GameObject gameHudPanel,
+            GameObject exitDialog,
             Text zoneNameText, Button selectServerBtn, Button enterGameBtn, InputField accountInput,
             InputField passwordInput, Toggle rememberToggle, Button loginBtn, Button gotoRegisterBtn,
             InputField regAccount, InputField regPassword, InputField regConfirm, Button registerBtn,
-            Button backToLoginBtn, Text charListText, InputField createNameInput,
-            Button enterWorldBtn, Button createCharBtn, Text statusText, Text errorText,
+            Button backToLoginBtn, Text statusText, Text errorText,
             Button exitReturnCharBtn, Button exitReturnLoginBtn, Button exitQuitBtn)
         {
             var so = new SerializedObject(ui);
@@ -508,6 +671,7 @@ namespace Rpg.Client.EditorTools
             so.FindProperty("_authPanel").objectReferenceValue = authPanel;
             so.FindProperty("_registerPanel").objectReferenceValue = registerPanel;
             so.FindProperty("_characterPanel").objectReferenceValue = characterPanel;
+            so.FindProperty("_characterSelect").objectReferenceValue = characterSelect;
             so.FindProperty("_gameHudPanel").objectReferenceValue = gameHudPanel;
             so.FindProperty("_exitDialog").objectReferenceValue = exitDialog;
             so.FindProperty("_zoneNameText").objectReferenceValue = zoneNameText;
@@ -523,10 +687,6 @@ namespace Rpg.Client.EditorTools
             so.FindProperty("_regConfirm").objectReferenceValue = regConfirm;
             so.FindProperty("_registerBtn").objectReferenceValue = registerBtn;
             so.FindProperty("_backToLoginBtn").objectReferenceValue = backToLoginBtn;
-            so.FindProperty("_charListText").objectReferenceValue = charListText;
-            so.FindProperty("_createNameInput").objectReferenceValue = createNameInput;
-            so.FindProperty("_enterWorldBtn").objectReferenceValue = enterWorldBtn;
-            so.FindProperty("_createCharBtn").objectReferenceValue = createCharBtn;
             so.FindProperty("_statusText").objectReferenceValue = statusText;
             so.FindProperty("_errorText").objectReferenceValue = errorText;
             so.FindProperty("_exitReturnCharBtn").objectReferenceValue = exitReturnCharBtn;
