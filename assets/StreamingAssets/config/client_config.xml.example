@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  复制为 client_config.xml 后按本机修改。
+  loginHost：可访问的 LoginServer IP（虚拟机/局域网地址因机器而异）
+-->
+<ClientConfig>
+    <windowWidth>1280</windowWidth>
+    <windowHeight>720</windowHeight>
+    <logLevel>info</logLevel>
+    <logToConsole>false</logToConsole>
+    <loginHost>127.0.0.1</loginHost>
+    <loginPort>9010</loginPort>
+    <!-- 网络时序（毫秒）；联调时可适当缩短以便快速发现超时 -->
+    <connectTimeoutMs>10000</connectTimeoutMs>
+    <responseTimeoutMs>15000</responseTimeoutMs>
+    <zoneListResponseTimeoutMs>10000</zoneListResponseTimeoutMs>
+    <heartbeatIntervalMs>10000</heartbeatIntervalMs>
+    <moveSendIntervalMs>100</moveSendIntervalMs>
+    <logoutTimeoutMs>15000</logoutTimeoutMs>
+    <!-- TLS：ca.crt 从服务端 config/tls 复制；联调可设 insecureSkipVerify=1 -->
+    <Tls enabled="1" ca="config/tls/ca.crt" insecureSkipVerify="1" minVersion="1.2"/>
+</ClientConfig>

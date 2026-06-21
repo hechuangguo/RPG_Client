@@ -1,0 +1,29 @@
+---
+description: C# 与脚本中文注释规范（Unity 迁移）
+globs: "**/*.{cs,ps1}"
+alwaysApply: false
+---
+
+# 代码注释规范
+
+与 C++ 头文件（如 `net/GameSession.h`）风格对齐；日志仍遵守 `log-language.mdc`。
+
+## 必须加注释
+
+| 类型 | 要求 |
+|------|------|
+| **新建/修改 `.cs`** | 文件头 `/// <summary>`：职责、协作类、线程/生命周期；public 类与方法 XML 注释 |
+| **Editor 脚本** | 同上；`[MenuItem]` 说明用途 |
+| **`scripts/*.ps1`** | 文件顶块：用途、参数、示例、依赖 |
+| **`Protobuf/*.cs`** | **不手改**；说明写在 `Protobuf/README.md` |
+
+## C# 文件头示例
+
+```csharp
+/// <summary>
+/// 游戏内网络会话（对标原 net/GameSession）。
+/// 职责：Gateway 连接、心跳、移动同步、离世界、消息分发。
+/// 协作：WorldController、PacketCodec、ClientLogger。
+/// 线程：仅 Unity 主线程。
+/// </summary>
+```

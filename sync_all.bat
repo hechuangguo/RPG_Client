@@ -15,7 +15,15 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo Running sync script (allows local uncommitted changes)...
+echo RPG_Client sync (allows local uncommitted changes):
+echo   1. Common read-only check
+echo   2. git pull + submodule (skip when -Offline)
+echo   3. 3Party fetch (protoc + Google.Protobuf)
+echo   4. sync_protobuf.ps1
+echo   5. sync_streaming_assets.ps1
+echo.
+echo Options: -Offline  (no network; local 3Party bundles required)
+echo.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%PS_SCRIPT%" -AllowDirty %*
 set "EXIT_CODE=%ERRORLEVEL%"
 

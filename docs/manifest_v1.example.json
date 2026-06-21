@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "mapId": 1002,
+  "sceneName": "World_1002",
+  "coordSystem": "unity_y_up",
+  "assets": {
+    "terrain": "Addressables/Map_1002/terrain",
+    "buildings": "Addressables/Map_1002/buildings"
+  },
+  "serverCollision": "collision/navmesh.bin"
+}

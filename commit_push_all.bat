@@ -16,8 +16,12 @@ if errorlevel 1 (
 )
 
 if "%~1"=="" (
-    echo Usage: commit_push_all.bat -m "提交说明"
-    echo Example: commit_push_all.bat -m "feat: 游戏中退出二级弹窗"
+    echo Usage: commit_push_all.bat -m "commit message"
+    echo.
+    echo Default: commit/push main repo only (Common submodule skipped^).
+    echo Common/*.proto local edits block commit unless -AllowCommonEdit.
+    echo.
+    echo Example: commit_push_all.bat -m "feat: Unity client update"
     exit /b 1
 )
 

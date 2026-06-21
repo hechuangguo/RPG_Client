@@ -1,9 +1,9 @@
 build/
 logs/
 out/
-3Party/_build/
-3Party/sfml/
-3Party/lua/
+3Party/protoc/bin/
+3Party/protoc/include/
+3Party/google.protobuf/lib/
 assets/fonts/NotoSansSC-Regular.otf
 build_configure.log
 vs_modify.log
@@ -12,3 +12,28 @@ vs_modify.log
 .vs/
 _sizeof_test.*
 config/client_config.xml
+
+# Unity generated
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Unity Addressables local build (optional)
+[Ss]erver[Dd]ata/
+[Aa]ssets/AddressableAssetsData/*/*.bin*
