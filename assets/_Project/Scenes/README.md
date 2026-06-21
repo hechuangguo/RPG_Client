@@ -11,4 +11,13 @@ Boot 流程场景：`assets/_Project/Scenes/Boot.unity`（挂载 GameApp + GameU
 
 **首次生成完整 Canvas**：Unity 菜单 **RPG → Setup Boot Scene**（或 `.\scripts\setup_boot_scene.ps1`）。当前 `Boot.unity` 为占位场景，须执行 Setup 后才有 GameApp/Canvas 绑定。
 
+Setup 会生成：
+
+- `ServerListPanel`：ScrollView 区列表 + 确认/取消
+- `assets/_Project/Prefabs/UI/ZoneListItem.prefab`：区服行模板
+
+区服选择流程：点击「选择区服」→ 列表展示 → 选中行 → 点「确认」返回区服首页。维护中区不可选。
+
 Addressables 分组：`Map_1002`（见计划 §3.3）。
+
+**EntityManager**：Setup 后须在 Inspector 为 `EntityManager` 指定 `_playerPrefab`（可为 Capsule 预制体）；未配置时不会静默创建 Primitive。

@@ -7,7 +7,9 @@ using System.Collections.Generic;
 using Rpg.Client.Config;
 using Rpg.Client.Log;
 using Rpg.Client.Net;
+using Rpg.Client.Scripting;
 using Rpg.Client.UI;
+using Rpg.Client.Util;
 using Rpg.Client.World;
 using Rpg.Proto.Login;
 using UnityEngine;
@@ -24,6 +26,7 @@ namespace Rpg.Client.App
         private readonly ZoneListSession _zoneList = new ZoneListSession();
         private readonly LoginSession _login = new LoginSession();
         private readonly GameSession _game = new GameSession();
+        private readonly GameScriptHost _scriptHost = new GameScriptHost();
 
         private AppState _state = AppState.ZoneHome;
         private uint _selectedZoneId;
@@ -46,6 +49,7 @@ namespace Rpg.Client.App
             _zoneList.SetConfig(_config);
             _login.SetConfig(_config);
             _game.SetConfig(_config);
+            _game.SetScriptHost(_scriptHost);
 
             WireCallbacks();
             SetState(AppState.ZoneHome);
@@ -56,6 +60,11 @@ namespace Rpg.Client.App
             _zoneList.Update();
             _login.Update();
             _game.Update();
+
+            if (_state == AppState.Game)
+            {
+                _scriptHost.OnTick(TimeUtil.NowMs());
+            }
 
             if (_state == AppState.Game && Input.GetKeyDown(KeyCode.Escape))
             {
@@ -93,6 +102,7 @@ namespace Rpg.Client.App
             {
                 var tcp = _login.TakeTcpClient();
                 _game.Start(tcp, enter);
+                _scriptHost.OnEnterGame(enter.UserId, enter.MapId);
                 _world.BindSession(_game);
                 _world.LoadMap(enter);
                 SetState(AppState.Game);

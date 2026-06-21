@@ -59,7 +59,7 @@ namespace Rpg.Proto.Client {
     /// </summary>
     [pbr::OriginalName("BATTLE")] Battle = 2,
     /// <summary>
-    /// 背包/物品（未实现）
+    /// 背包/物品；BagCommon
     /// </summary>
     [pbr::OriginalName("BAG")] Bag = 3,
     /// <summary>
@@ -75,7 +75,7 @@ namespace Rpg.Proto.Client {
     /// </summary>
     [pbr::OriginalName("SOCIAL")] Social = 6,
     /// <summary>
-    /// 任务（未实现）
+    /// 任务；QuestCommon
     /// </summary>
     [pbr::OriginalName("QUEST")] Quest = 7,
     /// <summary>

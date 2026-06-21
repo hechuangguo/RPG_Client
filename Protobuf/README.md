@@ -22,4 +22,4 @@
 
 ## 路由
 
-6 字节 **`MsgHeader`**（见 [`assets/_Project/Scripts/Net/MsgHeader.cs`](../assets/_Project/Scripts/Net/MsgHeader.cs) 与 [`Common/WireCommon.proto`](../Common/WireCommon.proto)）+ Protobuf body。
+4 字节 **`MsgHeader`**（见 [`assets/_Project/Scripts/Net/MsgHeader.cs`](../assets/_Project/Scripts/Net/MsgHeader.cs) 与 [`Common/WireCommon.proto`](../Common/WireCommon.proto)）+ Protobuf body。

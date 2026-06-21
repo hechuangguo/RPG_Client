@@ -30,7 +30,7 @@ namespace Rpg.Proto.Client {
             "X1VOU1BFQ0lGSUVEEAASFQoPTUFYX1BBQ0tFVF9TSVpFEP//AxIWChBSRUNW",
             "X0JVRkZFUl9TSVpFEICACBIWChBTRU5EX0JVRkZFUl9TSVpFEICACBIVChBN",
             "QVhfRVBPTExfRVZFTlRTEIAIEhMKDkxJU1RFTl9CQUNLTE9HEIAEEhMKD01T",
-            "R19IRUFERVJfU0laRRAGGgIQASopChJXaXJlQ29ubklkQ29uc3RhbnQSEwoP",
+            "R19IRUFERVJfU0laRRAEGgIQASopChJXaXJlQ29ubklkQ29uc3RhbnQSEwoP",
             "SU5WQUxJRF9DT05OX0lEEABCE6oCEFJwZy5Qcm90by5DbGllbnRiBnByb3Rv",
             "Mw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
@@ -53,7 +53,7 @@ namespace Rpg.Proto.Client {
     [pbr::OriginalName("SEND_BUFFER_SIZE", PreferredAlias = false)] SendBufferSize = 131072,
     [pbr::OriginalName("MAX_EPOLL_EVENTS")] MaxEpollEvents = 1024,
     [pbr::OriginalName("LISTEN_BACKLOG")] ListenBacklog = 512,
-    [pbr::OriginalName("MSG_HEADER_SIZE")] MsgHeaderSize = 6,
+    [pbr::OriginalName("MSG_HEADER_SIZE")] MsgHeaderSize = 4,
   }
 
   /// <summary>
@@ -67,7 +67,7 @@ namespace Rpg.Proto.Client {
 
   #region Messages
   /// <summary>
-  /// TCP 帧头逻辑视图（线上为 6 字节 packed：uint16 body_len LE + uint8 module + uint8 sub）
+  /// TCP 帧头逻辑视图（线上为 4 字节 packed：uint16 body_len LE + uint8 module + uint8 sub）
   /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class WireMsgHeader : pb::IMessage<WireMsgHeader>

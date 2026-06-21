@@ -17,6 +17,7 @@ namespace Rpg.Client.UI
         [Header("Panels")]
         [SerializeField] private GameObject _zoneHomePanel;
         [SerializeField] private GameObject _serverListPanel;
+        [SerializeField] private ServerListPanel _serverList;
         [SerializeField] private GameObject _authPanel;
         [SerializeField] private GameObject _registerPanel;
         [SerializeField] private GameObject _characterPanel;
@@ -42,19 +43,16 @@ namespace Rpg.Client.UI
         [SerializeField] private Button _registerBtn;
         [SerializeField] private Button _backToLoginBtn;
 
-        [Header("Server List")]
-        [SerializeField] private Button _cancelServerListBtn;
-
-        [Header("Exit Dialog")]
-        [SerializeField] private Button _exitReturnCharBtn;
-        [SerializeField] private Button _exitReturnLoginBtn;
-        [SerializeField] private Button _exitQuitBtn;
-
         [Header("Character")]
         [SerializeField] private Text _charListText;
         [SerializeField] private InputField _createNameInput;
         [SerializeField] private Button _enterWorldBtn;
         [SerializeField] private Button _createCharBtn;
+
+        [Header("Exit Dialog")]
+        [SerializeField] private Button _exitReturnCharBtn;
+        [SerializeField] private Button _exitReturnLoginBtn;
+        [SerializeField] private Button _exitQuitBtn;
 
         [Header("Common")]
         [SerializeField] private Text _statusText;
@@ -92,7 +90,9 @@ namespace Rpg.Client.UI
                 ShowRegister(false);
                 OnBackToLogin?.Invoke();
             });
-            _cancelServerListBtn?.onClick.AddListener(() => OnCancelServerList?.Invoke());
+            _serverList?.SetCallbacks(
+                (zoneId, gameType, name) => OnZoneConfirmed?.Invoke(zoneId, gameType, name),
+                () => OnCancelServerList?.Invoke());
             _exitReturnCharBtn?.onClick.AddListener(() =>
             {
                 ShowExitDialog(false);
@@ -123,6 +123,11 @@ namespace Rpg.Client.UI
             _gameHudPanel?.SetActive(state == AppState.Game);
             _exitDialog?.SetActive(false);
 
+            if (state == AppState.ServerList && _serverList != null)
+            {
+                _serverList.SetHint("正在拉取区列表…");
+            }
+
             if (_zoneNameText != null)
             {
                 _zoneNameText.text = string.IsNullOrEmpty(zoneName) ? "未选择" : zoneName;
@@ -151,17 +156,32 @@ namespace Rpg.Client.UI
 
         public void ShowServerList(List<GameZoneEntry> zones, uint selectedZoneId)
         {
-            // 简化：确认第一个可用区；完整 UI 可扩展为列表项 Prefab
-            foreach (var z in zones)
+            if (_serverList == null)
             {
-                if (z.Enabled)
+                ShowError("没有可用区服");
+                return;
+            }
+
+            ShowError(string.Empty);
+            _serverList.ShowZones(zones, selectedZoneId);
+
+            var hasSelectable = false;
+            if (zones != null)
+            {
+                foreach (var z in zones)
                 {
-                    OnZoneConfirmed?.Invoke(z.ZoneId, z.GameType, z.Name);
-                    return;
+                    if (z.Enabled && z.LoadStatus != ZoneLoadStatus.Maintenance)
+                    {
+                        hasSelectable = true;
+                        break;
+                    }
                 }
             }
 
-            ShowError("没有可用区服");
+            if (!hasSelectable)
+            {
+                ShowError("没有可用区服");
+            }
         }
 
         public void ShowCharacterSelect(List<CharacterEntry> chars, ulong highlightUserId)

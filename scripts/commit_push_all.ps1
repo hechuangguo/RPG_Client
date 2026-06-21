@@ -124,7 +124,24 @@ function Ensure-OnBranch {
         Write-Host "${label}: branch ${currentBranch}, checkout ${Branch} ..."
     }
 
+    Invoke-GitIn -WorkDir $WorkDir -GitArgs fetch, origin
     Invoke-GitIn -WorkDir $WorkDir -GitArgs checkout, $Branch
+
+    $remoteRef = "origin/$Branch"
+    $remoteExists = if ($WorkDir) {
+        git -C $WorkDir rev-parse --verify $remoteRef 2>$null
+    }
+    else {
+        git rev-parse --verify $remoteRef 2>$null
+    }
+    if ($remoteExists) {
+        try {
+            Invoke-GitIn -WorkDir $WorkDir -GitArgs merge, --ff-only, $remoteRef
+        }
+        catch {
+            Write-Warning "${label}: cannot fast-forward to ${remoteRef}; resolve manually before push."
+        }
+    }
 
     if ($detachedSha) {
         $headSha = if ($WorkDir) {
@@ -213,12 +230,7 @@ function Commit-And-Push {
     )
     $label = if ($WorkDir) { (Split-Path -Leaf $WorkDir) } else { "RPG_Client" }
 
-    Ensure-OnBranch -WorkDir $WorkDir -Branch $Branch
-    $branch = Get-CurrentBranch -WorkDir $WorkDir
-    if (-not $branch) {
-        throw "${label}: failed to checkout branch ${Branch}."
-    }
-
+    # 先在工作区提交，避免 detached HEAD + 本地改动时 checkout 覆盖文件
     if (Test-HasUncommitted -WorkDir $WorkDir) {
         Invoke-GitIn -WorkDir $WorkDir -GitArgs add, -A
         Invoke-GitIn -WorkDir $WorkDir -GitArgs commit, -m, $Message
@@ -226,6 +238,12 @@ function Commit-And-Push {
     }
     else {
         Write-Host "${label}: no uncommitted changes."
+    }
+
+    Ensure-OnBranch -WorkDir $WorkDir -Branch $Branch
+    $branch = Get-CurrentBranch -WorkDir $WorkDir
+    if (-not $branch) {
+        throw "${label}: failed to checkout branch ${Branch}."
     }
 
     $isSubmodule = [bool]$WorkDir

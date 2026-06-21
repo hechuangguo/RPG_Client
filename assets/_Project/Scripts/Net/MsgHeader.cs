@@ -1,6 +1,6 @@
 /// <summary>
-/// 6 字节定长帧头（对标 Common/NetDefine.h MsgHeader）。
-/// 实际 wire 为 4 字节：bodyLen(2) + module(1) + sub(1)，#pragma pack(1)。
+/// 4 字节定长帧头（对标 Common/WireCommon.proto WireMsgHeader）。
+/// wire：bodyLen(2) + module(1) + sub(1)，小端 packed。
 /// </summary>
 using System;
 using System.Buffers.Binary;
@@ -23,7 +23,7 @@ namespace Rpg.Client.Net
             Sub = sub;
         }
 
-        /// <summary>写入小端 6 字节。</summary>
+        /// <summary>写入小端 4 字节。</summary>
         public void WriteTo(Span<byte> dest)
         {
             if (dest.Length < Size)

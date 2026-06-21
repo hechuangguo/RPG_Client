@@ -5,7 +5,6 @@
 /// 线程：Unity 主线程。
 /// </summary>
 using System;
-using System.Collections.Generic;
 using Google.Protobuf;
 
 namespace Rpg.Client.Net
@@ -35,7 +34,8 @@ namespace Rpg.Client.Net
 
         /// <summary>从接收缓冲尝试拆出一帧；成功时移除已消费字节。</summary>
         public static bool TryDecode(
-            List<byte> buffer,
+            byte[] buffer,
+            ref int length,
             out byte module,
             out byte sub,
             out byte[] body)
@@ -44,18 +44,18 @@ namespace Rpg.Client.Net
             sub = 0;
             body = Array.Empty<byte>();
 
-            if (buffer.Count < MsgHeader.Size)
+            if (length < MsgHeader.Size)
             {
                 return false;
             }
 
-            if (!MsgHeader.TryRead(buffer.ToArray().AsSpan(0, MsgHeader.Size), out var header))
+            if (!MsgHeader.TryRead(buffer.AsSpan(0, length), out var header))
             {
                 return false;
             }
 
             var total = MsgHeader.Size + header.BodyLen;
-            if (buffer.Count < total)
+            if (length < total)
             {
                 return false;
             }
@@ -63,12 +63,19 @@ namespace Rpg.Client.Net
             if (header.BodyLen > 0)
             {
                 body = new byte[header.BodyLen];
-                Buffer.BlockCopy(buffer.ToArray(), MsgHeader.Size, body, 0, header.BodyLen);
+                Buffer.BlockCopy(buffer, MsgHeader.Size, body, 0, header.BodyLen);
             }
 
             module = header.Module;
             sub = header.Sub;
-            buffer.RemoveRange(0, total);
+
+            var remaining = length - total;
+            if (remaining > 0)
+            {
+                Buffer.BlockCopy(buffer, total, buffer, 0, remaining);
+            }
+
+            length = remaining;
             return true;
         }
 

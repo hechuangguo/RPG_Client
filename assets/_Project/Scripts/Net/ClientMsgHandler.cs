@@ -5,10 +5,12 @@
 using System.Collections.Generic;
 using Google.Protobuf;
 using Rpg.Client.Util;
+using Rpg.Proto.Bag;
 using Rpg.Proto.Chat;
 using Rpg.Proto.Client;
 using Rpg.Proto.Login;
 using Rpg.Proto.MapData;
+using Rpg.Proto.Quest;
 using Rpg.Proto.System;
 using Rpg.Proto.Zone;
 
@@ -20,6 +22,8 @@ namespace Rpg.Client.Net
         private static readonly byte SceneModule = (byte)ClientModule.Scene;
         private static readonly byte SystemModule = (byte)ClientModule.System;
         private static readonly byte ChatModule = (byte)ClientModule.Chat;
+        private static readonly byte QuestModule = (byte)ClientModule.Quest;
+        private static readonly byte BagModule = (byte)ClientModule.Bag;
 
         public static byte[] BuildLoginReq(string account, string password, uint zoneId, byte gameType)
         {
@@ -108,6 +112,34 @@ namespace Rpg.Client.Net
             return PacketCodec.Encode(SceneModule, (byte)MapDataMsgSub.C2SMoveReq, req);
         }
 
+        public static byte[] BuildChatReq(ChatChannel channel, string content)
+        {
+            var req = new C2SChatReq
+            {
+                Channel = channel,
+                Content = content ?? string.Empty
+            };
+            return PacketCodec.Encode(ChatModule, (byte)ChatMsgSub.C2SChatReq, req);
+        }
+
+        public static byte[] BuildQuestAcceptReq(uint questId)
+        {
+            var req = new C2SQuestAcceptReq { QuestId = questId };
+            return PacketCodec.Encode(QuestModule, (byte)QuestMsgSub.C2SQuestAccept, req);
+        }
+
+        public static byte[] BuildQuestSubmitReq(uint questId)
+        {
+            var req = new C2SQuestSubmitReq { QuestId = questId };
+            return PacketCodec.Encode(QuestModule, (byte)QuestMsgSub.C2SQuestSubmit, req);
+        }
+
+        public static byte[] BuildBagInfoReq(ulong userId)
+        {
+            var req = new C2SBagInfoReq { UserId = userId };
+            return PacketCodec.Encode(BagModule, (byte)BagMsgSub.C2SBagInfoReq, req);
+        }
+
         public static bool TryParseZoneListRsp(byte[] body, out S2CZoneListRsp rsp)
         {
             rsp = S2CZoneListRsp.Parser.ParseFrom(body);
@@ -126,6 +158,11 @@ namespace Rpg.Client.Net
         public static bool TryParseDespawnEntity(byte[] body, out S2CDespawnEntity despawn) { despawn = null; try { despawn = S2CDespawnEntity.Parser.ParseFrom(body); return true; } catch { return false; } }
         public static bool TryParseGatewayError(byte[] body, out S2CError err) { err = null; try { err = S2CError.Parser.ParseFrom(body); return true; } catch { return false; } }
         public static bool TryParseHeartbeat(byte[] body, out S2CHeartbeat hb) { hb = null; try { hb = S2CHeartbeat.Parser.ParseFrom(body); return true; } catch { return false; } }
+        public static bool TryParseNotice(byte[] body, out S2CNotice notice) { notice = null; try { notice = S2CNotice.Parser.ParseFrom(body); return true; } catch { return false; } }
+        public static bool TryParseKick(byte[] body, out S2CKick kick) { kick = null; try { kick = S2CKick.Parser.ParseFrom(body); return true; } catch { return false; } }
+        public static bool TryParseChatNotify(byte[] body, out S2CChatNotify chat) { chat = null; try { chat = S2CChatNotify.Parser.ParseFrom(body); return true; } catch { return false; } }
+        public static bool TryParseQuestInfo(byte[] body, out S2CQuestInfo info) { info = null; try { info = S2CQuestInfo.Parser.ParseFrom(body); return true; } catch { return false; } }
+        public static bool TryParseBagInfoRsp(byte[] body, out S2CBagInfoRsp rsp) { rsp = null; try { rsp = S2CBagInfoRsp.Parser.ParseFrom(body); return true; } catch { return false; } }
 
         public static List<GameZoneEntry> ToZoneEntries(S2CZoneListRsp rsp)
         {

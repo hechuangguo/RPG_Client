@@ -30,7 +30,9 @@ namespace Rpg.Client.Net
         private TcpClient _tcp;
         private Stream _stream;
         private SslStream _ssl;
-        private readonly List<byte> _recvBuffer = new List<byte>();
+        private byte[] _recvBuf = new byte[8192];
+        private int _recvLen;
+        private readonly byte[] _readScratch = new byte[8192];
         private readonly Queue<byte[]> _sendQueue = new Queue<byte[]>();
         private readonly Queue<Action> _mainThreadQueue = new Queue<Action>();
 
@@ -108,7 +110,7 @@ namespace Rpg.Client.Net
         {
             _connecting = false;
             _connected = false;
-            _recvBuffer.Clear();
+            _recvLen = 0;
             lock (_sendQueue)
             {
                 _sendQueue.Clear();
@@ -195,15 +197,31 @@ namespace Rpg.Client.Net
                 return;
             }
 
-            var buffer = new byte[8192];
             int read;
-            while (_tcp.Available > 0 && (read = _stream.Read(buffer, 0, buffer.Length)) > 0)
+            while (_tcp.Available > 0 && (read = _stream.Read(_readScratch, 0, _readScratch.Length)) > 0)
             {
-                for (var i = 0; i < read; i++)
-                {
-                    _recvBuffer.Add(buffer[i]);
-                }
+                EnsureRecvCapacity(_recvLen + read);
+                Buffer.BlockCopy(_readScratch, 0, _recvBuf, _recvLen, read);
+                _recvLen += read;
             }
+        }
+
+        private void EnsureRecvCapacity(int required)
+        {
+            if (_recvBuf.Length >= required)
+            {
+                return;
+            }
+
+            var newSize = _recvBuf.Length;
+            while (newSize < required)
+            {
+                newSize *= 2;
+            }
+
+            var expanded = new byte[newSize];
+            Buffer.BlockCopy(_recvBuf, 0, expanded, 0, _recvLen);
+            _recvBuf = expanded;
         }
 
         private void FlushSend()
@@ -227,7 +245,7 @@ namespace Rpg.Client.Net
 
         private void DecodeFrames()
         {
-            while (PacketCodec.TryDecode(_recvBuffer, out var module, out var sub, out var body))
+            while (PacketCodec.TryDecode(_recvBuf, ref _recvLen, out var module, out var sub, out var body))
             {
                 _onMessage?.Invoke(module, sub, body);
             }

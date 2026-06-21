@@ -1,8 +1,9 @@
 /// <summary>
 /// 实体管理（对标 game/EntityManager）。
-/// 职责：Spawn/Move/Despawn 3D 实体占位。
+/// 职责：Spawn/Move/Despawn 3D 实体。
 /// </summary>
 using System.Collections.Generic;
+using Rpg.Client.Log;
 using Rpg.Proto.MapData;
 using UnityEngine;
 
@@ -44,6 +45,11 @@ namespace Rpg.Client.World
             }
 
             _localPlayer = CreateEntity(name, new Vector3(x, y, z));
+            if (_localPlayer == null)
+            {
+                return;
+            }
+
             _entitiesById[userId] = _localPlayer;
         }
 
@@ -60,6 +66,11 @@ namespace Rpg.Client.World
             }
 
             var go = CreateEntity(spawn.Name, new Vector3(spawn.Pos.X, spawn.Pos.Y, spawn.Pos.Z));
+            if (go == null)
+            {
+                return;
+            }
+
             _entitiesById[spawn.EntityId] = go;
         }
 
@@ -115,20 +126,13 @@ namespace Rpg.Client.World
 
         private GameObject CreateEntity(string name, Vector3 pos)
         {
-            GameObject go;
-            if (_playerPrefab != null && _entityRoot != null)
+            if (_playerPrefab == null || _entityRoot == null)
             {
-                go = Instantiate(_playerPrefab, _entityRoot);
-            }
-            else
-            {
-                go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                if (_entityRoot != null)
-                {
-                    go.transform.SetParent(_entityRoot, false);
-                }
+                ClientLogger.Instance.Err("EntityManager：缺少 PlayerPrefab 或 EntityRoot，无法创建实体");
+                return null;
             }
 
+            var go = Instantiate(_playerPrefab, _entityRoot);
             go.name = string.IsNullOrEmpty(name) ? "Entity" : name;
             go.transform.position = pos;
             return go;

@@ -18,6 +18,7 @@ namespace Rpg.Client.EditorTools
     public static class BootSceneSetup
     {
         private const string ScenePath = "assets/_Project/Scenes/Boot.unity";
+        private const string ZoneListItemPrefabPath = "assets/_Project/Prefabs/UI/ZoneListItem.prefab";
         private const float RefWidth = 1280f;
         private const float RefHeight = 720f;
 
@@ -112,11 +113,20 @@ namespace Rpg.Client.EditorTools
             var enterGameBtn = CreateButton(zoneHomePanel.transform, "EnterGameBtn", "进入游戏", font);
             SetAnchored(enterGameBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.35f), new Vector2(200, 44));
 
-            var serverListPanel = CreatePanel(canvasGo.transform, "ServerListPanel", false);
-            CreateText(serverListPanel.transform, "HintText", "正在拉取区列表…", font, 20,
-                TextAnchor.MiddleCenter, Vector2.zero, new Vector2(500, 80));
-            var cancelServerListBtn = CreateButton(serverListPanel.transform, "CancelServerListBtn", "取消", font);
-            SetAnchored(cancelServerListBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.3f), new Vector2(160, 44));
+            var serverListPanelGo = CreatePanel(canvasGo.transform, "ServerListPanel", false);
+            var zoneListItemPrefab = EnsureZoneListItemPrefab(font);
+            var serverList = serverListPanelGo.AddComponent<ServerListPanel>();
+            var serverListHint = CreateText(serverListPanelGo.transform, "HintText", "正在拉取区列表…", font, 20,
+                TextAnchor.MiddleCenter, Vector2.zero, new Vector2(500, 40));
+            SetAnchored(serverListHint.rectTransform, new Vector2(0.5f, 0.82f), new Vector2(520, 40));
+            var scroll = CreateScrollView(serverListPanelGo.transform, "ZoneScrollView", out var listContent);
+            SetAnchored(scroll.GetComponent<RectTransform>(), new Vector2(0.5f, 0.52f), new Vector2(520, 320));
+            var confirmServerListBtn = CreateButton(serverListPanelGo.transform, "ConfirmServerListBtn", "确认", font);
+            SetAnchored(confirmServerListBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.22f), new Vector2(160, 44));
+            var cancelServerListBtn = CreateButton(serverListPanelGo.transform, "CancelServerListBtn", "取消", font);
+            SetAnchored(cancelServerListBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.14f), new Vector2(160, 44));
+            WireServerListPanel(serverList, serverListHint, listContent, zoneListItemPrefab,
+                confirmServerListBtn, cancelServerListBtn);
 
             var authPanel = CreatePanel(canvasGo.transform, "AuthPanel", false);
             var accountInput = CreateInputField(authPanel.transform, "AccountInput", "账号", font);
@@ -173,10 +183,10 @@ namespace Rpg.Client.EditorTools
             var exitQuitBtn = CreateButton(exitBox.transform, "BtnQuit", "退出客户端", font);
             SetAnchored(exitQuitBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.21f), new Vector2(260, 40));
 
-            WireUiController(ui, zoneHomePanel, serverListPanel, authPanel, registerPanel, characterPanel,
+            WireUiController(ui, zoneHomePanel, serverListPanelGo, serverList, authPanel, registerPanel, characterPanel,
                 gameHudPanel, exitDialog, zoneNameText, selectServerBtn, enterGameBtn, accountInput,
                 passwordInput, rememberToggle, loginBtn, gotoRegisterBtn, regAccount, regPassword, regConfirm,
-                registerBtn, backToLoginBtn, cancelServerListBtn, charListText, createNameInput, enterWorldBtn,
+                registerBtn, backToLoginBtn, charListText, createNameInput, enterWorldBtn,
                 createCharBtn, statusText, errorText, exitReturnCharBtn, exitReturnLoginBtn, exitQuitBtn);
 
             WireGameApp(gameApp, ui, world);
@@ -382,19 +392,119 @@ namespace Rpg.Client.EditorTools
             return toggle;
         }
 
+        private static ZoneListItemView EnsureZoneListItemPrefab(Font font)
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<ZoneListItemView>(ZoneListItemPrefabPath);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var dir = Path.GetDirectoryName(ZoneListItemPrefabPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            var go = new GameObject("ZoneListItem", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image),
+                typeof(ZoneListItemView), typeof(Button));
+            var rt = go.GetComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(500, 48);
+            go.GetComponent<Image>().color = new Color(0.14f, 0.16f, 0.2f, 0.95f);
+
+            var nameText = CreateText(go.transform, "NameText", "区服名", font, 18,
+                TextAnchor.MiddleLeft, new Vector2(12, 0), new Vector2(-280, 0));
+            var statusText = CreateText(go.transform, "StatusText", "流畅", font, 16,
+                TextAnchor.MiddleCenter, Vector2.zero, new Vector2(80, 0));
+            SetAnchored(statusText.rectTransform, new Vector2(0.72f, 0.5f), new Vector2(80, 28));
+            var onlineText = CreateText(go.transform, "OnlineText", string.Empty, font, 14,
+                TextAnchor.MiddleRight, new Vector2(12, 0), new Vector2(-12, 0));
+
+            var item = go.GetComponent<ZoneListItemView>();
+            var so = new SerializedObject(item);
+            so.FindProperty("_nameText").objectReferenceValue = nameText;
+            so.FindProperty("_statusText").objectReferenceValue = statusText;
+            so.FindProperty("_onlineText").objectReferenceValue = onlineText;
+            so.FindProperty("_background").objectReferenceValue = go.GetComponent<Image>();
+            so.FindProperty("_button").objectReferenceValue = go.GetComponent<Button>();
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            var btn = go.GetComponent<Button>();
+            btn.targetGraphic = go.GetComponent<Image>();
+
+            PrefabUtility.SaveAsPrefabAsset(go, ZoneListItemPrefabPath);
+            Object.DestroyImmediate(go);
+            return AssetDatabase.LoadAssetAtPath<ZoneListItemView>(ZoneListItemPrefabPath);
+        }
+
+        private static GameObject CreateScrollView(Transform parent, string name, out Transform content)
+        {
+            var scrollGo = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image),
+                typeof(ScrollRect));
+            scrollGo.transform.SetParent(parent, false);
+            scrollGo.GetComponent<Image>().color = new Color(0.06f, 0.08f, 0.1f, 0.9f);
+
+            var viewport = CreateStretchPanel(scrollGo.transform, "Viewport", new Color(0, 0, 0, 0));
+            viewport.AddComponent<Mask>().showMaskGraphic = false;
+
+            var contentGo = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup),
+                typeof(ContentSizeFitter));
+            contentGo.transform.SetParent(viewport.transform, false);
+            var contentRt = contentGo.GetComponent<RectTransform>();
+            contentRt.anchorMin = new Vector2(0, 1);
+            contentRt.anchorMax = new Vector2(1, 1);
+            contentRt.pivot = new Vector2(0.5f, 1);
+            contentRt.anchoredPosition = Vector2.zero;
+            contentRt.sizeDelta = new Vector2(0, 0);
+
+            var layout = contentGo.GetComponent<VerticalLayoutGroup>();
+            layout.childControlHeight = true;
+            layout.childControlWidth = true;
+            layout.childForceExpandHeight = false;
+            layout.childForceExpandWidth = true;
+            layout.spacing = 4;
+            layout.padding = new RectOffset(4, 4, 4, 4);
+
+            var fitter = contentGo.GetComponent<ContentSizeFitter>();
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            var scroll = scrollGo.GetComponent<ScrollRect>();
+            scroll.viewport = viewport.GetComponent<RectTransform>();
+            scroll.content = contentRt;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+
+            content = contentGo.transform;
+            return scrollGo;
+        }
+
+        private static void WireServerListPanel(ServerListPanel panel, Text hint, Transform content,
+            ZoneListItemView itemPrefab, Button confirmBtn, Button cancelBtn)
+        {
+            var so = new SerializedObject(panel);
+            so.FindProperty("_hintText").objectReferenceValue = hint;
+            so.FindProperty("_listContent").objectReferenceValue = content;
+            so.FindProperty("_itemPrefab").objectReferenceValue = itemPrefab;
+            so.FindProperty("_confirmBtn").objectReferenceValue = confirmBtn;
+            so.FindProperty("_cancelBtn").objectReferenceValue = cancelBtn;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         private static void WireUiController(GameUiController ui, GameObject zoneHomePanel,
-            GameObject serverListPanel, GameObject authPanel, GameObject registerPanel,
+            GameObject serverListPanel, ServerListPanel serverList, GameObject authPanel, GameObject registerPanel,
             GameObject characterPanel, GameObject gameHudPanel, GameObject exitDialog,
             Text zoneNameText, Button selectServerBtn, Button enterGameBtn, InputField accountInput,
             InputField passwordInput, Toggle rememberToggle, Button loginBtn, Button gotoRegisterBtn,
             InputField regAccount, InputField regPassword, InputField regConfirm, Button registerBtn,
-            Button backToLoginBtn, Button cancelServerListBtn, Text charListText, InputField createNameInput,
+            Button backToLoginBtn, Text charListText, InputField createNameInput,
             Button enterWorldBtn, Button createCharBtn, Text statusText, Text errorText,
             Button exitReturnCharBtn, Button exitReturnLoginBtn, Button exitQuitBtn)
         {
             var so = new SerializedObject(ui);
             so.FindProperty("_zoneHomePanel").objectReferenceValue = zoneHomePanel;
             so.FindProperty("_serverListPanel").objectReferenceValue = serverListPanel;
+            so.FindProperty("_serverList").objectReferenceValue = serverList;
             so.FindProperty("_authPanel").objectReferenceValue = authPanel;
             so.FindProperty("_registerPanel").objectReferenceValue = registerPanel;
             so.FindProperty("_characterPanel").objectReferenceValue = characterPanel;
@@ -413,7 +523,6 @@ namespace Rpg.Client.EditorTools
             so.FindProperty("_regConfirm").objectReferenceValue = regConfirm;
             so.FindProperty("_registerBtn").objectReferenceValue = registerBtn;
             so.FindProperty("_backToLoginBtn").objectReferenceValue = backToLoginBtn;
-            so.FindProperty("_cancelServerListBtn").objectReferenceValue = cancelServerListBtn;
             so.FindProperty("_charListText").objectReferenceValue = charListText;
             so.FindProperty("_createNameInput").objectReferenceValue = createNameInput;
             so.FindProperty("_enterWorldBtn").objectReferenceValue = enterWorldBtn;

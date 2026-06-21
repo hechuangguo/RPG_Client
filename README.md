@@ -1,6 +1,6 @@
 # RPG_Client
 
-Windows PC MMORPG **Unity 3D 客户端（C#）**，协议为 **Protobuf + 6 字节 MsgHeader**。
+Windows PC MMORPG **Unity 3D 客户端（C#）**，协议为 **Protobuf + 4 字节 MsgHeader**。
 
 **团结引擎 1.6.11**（Editor **2022.3.61t12**）。须在 Hub 安装该版本；打开前可运行 `.\scripts\align_tuanjie_editor.ps1` 校验。
 
@@ -40,7 +40,11 @@ git submodule update --init Common
 
 Hub 打开工程 → 等待 Package Manager 解析 URP / Addressables / InputSystem（勿 Upgrade 无关包）。
 
-菜单 **RPG → Setup Boot Scene**（或 `.\scripts\setup_boot_scene.ps1`）生成 Boot 场景。
+菜单 **RPG → Setup Boot Scene**（或 `.\scripts\setup_boot_scene.ps1`）生成 Boot 场景（含区服列表 ScrollView UI）。
+
+## 区服选择
+
+点击「选择区服」→ 拉取区列表 → 在列表中选中区服并点「确认」。维护中区不可选；上次所选区会预高亮。
 
 ## 离线开发
 

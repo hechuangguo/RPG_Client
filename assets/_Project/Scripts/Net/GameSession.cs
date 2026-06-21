@@ -1,15 +1,20 @@
 /// <summary>
 /// 游戏内网络会话（对标 net/GameSession）。
-/// 职责：Gateway 心跳、移动同步、离世界、实体消息分发。
-/// 协作：WorldController、LoginSession、GameTcpClient。
+/// 职责：Gateway 心跳、移动同步、离世界、实体与脚本消息分发。
+/// 协作：WorldController、GameScriptHost、GameTcpClient。
 /// 线程：Unity 主线程。
 /// </summary>
 using System;
 using Rpg.Client.Config;
 using Rpg.Client.Log;
+using Rpg.Client.Scripting;
 using Rpg.Client.Util;
+using Rpg.Proto.Bag;
+using Rpg.Proto.Chat;
+using Rpg.Proto.Client;
 using Rpg.Proto.Login;
 using Rpg.Proto.MapData;
+using Rpg.Proto.Quest;
 using Rpg.Proto.System;
 
 namespace Rpg.Client.Net
@@ -18,11 +23,13 @@ namespace Rpg.Client.Net
     {
         private GameTcpClient _tcp;
         private ClientConfigLoader _config;
+        private GameScriptHost _scriptHost;
         private S2CEnterGame _enterInfo;
         private ulong _localUserId;
         private long _lastHeartbeatMs;
         private long _lastMoveSendMs;
         private uint _heartbeatSeq;
+        private ulong _serverTimeMs;
         private bool _inWorld;
         private bool _waitingLogout;
         private LogoutAction _pendingLogoutAction;
@@ -36,6 +43,8 @@ namespace Rpg.Client.Net
         public Action OnDisconnected;
 
         public void SetConfig(ClientConfigLoader config) => _config = config;
+
+        public void SetScriptHost(GameScriptHost host) => _scriptHost = host;
 
         public void Start(GameTcpClient tcp, S2CEnterGame enter)
         {
@@ -96,6 +105,46 @@ namespace Rpg.Client.Net
             _tcp.SendRaw(ClientMsgHandler.BuildMoveReq(userId, x, y, z, dir, moveType));
         }
 
+        public void SendChat(ChatChannel channel, string content)
+        {
+            if (!_inWorld || _tcp == null)
+            {
+                return;
+            }
+
+            _tcp.SendRaw(ClientMsgHandler.BuildChatReq(channel, content));
+        }
+
+        public void SendQuestAccept(uint questId)
+        {
+            if (!_inWorld || _tcp == null)
+            {
+                return;
+            }
+
+            _tcp.SendRaw(ClientMsgHandler.BuildQuestAcceptReq(questId));
+        }
+
+        public void SendQuestSubmit(uint questId)
+        {
+            if (!_inWorld || _tcp == null)
+            {
+                return;
+            }
+
+            _tcp.SendRaw(ClientMsgHandler.BuildQuestSubmitReq(questId));
+        }
+
+        public void RequestBagInfo()
+        {
+            if (!_inWorld || _tcp == null)
+            {
+                return;
+            }
+
+            _tcp.SendRaw(ClientMsgHandler.BuildBagInfoReq(_localUserId));
+        }
+
         public void RequestLogout(LogoutAction action)
         {
             if (_tcp == null)
@@ -131,45 +180,122 @@ namespace Rpg.Client.Net
         public bool IsConnected => _tcp != null && _tcp.IsConnected;
         public bool IsWaitingLogout => _waitingLogout;
         public ulong LocalUserId => _localUserId;
+        public ulong ServerTimeMs => _serverTimeMs;
         public S2CEnterGame EnterGameInfo => _enterInfo;
 
         private void OnMessage(byte module, byte sub, byte[] body)
         {
             if (module == (byte)ClientModule.System)
             {
-                if (sub == (byte)SystemMsgSub.S2CError && ClientMsgHandler.TryParseGatewayError(body, out var err))
-                {
-                    OnError?.Invoke(ClientErrorText.GatewayErrorText(err));
-                }
-
+                HandleSystemMessage(sub, body);
                 return;
             }
 
             if (module == (byte)ClientModule.Login && sub == (byte)LoginMsgSub.S2CLogoutRsp)
             {
-                if (ClientMsgHandler.TryParseLogoutRsp(body, out var rsp) && rsp.Code == (int)LogoutResultCode.LogoutOk)
-                {
-                    _waitingLogout = false;
-                    _inWorld = false;
-                    ClientLogger.Instance.Info("GameSession：离世界成功");
-                    OnLogoutSuccess?.Invoke(_pendingLogoutAction);
-                }
-                else
-                {
-                    _waitingLogout = false;
-                    var msg = rsp != null && !string.IsNullOrEmpty(rsp.Msg) ? rsp.Msg : "离世界失败";
-                    ClientLogger.Instance.WarnFormat("GameSession：离世界失败 {0}", msg);
-                    OnError?.Invoke(msg);
-                }
-
+                HandleLogoutRsp(body);
                 return;
             }
 
-            if (module != (byte)ClientModule.Scene)
+            if (module == (byte)ClientModule.Scene)
             {
+                HandleSceneMessage(sub, body);
                 return;
             }
 
+            if (module == (byte)ClientModule.Chat && sub == (byte)ChatMsgSub.S2CChatNotify)
+            {
+                if (ClientMsgHandler.TryParseChatNotify(body, out var chat))
+                {
+                    _scriptHost?.OnChat(chat);
+                }
+
+                return;
+            }
+
+            if (module == (byte)ClientModule.Quest && sub == (byte)QuestMsgSub.S2CQuestInfo)
+            {
+                if (ClientMsgHandler.TryParseQuestInfo(body, out var info))
+                {
+                    _scriptHost?.OnQuestInfo(info);
+                }
+
+                return;
+            }
+
+            if (module == (byte)ClientModule.Bag && sub == (byte)BagMsgSub.S2CBagInfoRsp)
+            {
+                if (ClientMsgHandler.TryParseBagInfoRsp(body, out var bag))
+                {
+                    _scriptHost?.OnBagInfo(bag);
+                }
+            }
+        }
+
+        private void HandleSystemMessage(byte sub, byte[] body)
+        {
+            switch ((SystemMsgSub)sub)
+            {
+                case SystemMsgSub.S2CError:
+                    if (ClientMsgHandler.TryParseGatewayError(body, out var err))
+                    {
+                        OnError?.Invoke(ClientErrorText.GatewayErrorText(err));
+                    }
+
+                    break;
+                case SystemMsgSub.S2CKick:
+                    ClientLogger.Instance.Warn("GameSession：收到踢线通知");
+                    if (ClientMsgHandler.TryParseKick(body, out var kick))
+                    {
+                        var reason = string.IsNullOrEmpty(kick.Reason) ? "已被服务器踢下线" : kick.Reason;
+                        OnError?.Invoke(reason);
+                    }
+                    else
+                    {
+                        OnError?.Invoke("已被服务器踢下线");
+                    }
+
+                    Disconnect();
+                    break;
+                case SystemMsgSub.S2CHeartbeat:
+                    if (ClientMsgHandler.TryParseHeartbeat(body, out var hb))
+                    {
+                        _serverTimeMs = hb.ServerTime;
+                    }
+
+                    break;
+                case SystemMsgSub.S2CNotice:
+                    if (ClientMsgHandler.TryParseNotice(body, out var notice))
+                    {
+                        _scriptHost?.OnNotice(notice.Content);
+                    }
+
+                    break;
+            }
+        }
+
+        private void HandleLogoutRsp(byte[] body)
+        {
+            S2CLogoutRsp rsp = null;
+            ClientMsgHandler.TryParseLogoutRsp(body, out rsp);
+            if (rsp != null && rsp.Code == (int)LogoutResultCode.LogoutOk)
+            {
+                _waitingLogout = false;
+                _inWorld = false;
+                ClientLogger.Instance.Info("GameSession：离世界成功");
+                OnLogoutSuccess?.Invoke(_pendingLogoutAction);
+            }
+            else
+            {
+                _waitingLogout = false;
+                var msg = rsp != null && !string.IsNullOrEmpty(rsp.Msg) ? rsp.Msg : "离世界失败";
+                ClientLogger.Instance.WarnFormat("GameSession：离世界失败 {0}", msg);
+                OnError?.Invoke(msg);
+            }
+        }
+
+        private void HandleSceneMessage(byte sub, byte[] body)
+        {
             switch ((MapDataMsgSub)sub)
             {
                 case MapDataMsgSub.S2CSpawnEntity:
