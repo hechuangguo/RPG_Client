@@ -16,6 +16,8 @@
     <zoneListResponseTimeoutMs>10000</zoneListResponseTimeoutMs>
     <heartbeatIntervalMs>10000</heartbeatIntervalMs>
     <moveSendIntervalMs>100</moveSendIntervalMs>
+    <moveMinDelta>0.01</moveMinDelta>
+    <maxFlushBytesPerPoll>16384</maxFlushBytesPerPoll>
     <logoutTimeoutMs>15000</logoutTimeoutMs>
     <!-- TLS：ca.crt 从服务端 config/tls 复制；联调可设 insecureSkipVerify=1 -->
     <Tls enabled="1" ca="config/tls/ca.crt" insecureSkipVerify="1" minVersion="1.2"/>

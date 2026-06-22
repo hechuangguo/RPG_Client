@@ -11,5 +11,8 @@ namespace Rpg.Client.Config
         public const long HeartbeatIntervalMs = 10_000;
         public const long MoveSendIntervalMs = 100;
         public const long LogoutTimeoutMs = 15_000;
+        public const int MaxFlushBytesPerPoll = 16_384;
+        public const float MoveMinDelta = 0.01f;
     }
 }
+

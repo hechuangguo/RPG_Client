@@ -18,7 +18,7 @@ namespace Rpg.Client.Net
     {
         private enum State
         {
-            Idle, ConnectLogin, WaitLoginRsp, SwitchingGateway, ConnectGateway,
+            Idle, ConnectLogin, WaitLoginChallenge, WaitLoginRsp, SwitchingGateway, ConnectGateway,
             WaitUserList, WaitUserAction, WaitCreateUserRsp, WaitEnterGame,
             RegisterConnect, RegisterWaitRsp
         }
@@ -49,6 +49,10 @@ namespace Rpg.Client.Net
         private bool _gotUserList;
         private bool _intentionalDisconnect;
         private bool _userListRetried;
+        private bool _isRegisterFlow;
+        private byte[] _loginNonce;
+        private long _lastHeartbeatMs;
+        private uint _heartbeatSeq;
         private readonly List<CharacterEntry> _cachedCharacters = new List<CharacterEntry>();
 
         public Action<S2CEnterGame> OnEnterGame;
@@ -70,6 +74,8 @@ namespace Rpg.Client.Net
         public void StartLogin(string account, string password, uint zoneId, byte gameType)
         {
             Cancel();
+            _isRegisterFlow = false;
+            _loginNonce = null;
             _account = account;
             _password = password;
             _zoneId = zoneId;
@@ -84,6 +90,8 @@ namespace Rpg.Client.Net
         public void StartRegister(string account, string password, string confirm, uint zoneId, byte gameType)
         {
             Cancel();
+            _isRegisterFlow = true;
+            _loginNonce = null;
             _account = account;
             _password = password;
             _confirmPassword = confirm;
@@ -135,7 +143,17 @@ namespace Rpg.Client.Net
         public void Update()
         {
             _tcp.Poll();
+            SendGatewayHeartbeatIfNeeded();
             CheckTimeouts();
+        }
+
+        public void ClearHandlers()
+        {
+            OnEnterGame = null;
+            OnError = null;
+            OnRegisterSuccess = null;
+            OnUserList = null;
+            OnStatus = null;
         }
 
         public void Cancel()
@@ -145,6 +163,8 @@ namespace Rpg.Client.Net
             _gotLoginRsp = _gotGatewayInfo = _gotUserList = false;
             _userListRetried = false;
             _intentionalDisconnect = false;
+            _isRegisterFlow = false;
+            _loginNonce = null;
             _cachedCharacters.Clear();
             _tcp.Disconnect();
         }
@@ -180,7 +200,26 @@ namespace Rpg.Client.Net
             _userListRetried = false;
             _state = State.WaitUserList;
             _waitStartMs = TimeUtil.NowMs();
+            _lastHeartbeatMs = TimeUtil.NowMs();
             NotifyStatus("正在刷新角色列表...");
+        }
+
+        private void SendGatewayHeartbeatIfNeeded()
+        {
+            if (!_gatewayConnected || _state == State.Idle)
+            {
+                return;
+            }
+
+            var now = TimeUtil.NowMs();
+            var interval = _config?.HeartbeatIntervalMs ?? ClientTimingDefaults.HeartbeatIntervalMs;
+            if (TimeUtil.ElapsedMs(now, _lastHeartbeatMs) < interval)
+            {
+                return;
+            }
+
+            _lastHeartbeatMs = now;
+            _tcp.SendRaw(ClientMsgHandler.BuildHeartbeat(_heartbeatSeq++));
         }
 
         private bool CanSendUserAction() =>
@@ -189,10 +228,14 @@ namespace Rpg.Client.Net
         private void CheckTimeouts()
         {
             var now = TimeUtil.NowMs();
-            if (_state is State.ConnectLogin or State.RegisterConnect or State.ConnectGateway &&
-                now - _connectStartMs > (_config?.ConnectTimeoutMs ?? ClientTimingDefaults.ConnectTimeoutMs))
+            var connectTimeout = _config?.ConnectTimeoutMs ?? ClientTimingDefaults.ConnectTimeoutMs;
+            if ((_state is State.ConnectLogin or State.RegisterConnect or State.ConnectGateway
+                     or State.WaitLoginChallenge) &&
+                TimeUtil.ElapsedMs(now, _connectStartMs) > connectTimeout)
             {
-                Fail(ClientLocalError.ConnectTimeout);
+                Fail(_state == State.WaitLoginChallenge
+                    ? ClientLocalError.ResponseTimeout
+                    : ClientLocalError.ConnectTimeout);
                 return;
             }
 
@@ -201,7 +244,12 @@ namespace Rpg.Client.Net
                 return;
             }
 
-            if (now - _waitStartMs <= (_config?.ResponseTimeoutMs ?? ClientTimingDefaults.ResponseTimeoutMs))
+            if (_state == State.WaitLoginChallenge)
+            {
+                return;
+            }
+
+            if (TimeUtil.ElapsedMs(now, _waitStartMs) <= (_config?.ResponseTimeoutMs ?? ClientTimingDefaults.ResponseTimeoutMs))
             {
                 return;
             }
@@ -228,21 +276,21 @@ namespace Rpg.Client.Net
 
         private bool IsWaitingResponse() =>
             _state is State.WaitLoginRsp or State.RegisterWaitRsp or State.WaitUserList
-                or State.WaitCreateUserRsp or State.WaitEnterGame;
+                or State.WaitCreateUserRsp or State.WaitEnterGame or State.WaitLoginChallenge;
 
         private void OnConnected()
         {
             switch (_state)
             {
                 case State.ConnectLogin:
-                    _tcp.SendRaw(ClientMsgHandler.BuildLoginReq(_account, _password, _zoneId, _gameType));
-                    _state = State.WaitLoginRsp;
-                    _waitStartMs = TimeUtil.NowMs();
+                    _state = State.WaitLoginChallenge;
+                    _connectStartMs = TimeUtil.NowMs();
+                    NotifyStatus("等待登录挑战...");
                     break;
                 case State.RegisterConnect:
-                    _tcp.SendRaw(ClientMsgHandler.BuildRegisterReq(_account, _password, _confirmPassword, _zoneId, _gameType));
-                    _state = State.RegisterWaitRsp;
-                    _waitStartMs = TimeUtil.NowMs();
+                    _state = State.WaitLoginChallenge;
+                    _connectStartMs = TimeUtil.NowMs();
+                    NotifyStatus("等待注册挑战...");
                     break;
                 case State.ConnectGateway:
                     ClientLogger.Instance.InfoFormat(
@@ -252,6 +300,7 @@ namespace Rpg.Client.Net
                     _state = State.WaitUserList;
                     _waitStartMs = TimeUtil.NowMs();
                     _gatewayConnected = true;
+                    _lastHeartbeatMs = TimeUtil.NowMs();
                     break;
             }
         }
@@ -281,6 +330,10 @@ namespace Rpg.Client.Net
                         Fail(ClientErrorText.GatewayErrorText(err));
                     }
                 }
+                else if (sub == (byte)SystemMsgSub.S2CHeartbeat)
+                {
+                    ClientMsgHandler.TryParseHeartbeat(body, out _);
+                }
 
                 return;
             }
@@ -292,6 +345,9 @@ namespace Rpg.Client.Net
 
             switch ((LoginMsgSub)sub)
             {
+                case LoginMsgSub.S2CLoginChallenge:
+                    HandleLoginChallenge(body);
+                    break;
                 case LoginMsgSub.S2CLoginRsp:
                     HandleLoginRsp(body);
                     break;
@@ -311,6 +367,37 @@ namespace Rpg.Client.Net
                     HandleEnterGame(body);
                     break;
             }
+        }
+
+        private void HandleLoginChallenge(byte[] body)
+        {
+            if (_state != State.WaitLoginChallenge)
+            {
+                return;
+            }
+
+            if (!ClientMsgHandler.TryParseLoginChallenge(body, out var challenge) ||
+                challenge.Nonce == null || challenge.Nonce.Length == 0)
+            {
+                Fail(ClientLocalError.ParseError);
+                return;
+            }
+
+            _loginNonce = challenge.Nonce.ToByteArray();
+            if (_isRegisterFlow)
+            {
+                _tcp.SendRaw(ClientMsgHandler.BuildRegisterReq(
+                    _account, _password, _confirmPassword, _loginNonce, _zoneId, _gameType));
+                _state = State.RegisterWaitRsp;
+            }
+            else
+            {
+                _tcp.SendRaw(ClientMsgHandler.BuildLoginReq(
+                    _account, _password, _loginNonce, _zoneId, _gameType));
+                _state = State.WaitLoginRsp;
+            }
+
+            _waitStartMs = TimeUtil.NowMs();
         }
 
         private void HandleLoginRsp(byte[] body)

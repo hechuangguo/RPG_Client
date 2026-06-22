@@ -1,5 +1,5 @@
 /// <summary>
-/// 客户端日志（文件 + Unity Console）。
+/// 客户端日志（缓冲文件 + Unity Console）。
 /// </summary>
 using System;
 using System.IO;
@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace Rpg.Client.Log
 {
-    public sealed class ClientLogger
+    public sealed class ClientLogger : IDisposable
     {
         public static ClientLogger Instance { get; } = new ClientLogger();
 
@@ -18,10 +18,14 @@ namespace Rpg.Client.Log
             Err
         }
 
+        private const long FlushIntervalMs = 1000;
+
         public Level MinLevel { get; set; } = Level.Info;
 
         private readonly object _lock = new object();
         private string _logPath;
+        private StreamWriter _writer;
+        private long _lastFlushMs;
 
         /// <summary>初始化日志路径（Boot 场景启动时调用一次）。</summary>
         public void Initialize(string repoRoot = null)
@@ -31,9 +35,11 @@ namespace Rpg.Client.Log
             {
                 root = Directory.GetParent(Application.dataPath)?.FullName;
             }
+
             var logsDir = Path.Combine(root ?? ".", "logs");
             Directory.CreateDirectory(logsDir);
             _logPath = Path.Combine(logsDir, $"client_{DateTime.Now:yyyyMMdd}.log");
+            OpenWriter();
         }
 
         public void Info(string message) => Write(Level.Info, message);
@@ -48,6 +54,41 @@ namespace Rpg.Client.Log
 
         public void ErrFormat(string format, params object[] args) =>
             Write(Level.Err, string.Format(format, args));
+
+        public void Shutdown() => Dispose();
+
+        public void Dispose()
+        {
+            lock (_lock)
+            {
+                try
+                {
+                    _writer?.Flush();
+                    _writer?.Dispose();
+                }
+                catch
+                {
+                    // ignore
+                }
+
+                _writer = null;
+            }
+        }
+
+        private void OpenWriter()
+        {
+            lock (_lock)
+            {
+                _writer?.Dispose();
+                var stream = new FileStream(
+                    _logPath,
+                    FileMode.Append,
+                    FileAccess.Write,
+                    FileShare.Read);
+                _writer = new StreamWriter(stream) { AutoFlush = false };
+                _lastFlushMs = (long)(Time.realtimeSinceStartupAsDouble * 1000.0);
+            }
+        }
 
         private void Write(Level level, string message)
         {
@@ -64,7 +105,14 @@ namespace Rpg.Client.Log
             var line = $"[{DateTime.Now:HH:mm:ss.fff}] [{LevelTag(level)}] {message}";
             lock (_lock)
             {
-                File.AppendAllText(_logPath, line + Environment.NewLine);
+                EnsureWriter();
+                _writer.WriteLine(line);
+                var nowMs = (long)(Time.realtimeSinceStartupAsDouble * 1000.0);
+                if (level == Level.Err || nowMs - _lastFlushMs >= FlushIntervalMs)
+                {
+                    _writer.Flush();
+                    _lastFlushMs = nowMs;
+                }
             }
 
             if (level == Level.Err)
@@ -78,6 +126,14 @@ namespace Rpg.Client.Log
             else
             {
                 Debug.Log(line);
+            }
+        }
+
+        private void EnsureWriter()
+        {
+            if (_writer == null)
+            {
+                OpenWriter();
             }
         }
 

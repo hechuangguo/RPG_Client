@@ -29,17 +29,19 @@ namespace Rpg.Client.Net
             return frame;
         }
 
-        /// <summary>从接收缓冲尝试拆出一帧；成功时移除已消费字节。</summary>
+        /// <summary>从接收缓冲尝试拆出一帧；成功时移除已消费字节。protocolError 表示帧头非法须断连。</summary>
         public static bool TryDecode(
             byte[] buffer,
             ref int length,
             out byte module,
             out byte sub,
-            out byte[] body)
+            out byte[] body,
+            out bool protocolError)
         {
             module = 0;
             sub = 0;
             body = Array.Empty<byte>();
+            protocolError = false;
 
             if (length < MsgHeader.Size)
             {
@@ -48,6 +50,13 @@ namespace Rpg.Client.Net
 
             if (!MsgHeader.TryRead(buffer.AsSpan(0, length), out var header))
             {
+                protocolError = true;
+                return false;
+            }
+
+            if (header.BodyLen > MsgHeader.MaxPacketSize)
+            {
+                protocolError = true;
                 return false;
             }
 

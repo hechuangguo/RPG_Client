@@ -27,6 +27,11 @@ namespace Rpg.Client.Net
         private long _lastMoveSendMs;
         private uint _heartbeatSeq;
         private ulong _serverTimeMs;
+        private float _lastSentX;
+        private float _lastSentY;
+        private float _lastSentZ;
+        private float _lastSentDir;
+        private bool _hasLastSentPos;
         private bool _inWorld;
         private bool _waitingLogout;
         private LogoutAction _pendingLogoutAction;
@@ -39,6 +44,16 @@ namespace Rpg.Client.Net
         public Action<LogoutAction> OnLogoutSuccess;
         public Action OnDisconnected;
 
+        public void ClearHandlers()
+        {
+            OnSpawn = null;
+            OnMove = null;
+            OnDespawn = null;
+            OnError = null;
+            OnLogoutSuccess = null;
+            OnDisconnected = null;
+        }
+
         public void SetConfig(ClientConfigLoader config) => _config = config;
 
         public void SetScriptHost(GameScriptHost host) => _scriptHost = host;
@@ -50,6 +65,7 @@ namespace Rpg.Client.Net
             _localUserId = enter.UserId;
             _inWorld = true;
             _waitingLogout = false;
+            _hasLastSentPos = false;
             _lastHeartbeatMs = TimeUtil.NowMs();
             _tcp.SetOnMessage(OnMessage);
             _tcp.SetOnDisconnected(() =>
@@ -70,14 +86,15 @@ namespace Rpg.Client.Net
             }
 
             var now = TimeUtil.NowMs();
-            if (now - _lastHeartbeatMs >= (_config?.HeartbeatIntervalMs ?? ClientTimingDefaults.HeartbeatIntervalMs))
+            var heartbeatInterval = _config?.HeartbeatIntervalMs ?? ClientTimingDefaults.HeartbeatIntervalMs;
+            if (TimeUtil.ElapsedMs(now, _lastHeartbeatMs) >= heartbeatInterval)
             {
                 _lastHeartbeatMs = now;
                 _tcp.SendRaw(ClientMsgHandler.BuildHeartbeat(_heartbeatSeq++));
             }
 
             if (_waitingLogout &&
-                now - _logoutWaitStartMs > (_config?.LogoutTimeoutMs ?? ClientTimingDefaults.LogoutTimeoutMs))
+                TimeUtil.ElapsedMs(now, _logoutWaitStartMs) > (_config?.LogoutTimeoutMs ?? ClientTimingDefaults.LogoutTimeoutMs))
             {
                 ClientLogger.Instance.Warn("GameSession：离世界响应超时");
                 OnError?.Invoke(ClientErrorText.LocalErrorText(ClientLocalError.LogoutTimeout));
@@ -93,12 +110,33 @@ namespace Rpg.Client.Net
             }
 
             var now = TimeUtil.NowMs();
-            if (now - _lastMoveSendMs < (_config?.MoveSendIntervalMs ?? ClientTimingDefaults.MoveSendIntervalMs))
+            var interval = _config?.MoveSendIntervalMs ?? ClientTimingDefaults.MoveSendIntervalMs;
+            if (TimeUtil.ElapsedMs(now, _lastMoveSendMs) < interval)
             {
                 return;
             }
 
+            var minDelta = _config?.MoveMinDelta ?? ClientTimingDefaults.MoveMinDelta;
+            var minDeltaSq = minDelta * minDelta;
+            if (_hasLastSentPos)
+            {
+                var dx = x - _lastSentX;
+                var dy = y - _lastSentY;
+                var dz = z - _lastSentZ;
+                var distSq = dx * dx + dy * dy + dz * dz;
+                var dirChanged = Math.Abs(dir - _lastSentDir) > 0.01f;
+                if (distSq < minDeltaSq && !dirChanged)
+                {
+                    return;
+                }
+            }
+
             _lastMoveSendMs = now;
+            _lastSentX = x;
+            _lastSentY = y;
+            _lastSentZ = z;
+            _lastSentDir = dir;
+            _hasLastSentPos = true;
             _tcp.SendRaw(ClientMsgHandler.BuildMoveReq(userId, x, y, z, dir, moveType));
         }
 
@@ -273,9 +311,15 @@ namespace Rpg.Client.Net
 
         private void HandleLogoutRsp(byte[] body)
         {
-            S2CLogoutRsp rsp = null;
-            ClientMsgHandler.TryParseLogoutRsp(body, out rsp);
-            if (rsp != null && rsp.Code == (int)LogoutResultCode.LogoutOk)
+            if (!ClientMsgHandler.TryParseLogoutRsp(body, out var rsp))
+            {
+                _waitingLogout = false;
+                ClientLogger.Instance.Warn("GameSession：离世界响应解析失败");
+                OnError?.Invoke("离世界失败");
+                return;
+            }
+
+            if (rsp.Code == (int)LogoutResultCode.LogoutOk)
             {
                 _waitingLogout = false;
                 _inWorld = false;
@@ -285,7 +329,7 @@ namespace Rpg.Client.Net
             else
             {
                 _waitingLogout = false;
-                var msg = rsp != null && !string.IsNullOrEmpty(rsp.Msg) ? rsp.Msg : "离世界失败";
+                var msg = !string.IsNullOrEmpty(rsp.Msg) ? rsp.Msg : "离世界失败";
                 ClientLogger.Instance.WarnFormat("GameSession：离世界失败 {0}", msg);
                 OnError?.Invoke(msg);
             }

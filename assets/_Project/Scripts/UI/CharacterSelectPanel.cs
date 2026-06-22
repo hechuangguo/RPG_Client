@@ -26,6 +26,7 @@ namespace Rpg.Client.UI
         [SerializeField] private Button _enterWorldBtn;
 
         private readonly List<CharacterListItemView> _items = new List<CharacterListItemView>();
+        private UiViewPool<CharacterListItemView> _itemPool;
         private ulong _selectedUserId;
         private Action<ulong> _onEnterWorld;
         private Action<string, byte, byte> _onCreateCharacter;
@@ -63,6 +64,7 @@ namespace Rpg.Client.UI
         {
             ResolveListContent();
             PrepareListContent();
+            _itemPool ??= new UiViewPool<CharacterListItemView>(_itemPrefab, _listContent);
             ClearItems();
 
             _selectedUserId = 0;
@@ -411,7 +413,7 @@ namespace Rpg.Client.UI
 
             if (_itemPrefab != null)
             {
-                var instance = Instantiate(_itemPrefab, _listContent);
+                var instance = _itemPool?.Rent();
                 if (instance != null && instance.HasValidVisuals())
                 {
                     return instance;
@@ -419,11 +421,13 @@ namespace Rpg.Client.UI
 
                 if (instance != null)
                 {
-                    Destroy(instance.gameObject);
+                    instance.gameObject.SetActive(false);
                 }
             }
 
-            return CreateFallbackListItem();
+            var fallback = CreateFallbackListItem();
+            _itemPool?.Track(fallback);
+            return fallback;
         }
 
         private CharacterListItemView CreateFallbackListItem()
@@ -470,14 +474,7 @@ namespace Rpg.Client.UI
 
         private void ClearItems()
         {
-            foreach (var item in _items)
-            {
-                if (item != null)
-                {
-                    Destroy(item.gameObject);
-                }
-            }
-
+            _itemPool?.ReleaseAll();
             _items.Clear();
         }
     }

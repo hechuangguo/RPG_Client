@@ -24,6 +24,7 @@ namespace Rpg.Client.UI
         [SerializeField] private Button _cancelBtn;
 
         private readonly List<ZoneListItemView> _items = new List<ZoneListItemView>();
+        private UiViewPool<ZoneListItemView> _itemPool;
         private GameZoneEntry _selectedEntry;
         private Action<uint, byte, string> _onConfirmed;
         private Action _onCancel;
@@ -56,6 +57,7 @@ namespace Rpg.Client.UI
 
             ResolveListContent();
             PrepareListContent();
+            _itemPool ??= new UiViewPool<ZoneListItemView>(_itemPrefab, _listContent);
             ClearItems();
             _selectedEntry = null;
 
@@ -302,7 +304,7 @@ namespace Rpg.Client.UI
 
             if (_itemPrefab != null)
             {
-                var instance = Instantiate(_itemPrefab, _listContent);
+                var instance = _itemPool?.Rent();
                 if (instance != null && instance.HasValidVisuals())
                 {
                     EnsureListItemBackground(instance.GetComponent<Image>());
@@ -312,11 +314,13 @@ namespace Rpg.Client.UI
 
                 if (instance != null)
                 {
-                    Destroy(instance.gameObject);
+                    instance.gameObject.SetActive(false);
                 }
             }
 
-            return CreateFallbackListItem();
+            var fallback = CreateFallbackListItem();
+            _itemPool?.Track(fallback);
+            return fallback;
         }
 
         private ZoneListItemView CreateFallbackListItem()
@@ -425,14 +429,7 @@ namespace Rpg.Client.UI
 
         private void ClearItems()
         {
-            foreach (var item in _items)
-            {
-                if (item != null)
-                {
-                    Destroy(item.gameObject);
-                }
-            }
-
+            _itemPool?.ReleaseAll();
             _items.Clear();
         }
     }

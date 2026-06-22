@@ -16,11 +16,14 @@ namespace Rpg.Client.World
 
         private ulong _localUserId;
         private bool _active;
+        private Vector3 _lastSentPos;
+        private bool _hasSentPos;
 
         public void LoadMap(S2CEnterGame enter)
         {
             _localUserId = enter.UserId;
             _active = true;
+            _hasSentPos = false;
             _entities?.Clear();
             if (enter.Pos != null)
             {
@@ -30,6 +33,13 @@ namespace Rpg.Client.World
 
         public void BindSession(GameSession session)
         {
+            if (_gameSession != null)
+            {
+                _gameSession.OnSpawn = null;
+                _gameSession.OnMove = null;
+                _gameSession.OnDespawn = null;
+            }
+
             _gameSession = session;
             if (session == null)
             {
@@ -45,6 +55,14 @@ namespace Rpg.Client.World
         {
             _active = false;
             _localUserId = 0;
+            _hasSentPos = false;
+            if (_gameSession != null)
+            {
+                _gameSession.OnSpawn = null;
+                _gameSession.OnMove = null;
+                _gameSession.OnDespawn = null;
+            }
+
             _entities?.Clear();
         }
 
@@ -63,8 +81,21 @@ namespace Rpg.Client.World
             }
 
             var pos = _entities?.LocalPosition ?? Vector3.zero;
-            pos += new Vector3(h, 0, v).normalized * (_moveSpeed * Time.deltaTime);
+            var delta = new Vector3(h, 0, v).normalized * (_moveSpeed * Time.deltaTime);
+            if (delta.sqrMagnitude < 1e-8f)
+            {
+                return;
+            }
+
+            pos += delta;
             _entities?.SetLocalPosition(pos);
+            if (_hasSentPos && (pos - _lastSentPos).sqrMagnitude < 1e-8f)
+            {
+                return;
+            }
+
+            _lastSentPos = pos;
+            _hasSentPos = true;
             _gameSession.SendMove(_localUserId, pos.x, pos.y, pos.z, 0f, MoveType.Walk);
         }
     }

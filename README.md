@@ -106,12 +106,15 @@ git commit -m "chore: bump Common submodule"
 
 ## 联调
 
-- 配置：`assets/StreamingAssets/config/client_config.xml`（模板 `config/client_config.xml.example`）
-- 日志：运行目录向上查找 `logs/client_YYYYMMDD.log`
+- 配置：[`docs/CONFIG.md`](docs/CONFIG.md)（`client_config.xml` 模板 `config/client_config.xml.example`）
+- 安全/登录 nonce：[`docs/SECURITY.md`](docs/SECURITY.md)
+- 日志：运行目录向上查找 `logs/client_YYYYMMDD.log`（缓冲写入，Err 立即刷盘）
 - 注释规范：[`.cursor/rules/code-comments.mdc`](.cursor/rules/code-comments.mdc)；日志中文：[`.cursor/rules/log-language.mdc`](.cursor/rules/log-language.mdc)
 
 ## 文档
 
 - [`docs/SCOPE.md`](docs/SCOPE.md) — 实施范围
+- [`docs/CONFIG.md`](docs/CONFIG.md) — 配置格式（XML/JSON/Lua）
+- [`docs/SECURITY.md`](docs/SECURITY.md) — 登录 nonce 与服务端对接
 - [`docs/LUA_BRIDGE.md`](docs/LUA_BRIDGE.md) — Lua 桥接（Phase 3）
 - `scripts/sync_protobuf.ps1` — 从 Common 生成 `Protobuf/*.cs`（本地，不提交）

@@ -12,7 +12,7 @@ namespace Rpg.Client.Net
         public static ProtocolVersion CurrentProtocolVersion => new ProtocolVersion
         {
             Major = 1,
-            Minor = 0
+            Minor = 1
         };
     }
 }

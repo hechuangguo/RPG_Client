@@ -111,6 +111,30 @@ namespace Rpg.Client.UI
             });
         }
 
+        private void OnDestroy()
+        {
+            OnSelectServerClicked = null;
+            OnCancelServerList = null;
+            OnGoToRegister = null;
+            OnBackToLogin = null;
+            OnZoneConfirmed = null;
+            OnEnterGameFromHome = null;
+            OnLoginClicked = null;
+            OnRegisterClicked = null;
+            OnSelectCharacter = null;
+            OnCreateCharacter = null;
+            OnExitGameAction = null;
+            _selectServerBtn?.onClick.RemoveAllListeners();
+            _enterGameBtn?.onClick.RemoveAllListeners();
+            _loginBtn?.onClick.RemoveAllListeners();
+            _gotoRegisterBtn?.onClick.RemoveAllListeners();
+            _registerBtn?.onClick.RemoveAllListeners();
+            _backToLoginBtn?.onClick.RemoveAllListeners();
+            _exitReturnCharBtn?.onClick.RemoveAllListeners();
+            _exitReturnLoginBtn?.onClick.RemoveAllListeners();
+            _exitQuitBtn?.onClick.RemoveAllListeners();
+        }
+
         public void SetAppState(AppState state, string zoneName, string lastAccount, bool remember)
         {
             _zoneHomePanel?.SetActive(state == AppState.ZoneHome);

@@ -384,5 +384,13 @@ namespace Rpg.Client.App
             _state = state;
             _ui.SetAppState(state, _selectedZoneName, _localSettings.LastAccount, _localSettings.RememberAccount);
         }
+
+        private void OnDestroy()
+        {
+            _zoneList.ClearHandlers();
+            _login.ClearHandlers();
+            _game.ClearHandlers();
+            ClientLogger.Instance.Shutdown();
+        }
     }
 }

@@ -23,6 +23,8 @@ namespace Rpg.Client.Config
         public long ZoneListResponseTimeoutMs { get; private set; } = ClientTimingDefaults.ZoneListResponseTimeoutMs;
         public long HeartbeatIntervalMs { get; private set; } = ClientTimingDefaults.HeartbeatIntervalMs;
         public long MoveSendIntervalMs { get; private set; } = ClientTimingDefaults.MoveSendIntervalMs;
+        public float MoveMinDelta { get; private set; } = ClientTimingDefaults.MoveMinDelta;
+        public int MaxFlushBytesPerPoll { get; private set; } = ClientTimingDefaults.MaxFlushBytesPerPoll;
         public long LogoutTimeoutMs { get; private set; } = ClientTimingDefaults.LogoutTimeoutMs;
         public ClientTlsConfig Tls { get; } = new ClientTlsConfig();
 
@@ -83,6 +85,8 @@ namespace Rpg.Client.Config
             ZoneListResponseTimeoutMs = ParseLong(root, "zoneListResponseTimeoutMs", ZoneListResponseTimeoutMs);
             HeartbeatIntervalMs = ParseLong(root, "heartbeatIntervalMs", HeartbeatIntervalMs);
             MoveSendIntervalMs = ParseLong(root, "moveSendIntervalMs", MoveSendIntervalMs);
+            MoveMinDelta = ParseFloat(root, "moveMinDelta", MoveMinDelta);
+            MaxFlushBytesPerPoll = (int)ParseLong(root, "maxFlushBytesPerPoll", MaxFlushBytesPerPoll);
             LogoutTimeoutMs = ParseLong(root, "logoutTimeoutMs", LogoutTimeoutMs);
 
             var tls = root.Element("Tls");
@@ -115,6 +119,12 @@ namespace Rpg.Client.Config
         {
             var text = root.Element(name)?.Value?.Trim();
             return long.TryParse(text, out var v) ? v : fallback;
+        }
+
+        private static float ParseFloat(XElement root, string name, float fallback)
+        {
+            var text = root.Element(name)?.Value?.Trim();
+            return float.TryParse(text, out var v) ? v : fallback;
         }
 
         private static bool ParseBool(string text, bool fallback)

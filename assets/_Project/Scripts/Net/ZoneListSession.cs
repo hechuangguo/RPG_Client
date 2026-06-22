@@ -1,6 +1,6 @@
 /// <summary>
 /// 区列表短会话。
-/// 职责：连接 LoginServer，发送 C2SZoneListReq，解析 S2CZoneListRsp 后断开。
+/// 职责：连接 LoginServer，等待登录挑战，发送 C2SZoneListReq，解析 S2CZoneListRsp 后断开。
 /// </summary>
 using System;
 using System.Collections.Generic;
@@ -15,7 +15,7 @@ namespace Rpg.Client.Net
 {
     public sealed class ZoneListSession
     {
-        private enum State { Idle, Connecting, WaitResponse }
+        private enum State { Idle, Connecting, WaitChallenge, WaitResponse }
 
         private readonly GameTcpClient _tcp = new GameTcpClient();
         private ClientConfigLoader _config;
@@ -24,6 +24,7 @@ namespace Rpg.Client.Net
         private long _connectStartMs;
         private int _fetchToken;
         private int _activeFetchToken;
+        private byte[] _loginNonce;
 
         public Action<List<GameZoneEntry>> OnSuccess;
         public Action<string> OnError;
@@ -43,6 +44,7 @@ namespace Rpg.Client.Net
         {
             Cancel();
             _activeFetchToken = ++_fetchToken;
+            _loginNonce = null;
             _state = State.Connecting;
             _connectStartMs = TimeUtil.NowMs();
             _waitStartMs = _connectStartMs;
@@ -55,6 +57,12 @@ namespace Rpg.Client.Net
             CheckTimeouts();
         }
 
+        public void ClearHandlers()
+        {
+            OnSuccess = null;
+            OnError = null;
+        }
+
         public void Cancel()
         {
             if (_activeFetchToken != 0)
@@ -64,6 +72,7 @@ namespace Rpg.Client.Net
             }
 
             _state = State.Idle;
+            _loginNonce = null;
             _tcp.Disconnect();
         }
 
@@ -72,14 +81,15 @@ namespace Rpg.Client.Net
             var now = TimeUtil.NowMs();
             var connectTimeout = _config?.ConnectTimeoutMs ?? ClientTimingDefaults.ConnectTimeoutMs;
 
-            if (_state == State.Connecting && now - _connectStartMs > connectTimeout)
+            if (_state is State.Connecting or State.WaitChallenge &&
+                TimeUtil.ElapsedMs(now, _connectStartMs) > connectTimeout)
             {
                 Fail(ClientLocalError.ConnectTimeout);
                 return;
             }
 
             if (_state == State.WaitResponse &&
-                now - _waitStartMs > (_config?.ZoneListResponseTimeoutMs ?? ClientTimingDefaults.ZoneListResponseTimeoutMs))
+                TimeUtil.ElapsedMs(now, _waitStartMs) > (_config?.ZoneListResponseTimeoutMs ?? ClientTimingDefaults.ZoneListResponseTimeoutMs))
             {
                 Fail(ClientLocalError.ZoneListTimeout);
             }
@@ -87,9 +97,8 @@ namespace Rpg.Client.Net
 
         private void OnConnected()
         {
-            _tcp.SendRaw(ClientMsgHandler.BuildZoneListReq());
-            _state = State.WaitResponse;
-            _waitStartMs = TimeUtil.NowMs();
+            _state = State.WaitChallenge;
+            _connectStartMs = TimeUtil.NowMs();
         }
 
         private void OnDisconnected()
@@ -114,6 +123,27 @@ namespace Rpg.Client.Net
                     Fail(ClientErrorText.GatewayErrorText(err));
                 }
 
+                return;
+            }
+
+            if (module == (byte)ClientModule.Login && sub == (byte)LoginMsgSub.S2CLoginChallenge)
+            {
+                if (_state != State.WaitChallenge)
+                {
+                    return;
+                }
+
+                if (!ClientMsgHandler.TryParseLoginChallenge(body, out var challenge) ||
+                    challenge.Nonce == null || challenge.Nonce.Length == 0)
+                {
+                    Fail(ClientLocalError.ParseError);
+                    return;
+                }
+
+                _loginNonce = challenge.Nonce.ToByteArray();
+                _tcp.SendRaw(ClientMsgHandler.BuildZoneListReq());
+                _state = State.WaitResponse;
+                _waitStartMs = TimeUtil.NowMs();
                 return;
             }
 

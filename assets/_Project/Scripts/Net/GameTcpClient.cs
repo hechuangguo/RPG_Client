@@ -1,15 +1,14 @@
 /// <summary>
 /// 非阻塞 TCP + 可选 TLS。职责：connect/poll/send；MsgHeader 切帧后回调。
+/// 阻塞连接在后台线程执行，状态变更经主线程队列回传（IL2CPP 友好）。
 /// </summary>
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
-using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
-using System.Threading.Tasks;
 using Rpg.Client.Config;
 using Rpg.Client.Log;
 using UnityEngine;
@@ -21,6 +20,9 @@ namespace Rpg.Client.Net
         public delegate void MessageHandler(byte module, byte sub, byte[] body);
         public delegate void VoidHandler();
 
+        private const int RecvBufInitial = 8192;
+        private static readonly int RecvBufMax = MsgHeader.Size + MsgHeader.MaxPacketSize;
+
         private MessageHandler _onMessage;
         private VoidHandler _onConnected;
         private VoidHandler _onDisconnected;
@@ -28,11 +30,12 @@ namespace Rpg.Client.Net
         private TcpClient _tcp;
         private Stream _stream;
         private SslStream _ssl;
-        private byte[] _recvBuf = new byte[8192];
+        private byte[] _recvBuf = new byte[RecvBufInitial];
         private int _recvLen;
-        private readonly byte[] _readScratch = new byte[8192];
+        private readonly byte[] _readScratch = new byte[RecvBufInitial];
         private readonly Queue<byte[]> _sendQueue = new Queue<byte[]>();
         private readonly Queue<Action> _mainThreadQueue = new Queue<Action>();
+        private int _flushBytesThisPoll;
 
         private volatile bool _connecting;
         private volatile bool _connected;
@@ -44,6 +47,13 @@ namespace Rpg.Client.Net
         public void SetOnMessage(MessageHandler cb) => _onMessage = cb;
         public void SetOnConnected(VoidHandler cb) => _onConnected = cb;
         public void SetOnDisconnected(VoidHandler cb) => _onDisconnected = cb;
+
+        public void ClearCallbacks()
+        {
+            _onMessage = null;
+            _onConnected = null;
+            _onDisconnected = null;
+        }
 
         public bool IsConnected => _connected && !_connecting;
         public bool IsConnecting => _connecting;
@@ -58,7 +68,12 @@ namespace Rpg.Client.Net
             _connected = false;
             var generation = ++_connectGeneration;
 
-            Task.Run(() => ConnectBackground(host, port, generation));
+            var thread = new Thread(() => ConnectBackground(host, port, generation))
+            {
+                IsBackground = true,
+                Name = "GameTcpClient.Connect"
+            };
+            thread.Start();
             return true;
         }
 
@@ -95,9 +110,11 @@ namespace Rpg.Client.Net
 
             try
             {
+                _flushBytesThisPoll = 0;
                 ReadAvailable();
                 DecodeFrames();
                 FlushSend();
+                ShrinkRecvBufIfIdle();
             }
             catch (Exception ex)
             {
@@ -118,8 +135,23 @@ namespace Rpg.Client.Net
 
             try
             {
-                _ssl?.Dispose();
-                _stream?.Dispose();
+                if (_ssl != null)
+                {
+                    _ssl.Dispose();
+                    _ssl = null;
+                }
+                else
+                {
+                    _stream?.Dispose();
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            try
+            {
                 _tcp?.Close();
             }
             catch
@@ -127,42 +159,40 @@ namespace Rpg.Client.Net
                 // ignore
             }
 
-            _ssl = null;
             _stream = null;
             _tcp = null;
         }
 
-        public void Dispose() => Disconnect();
+        public void Dispose()
+        {
+            _disposed = true;
+            Disconnect();
+            ClearCallbacks();
+        }
 
         private void ConnectBackground(string host, ushort port, int generation)
         {
+            TcpClient tcp = null;
+            SslStream ssl = null;
+            Stream stream = null;
+
             try
             {
-                var tcp = new TcpClient();
+                tcp = new TcpClient();
                 tcp.NoDelay = true;
                 tcp.Connect(host, port);
-                Stream stream = tcp.GetStream();
+                stream = tcp.GetStream();
 
                 if (_tls.Enabled)
                 {
-                    var ssl = new SslStream(stream, false, ValidateCert);
+                    ssl = new SslStream(stream, false, ValidateCert);
                     ssl.AuthenticateAsClient(host);
                     stream = ssl;
                     EnqueueMain(() =>
                     {
                         if (generation != _connectGeneration)
                         {
-                            try
-                            {
-                                ssl.Dispose();
-                                stream.Dispose();
-                                tcp.Close();
-                            }
-                            catch
-                            {
-                                // ignore stale connect cleanup
-                            }
-
+                            DisposeConnectResources(tcp, ssl, stream);
                             return;
                         }
 
@@ -176,16 +206,7 @@ namespace Rpg.Client.Net
                     {
                         if (generation != _connectGeneration)
                         {
-                            try
-                            {
-                                stream.Dispose();
-                                tcp.Close();
-                            }
-                            catch
-                            {
-                                // ignore stale connect cleanup
-                            }
-
+                            DisposeConnectResources(tcp, null, stream);
                             return;
                         }
 
@@ -195,6 +216,7 @@ namespace Rpg.Client.Net
             }
             catch (Exception ex)
             {
+                DisposeConnectResources(tcp, ssl, stream);
                 EnqueueMain(() =>
                 {
                     if (generation != _connectGeneration)
@@ -206,6 +228,34 @@ namespace Rpg.Client.Net
                     ClientLogger.Instance.ErrFormat("GameTcpClient：连接失败：{0}", ex.Message);
                     NotifyDisconnected();
                 });
+            }
+        }
+
+        private static void DisposeConnectResources(TcpClient tcp, SslStream ssl, Stream stream)
+        {
+            try
+            {
+                if (ssl != null)
+                {
+                    ssl.Dispose();
+                }
+                else
+                {
+                    stream?.Dispose();
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            try
+            {
+                tcp?.Close();
+            }
+            catch
+            {
+                // ignore
             }
         }
 
@@ -239,7 +289,16 @@ namespace Rpg.Client.Net
             int read;
             while (_tcp.Available > 0 && (read = _stream.Read(_readScratch, 0, _readScratch.Length)) > 0)
             {
-                EnsureRecvCapacity(_recvLen + read);
+                var required = _recvLen + read;
+                if (required > RecvBufMax)
+                {
+                    ClientLogger.Instance.ErrFormat(
+                        "GameTcpClient：接收缓冲超限 {0} > {1}，断开连接", required, RecvBufMax);
+                    NotifyDisconnected();
+                    return;
+                }
+
+                EnsureRecvCapacity(required);
                 Buffer.BlockCopy(_readScratch, 0, _recvBuf, _recvLen, read);
                 _recvLen += read;
             }
@@ -256,6 +315,11 @@ namespace Rpg.Client.Net
             while (newSize < required)
             {
                 newSize *= 2;
+                if (newSize > RecvBufMax)
+                {
+                    newSize = RecvBufMax;
+                    break;
+                }
             }
 
             var expanded = new byte[newSize];
@@ -263,9 +327,21 @@ namespace Rpg.Client.Net
             _recvBuf = expanded;
         }
 
+        private void ShrinkRecvBufIfIdle()
+        {
+            if (_recvLen != 0 || _recvBuf.Length <= RecvBufInitial)
+            {
+                return;
+            }
+
+            _recvBuf = new byte[RecvBufInitial];
+        }
+
         private void FlushSend()
         {
-            while (true)
+            var budget = ClientTimingDefaults.MaxFlushBytesPerPoll;
+
+            while (_flushBytesThisPoll < budget)
             {
                 byte[] packet;
                 lock (_sendQueue)
@@ -279,13 +355,26 @@ namespace Rpg.Client.Net
                 }
 
                 _stream.Write(packet, 0, packet.Length);
+                _flushBytesThisPoll += packet.Length;
             }
         }
 
         private void DecodeFrames()
         {
-            while (PacketCodec.TryDecode(_recvBuf, ref _recvLen, out var module, out var sub, out var body))
+            while (true)
             {
+                if (!PacketCodec.TryDecode(
+                        _recvBuf, ref _recvLen, out var module, out var sub, out var body, out var protocolError))
+                {
+                    if (protocolError)
+                    {
+                        ClientLogger.Instance.Err("GameTcpClient：协议帧非法，断开连接");
+                        NotifyDisconnected();
+                    }
+
+                    break;
+                }
+
                 _onMessage?.Invoke(module, sub, body);
             }
         }
@@ -297,8 +386,9 @@ namespace Rpg.Client.Net
                 return;
             }
 
+            var cb = _onDisconnected;
             Disconnect();
-            _onDisconnected?.Invoke();
+            cb?.Invoke();
         }
 
         private void EnqueueMain(Action action)

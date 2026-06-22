@@ -25,29 +25,32 @@ namespace Rpg.Client.Net
         private static readonly byte QuestModule = (byte)ClientModule.Quest;
         private static readonly byte BagModule = (byte)ClientModule.Bag;
 
-        public static byte[] BuildLoginReq(string account, string password, uint zoneId, uint gameType)
+        public static byte[] BuildLoginReq(string account, string password, byte[] loginNonce, uint zoneId, uint gameType)
         {
             var req = new C2SLoginReq
             {
                 Account = account,
-                PasswordDigest = ByteString.CopyFrom(PasswordDigest.Sha256Utf8Password(password)),
+                PasswordDigest = ByteString.CopyFrom(PasswordDigest.Sha256NoncePassword(loginNonce, password)),
                 ZoneId = zoneId,
                 GameType = gameType,
-                ProtocolVersion = WireConstants.CurrentProtocolVersion
+                ProtocolVersion = WireConstants.CurrentProtocolVersion,
+                LoginNonce = ByteString.CopyFrom(loginNonce)
             };
             return PacketCodec.Encode(LoginModule, (byte)LoginMsgSub.C2SLoginReq, req);
         }
 
-        public static byte[] BuildRegisterReq(string account, string password, string confirm, uint zoneId, uint gameType)
+        public static byte[] BuildRegisterReq(
+            string account, string password, string confirm, byte[] loginNonce, uint zoneId, uint gameType)
         {
             var req = new C2SRegisterReq
             {
                 Account = account,
-                PasswordDigest = ByteString.CopyFrom(PasswordDigest.Sha256Utf8Password(password)),
-                ConfirmPasswordDigest = ByteString.CopyFrom(PasswordDigest.Sha256Utf8Password(confirm)),
+                PasswordDigest = ByteString.CopyFrom(PasswordDigest.Sha256NoncePassword(loginNonce, password)),
+                ConfirmPasswordDigest = ByteString.CopyFrom(PasswordDigest.Sha256NoncePassword(loginNonce, confirm)),
                 ZoneId = zoneId,
                 GameType = gameType,
-                ProtocolVersion = WireConstants.CurrentProtocolVersion
+                ProtocolVersion = WireConstants.CurrentProtocolVersion,
+                LoginNonce = ByteString.CopyFrom(loginNonce)
             };
             return PacketCodec.Encode(LoginModule, (byte)LoginMsgSub.C2SRegisterReq, req);
         }
@@ -145,58 +148,61 @@ namespace Rpg.Client.Net
         }
 
         public static bool TryParseZoneListRsp(byte[] body, out S2CZoneListRsp rsp) =>
-            ProtoParse.TryParse(body, S2CZoneListRsp.Parser, out rsp);
+            ProtoParse.TryParse(body, S2CZoneListRsp.Parser, out rsp, "S2CZoneListRsp");
 
         public static bool TryParseLoginRsp(byte[] body, out S2CLoginRsp rsp) =>
-            ProtoParse.TryParse(body, S2CLoginRsp.Parser, out rsp);
+            ProtoParse.TryParse(body, S2CLoginRsp.Parser, out rsp, "S2CLoginRsp");
+
+        public static bool TryParseLoginChallenge(byte[] body, out S2CLoginChallenge challenge) =>
+            ProtoParse.TryParse(body, S2CLoginChallenge.Parser, out challenge, "S2CLoginChallenge");
 
         public static bool TryParseRegisterRsp(byte[] body, out S2CRegisterRsp rsp) =>
-            ProtoParse.TryParse(body, S2CRegisterRsp.Parser, out rsp);
+            ProtoParse.TryParse(body, S2CRegisterRsp.Parser, out rsp, "S2CRegisterRsp");
 
         public static bool TryParseGatewayInfo(byte[] body, out S2CGatewayInfo info) =>
-            ProtoParse.TryParse(body, S2CGatewayInfo.Parser, out info);
+            ProtoParse.TryParse(body, S2CGatewayInfo.Parser, out info, "S2CGatewayInfo");
 
         public static bool TryParseEnterGame(byte[] body, out S2CEnterGame enter) =>
-            ProtoParse.TryParse(body, S2CEnterGame.Parser, out enter);
+            ProtoParse.TryParse(body, S2CEnterGame.Parser, out enter, "S2CEnterGame");
 
         public static bool TryParseUserList(byte[] body, out S2CUserList list) =>
-            ProtoParse.TryParse(body, S2CUserList.Parser, out list);
+            ProtoParse.TryParse(body, S2CUserList.Parser, out list, "S2CUserList");
 
         public static bool TryParseCreateUserRsp(byte[] body, out S2CCreateUserRsp rsp) =>
-            ProtoParse.TryParse(body, S2CCreateUserRsp.Parser, out rsp);
+            ProtoParse.TryParse(body, S2CCreateUserRsp.Parser, out rsp, "S2CCreateUserRsp");
 
         public static bool TryParseLogoutRsp(byte[] body, out S2CLogoutRsp rsp) =>
-            ProtoParse.TryParse(body, S2CLogoutRsp.Parser, out rsp);
+            ProtoParse.TryParse(body, S2CLogoutRsp.Parser, out rsp, "S2CLogoutRsp");
 
         public static bool TryParseSpawnEntity(byte[] body, out S2CSpawnEntity spawn) =>
-            ProtoParse.TryParse(body, S2CSpawnEntity.Parser, out spawn);
+            ProtoParse.TryParse(body, S2CSpawnEntity.Parser, out spawn, "S2CSpawnEntity");
 
         public static bool TryParseMoveNotify(byte[] body, out S2CMoveNotify notify) =>
-            ProtoParse.TryParse(body, S2CMoveNotify.Parser, out notify);
+            ProtoParse.TryParse(body, S2CMoveNotify.Parser, out notify, "S2CMoveNotify");
 
         public static bool TryParseDespawnEntity(byte[] body, out S2CDespawnEntity despawn) =>
-            ProtoParse.TryParse(body, S2CDespawnEntity.Parser, out despawn);
+            ProtoParse.TryParse(body, S2CDespawnEntity.Parser, out despawn, "S2CDespawnEntity");
 
         public static bool TryParseGatewayError(byte[] body, out S2CError err) =>
-            ProtoParse.TryParse(body, S2CError.Parser, out err);
+            ProtoParse.TryParse(body, S2CError.Parser, out err, "S2CError");
 
         public static bool TryParseHeartbeat(byte[] body, out S2CHeartbeat hb) =>
-            ProtoParse.TryParse(body, S2CHeartbeat.Parser, out hb);
+            ProtoParse.TryParse(body, S2CHeartbeat.Parser, out hb, "S2CHeartbeat");
 
         public static bool TryParseNotice(byte[] body, out S2CNotice notice) =>
-            ProtoParse.TryParse(body, S2CNotice.Parser, out notice);
+            ProtoParse.TryParse(body, S2CNotice.Parser, out notice, "S2CNotice");
 
         public static bool TryParseKick(byte[] body, out S2CKick kick) =>
-            ProtoParse.TryParse(body, S2CKick.Parser, out kick);
+            ProtoParse.TryParse(body, S2CKick.Parser, out kick, "S2CKick");
 
         public static bool TryParseChatNotify(byte[] body, out S2CChatNotify chat) =>
-            ProtoParse.TryParse(body, S2CChatNotify.Parser, out chat);
+            ProtoParse.TryParse(body, S2CChatNotify.Parser, out chat, "S2CChatNotify");
 
         public static bool TryParseQuestInfo(byte[] body, out S2CQuestInfo info) =>
-            ProtoParse.TryParse(body, S2CQuestInfo.Parser, out info);
+            ProtoParse.TryParse(body, S2CQuestInfo.Parser, out info, "S2CQuestInfo");
 
         public static bool TryParseBagInfoRsp(byte[] body, out S2CBagInfoRsp rsp) =>
-            ProtoParse.TryParse(body, S2CBagInfoRsp.Parser, out rsp);
+            ProtoParse.TryParse(body, S2CBagInfoRsp.Parser, out rsp, "S2CBagInfoRsp");
 
         public static List<GameZoneEntry> ToZoneEntries(S2CZoneListRsp rsp)
         {
