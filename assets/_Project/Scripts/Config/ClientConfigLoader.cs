@@ -18,6 +18,10 @@ namespace Rpg.Client.Config
         public bool LogToConsole { get; private set; }
         public string LoginHost { get; private set; } = "127.0.0.1";
         public ushort LoginPort { get; private set; } = 9010;
+        /// <summary>非空时覆盖服务端下发的 Gateway IP（联调/端口转发）。</summary>
+        public string GatewayHost { get; private set; } = string.Empty;
+        /// <summary>为 true 且未配置 gatewayHost 时，Gateway 与 Login 共用 loginHost。</summary>
+        public bool GatewayUseLoginHost { get; private set; }
         public long ConnectTimeoutMs { get; private set; } = ClientTimingDefaults.ConnectTimeoutMs;
         public long ResponseTimeoutMs { get; private set; } = ClientTimingDefaults.ResponseTimeoutMs;
         public long ZoneListResponseTimeoutMs { get; private set; } = ClientTimingDefaults.ZoneListResponseTimeoutMs;
@@ -80,6 +84,8 @@ namespace Rpg.Client.Config
             LogToConsole = ParseBool(root.Element("logToConsole")?.Value, LogToConsole);
             LoginHost = root.Element("loginHost")?.Value?.Trim() ?? LoginHost;
             LoginPort = (ushort)ParseUInt(root, "loginPort", LoginPort);
+            GatewayHost = root.Element("gatewayHost")?.Value?.Trim() ?? string.Empty;
+            GatewayUseLoginHost = ParseBool(root.Element("gatewayUseLoginHost")?.Value, GatewayUseLoginHost);
             ConnectTimeoutMs = ParseLong(root, "connectTimeoutMs", ConnectTimeoutMs);
             ResponseTimeoutMs = ParseLong(root, "responseTimeoutMs", ResponseTimeoutMs);
             ZoneListResponseTimeoutMs = ParseLong(root, "zoneListResponseTimeoutMs", ZoneListResponseTimeoutMs);

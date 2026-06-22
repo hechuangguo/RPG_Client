@@ -21,6 +21,8 @@
 | 字段 | 说明 | 默认 |
 |------|------|------|
 | `loginHost` / `loginPort` | LoginServer 地址 | `127.0.0.1:9010` |
+| `gatewayHost` | 可选，覆盖服务端下发的 Gateway IP | 空（用 `S2C_GATEWAY_INFO`） |
+| `gatewayUseLoginHost` | Gateway 与 Login 同机联调（忽略服务端旧 IP） | `0` |
 | `connectTimeoutMs` | TCP/TLS 连接与登录挑战超时 | 10000 |
 | `responseTimeoutMs` | 业务响应超时 | 15000 |
 | `heartbeatIntervalMs` | Gateway 心跳间隔 | 10000 |

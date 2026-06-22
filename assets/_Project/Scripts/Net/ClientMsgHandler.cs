@@ -30,7 +30,7 @@ namespace Rpg.Client.Net
             var req = new C2SLoginReq
             {
                 Account = account,
-                PasswordDigest = ByteString.CopyFrom(PasswordDigest.Sha256NoncePassword(loginNonce, password)),
+                PasswordDigest = ByteString.CopyFrom(PasswordDigest.Sha256Utf8Password(password)),
                 ZoneId = zoneId,
                 GameType = gameType,
                 ProtocolVersion = WireConstants.CurrentProtocolVersion,
@@ -45,8 +45,8 @@ namespace Rpg.Client.Net
             var req = new C2SRegisterReq
             {
                 Account = account,
-                PasswordDigest = ByteString.CopyFrom(PasswordDigest.Sha256NoncePassword(loginNonce, password)),
-                ConfirmPasswordDigest = ByteString.CopyFrom(PasswordDigest.Sha256NoncePassword(loginNonce, confirm)),
+                PasswordDigest = ByteString.CopyFrom(PasswordDigest.Sha256Utf8Password(password)),
+                ConfirmPasswordDigest = ByteString.CopyFrom(PasswordDigest.Sha256Utf8Password(confirm)),
                 ZoneId = zoneId,
                 GameType = gameType,
                 ProtocolVersion = WireConstants.CurrentProtocolVersion,

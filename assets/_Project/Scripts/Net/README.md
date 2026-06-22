@@ -70,7 +70,7 @@
 | 4 创角 | `LoginSession` | `C2SCreateUserReq` → `S2CCreateUserRsp` | `CreateCharacterResultCode` |
 | 5 进世界 | `LoginSession` → `GameSession` | `C2SSelectUserReq` → `S2CEnterGame`；TCP 移交后心跳/Scene | `userId/mapId` 非零；`S2CUserList.code` 在选角前校验 |
 
-**LoginServer 挑战**：连接 LoginServer 后须先收 `S2CLoginChallenge`，再发登录/注册/区列表；超时见 `connectTimeoutMs`。
+**LoginServer 挑战**：连接 LoginServer 后须先收 `S2CLoginChallenge` 并回显 `login_nonce`；`password_digest` 仍为 `SHA-256(UTF-8 密码)`（见 [`docs/SECURITY.md`](../../../../docs/SECURITY.md)）。
 
 **Gateway 心跳**：`LoginSession` 在 Gateway 已连接阶段（选角/创角/进世界前）与 `GameSession` 一样周期性发送 `C2SHeartbeat`。
 

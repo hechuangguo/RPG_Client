@@ -34,14 +34,17 @@ namespace Rpg.Client.UI
         [Header("Auth")]
         [SerializeField] private InputField _accountInput;
         [SerializeField] private InputField _passwordInput;
+        [SerializeField] private Toggle _showLoginPasswordToggle;
         [SerializeField] private Toggle _rememberToggle;
         [SerializeField] private Button _loginBtn;
         [SerializeField] private Button _gotoRegisterBtn;
+        [SerializeField] private Button _authSelectServerBtn;
 
         [Header("Register")]
         [SerializeField] private InputField _regAccount;
         [SerializeField] private InputField _regPassword;
         [SerializeField] private InputField _regConfirm;
+        [SerializeField] private Toggle _showRegisterPasswordToggle;
         [SerializeField] private Button _registerBtn;
         [SerializeField] private Button _backToLoginBtn;
 
@@ -72,6 +75,7 @@ namespace Rpg.Client.UI
         {
             ResolveServerList();
             ResolveCharacterSelect();
+            EnsureAuthRegisterUiRefs();
             _selectServerBtn?.onClick.AddListener(() => OnSelectServerClicked?.Invoke());
             _enterGameBtn?.onClick.AddListener(() => OnEnterGameFromHome?.Invoke());
             _loginBtn?.onClick.AddListener(() =>
@@ -81,6 +85,9 @@ namespace Rpg.Client.UI
                 ShowRegister(true);
                 OnGoToRegister?.Invoke();
             });
+            _authSelectServerBtn?.onClick.AddListener(() => OnSelectServerClicked?.Invoke());
+            _showLoginPasswordToggle?.onValueChanged.AddListener(OnLoginPasswordVisibilityChanged);
+            _showRegisterPasswordToggle?.onValueChanged.AddListener(OnRegisterPasswordVisibilityChanged);
             _registerBtn?.onClick.AddListener(() =>
                 OnRegisterClicked?.Invoke(_regAccount.text, _regPassword.text, _regConfirm.text));
             _backToLoginBtn?.onClick.AddListener(() =>
@@ -128,6 +135,9 @@ namespace Rpg.Client.UI
             _enterGameBtn?.onClick.RemoveAllListeners();
             _loginBtn?.onClick.RemoveAllListeners();
             _gotoRegisterBtn?.onClick.RemoveAllListeners();
+            _authSelectServerBtn?.onClick.RemoveAllListeners();
+            _showLoginPasswordToggle?.onValueChanged.RemoveAllListeners();
+            _showRegisterPasswordToggle?.onValueChanged.RemoveAllListeners();
             _registerBtn?.onClick.RemoveAllListeners();
             _backToLoginBtn?.onClick.RemoveAllListeners();
             _exitReturnCharBtn?.onClick.RemoveAllListeners();
@@ -306,6 +316,138 @@ namespace Rpg.Client.UI
             _characterSelect?.TryEnsureRuntimeLayout();
         }
 
+        /// <summary>场景未重跑 Setup Boot Scene 时，按名称查找或克隆已有控件补齐引用。</summary>
+        private void EnsureAuthRegisterUiRefs()
+        {
+            if (_authPanel != null)
+            {
+                _showLoginPasswordToggle ??= FindDeepComponent<Toggle>(_authPanel.transform, "ShowLoginPasswordToggle");
+                if (_showLoginPasswordToggle == null && _rememberToggle != null)
+                {
+                    _showLoginPasswordToggle = CloneToggle(_rememberToggle, "ShowLoginPasswordToggle", "显示密码", 0.45f);
+                }
+
+                _authSelectServerBtn ??= FindDeepComponent<Button>(_authPanel.transform, "AuthSelectServerBtn");
+                if (_authSelectServerBtn == null && _gotoRegisterBtn != null)
+                {
+                    _authSelectServerBtn = CloneButton(_gotoRegisterBtn, "AuthSelectServerBtn", "选择服务器", 0.14f);
+                }
+
+                if (_rememberToggle != null)
+                {
+                    SetAnchoredY(_rememberToggle.GetComponent<RectTransform>(), 0.38f);
+                }
+
+                if (_loginBtn != null)
+                {
+                    SetAnchoredY(_loginBtn.GetComponent<RectTransform>(), 0.30f);
+                }
+
+                if (_gotoRegisterBtn != null)
+                {
+                    SetAnchoredY(_gotoRegisterBtn.GetComponent<RectTransform>(), 0.22f);
+                }
+            }
+
+            if (_registerPanel != null)
+            {
+                _showRegisterPasswordToggle ??=
+                    FindDeepComponent<Toggle>(_registerPanel.transform, "ShowRegisterPasswordToggle");
+                if (_showRegisterPasswordToggle == null && _rememberToggle != null)
+                {
+                    _showRegisterPasswordToggle = CloneToggle(
+                        _rememberToggle, _registerPanel.transform, "ShowRegisterPasswordToggle", "显示密码", 0.37f);
+                }
+
+                if (_registerBtn != null)
+                {
+                    SetAnchoredY(_registerBtn.GetComponent<RectTransform>(), 0.28f);
+                }
+
+                if (_backToLoginBtn != null)
+                {
+                    SetAnchoredY(_backToLoginBtn.GetComponent<RectTransform>(), 0.20f);
+                }
+            }
+        }
+
+        private static T FindDeepComponent<T>(Transform root, string name) where T : Component
+        {
+            if (root == null)
+            {
+                return null;
+            }
+
+            foreach (var child in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (child.name != name)
+                {
+                    continue;
+                }
+
+                var component = child.GetComponent<T>();
+                if (component != null)
+                {
+                    return component;
+                }
+            }
+
+            return null;
+        }
+
+        private static Toggle CloneToggle(Toggle template, string objectName, string label, float anchorY) =>
+            CloneToggle(template, template.transform.parent, objectName, label, anchorY);
+
+        private static Toggle CloneToggle(
+            Toggle template, Transform parent, string objectName, string label, float anchorY)
+        {
+            var clone = Instantiate(template, parent);
+            clone.name = objectName;
+            clone.isOn = false;
+            SetToggleLabel(clone, label);
+            SetAnchoredY(clone.GetComponent<RectTransform>(), anchorY);
+            return clone;
+        }
+
+        private static Button CloneButton(Button template, string objectName, string label, float anchorY)
+        {
+            var clone = Instantiate(template, template.transform.parent);
+            clone.name = objectName;
+            SetButtonLabel(clone, label);
+            SetAnchoredY(clone.GetComponent<RectTransform>(), anchorY);
+            return clone;
+        }
+
+        private static void SetToggleLabel(Toggle toggle, string label)
+        {
+            var text = toggle.GetComponentInChildren<Text>(true);
+            if (text != null)
+            {
+                text.text = label;
+            }
+        }
+
+        private static void SetButtonLabel(Button button, string label)
+        {
+            var text = button.GetComponentInChildren<Text>(true);
+            if (text != null)
+            {
+                text.text = label;
+            }
+        }
+
+        private static void SetAnchoredY(RectTransform rect, float anchorY)
+        {
+            if (rect == null)
+            {
+                return;
+            }
+
+            rect.anchorMin = new Vector2(0.5f, anchorY);
+            rect.anchorMax = new Vector2(0.5f, anchorY);
+            rect.anchoredPosition = Vector2.zero;
+        }
+
         private void ApplyConnectingLock(bool connecting)
         {
             if (_loginBtn != null)
@@ -313,10 +455,37 @@ namespace Rpg.Client.UI
                 _loginBtn.interactable = !connecting;
             }
 
+            if (_authSelectServerBtn != null)
+            {
+                _authSelectServerBtn.interactable = !connecting;
+            }
+
             if (_registerBtn != null)
             {
                 _registerBtn.interactable = !connecting && !_registerBusy;
             }
+        }
+
+        private void OnLoginPasswordVisibilityChanged(bool visible) =>
+            ApplyPasswordVisibility(_passwordInput, visible);
+
+        private void OnRegisterPasswordVisibilityChanged(bool visible)
+        {
+            ApplyPasswordVisibility(_regPassword, visible);
+            ApplyPasswordVisibility(_regConfirm, visible);
+        }
+
+        private static void ApplyPasswordVisibility(InputField field, bool visible)
+        {
+            if (field == null)
+            {
+                return;
+            }
+
+            field.contentType = visible
+                ? InputField.ContentType.Standard
+                : InputField.ContentType.Password;
+            field.ForceLabelUpdate();
         }
     }
 }

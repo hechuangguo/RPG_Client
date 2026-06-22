@@ -10,12 +10,18 @@
     <logToConsole>false</logToConsole>
     <loginHost>127.0.0.1</loginHost>
     <loginPort>9010</loginPort>
+    <!-- 可选：覆盖服务端 S2C_GATEWAY_INFO 下发的 IP -->
+    <!-- <gatewayHost>192.168.1.100</gatewayHost> -->
+    <!-- Login/Gateway 同机且服务端 IP 过期时设为 1 -->
+    <!-- <gatewayUseLoginHost>1</gatewayUseLoginHost> -->
     <!-- 网络时序（毫秒）；联调时可适当缩短以便快速发现超时 -->
     <connectTimeoutMs>10000</connectTimeoutMs>
     <responseTimeoutMs>15000</responseTimeoutMs>
     <zoneListResponseTimeoutMs>10000</zoneListResponseTimeoutMs>
     <heartbeatIntervalMs>10000</heartbeatIntervalMs>
     <moveSendIntervalMs>100</moveSendIntervalMs>
+    <moveMinDelta>0.01</moveMinDelta>
+    <maxFlushBytesPerPoll>16384</maxFlushBytesPerPoll>
     <logoutTimeoutMs>15000</logoutTimeoutMs>
     <!-- TLS：ca.crt 从服务端 config/tls 复制；联调可设 insecureSkipVerify=1 -->
     <Tls enabled="1" ca="config/tls/ca.crt" insecureSkipVerify="1" minVersion="1.2"/>

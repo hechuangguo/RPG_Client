@@ -231,6 +231,8 @@ namespace Rpg.Client.App
             };
             _ui.OnLoginClicked = (account, password, remember) =>
             {
+                account = account?.Trim() ?? string.Empty;
+                password = password ?? string.Empty;
                 SyncSelectedZoneFromList(_cachedZones);
 
                 if (_cachedZones.Count > 0)
@@ -278,6 +280,9 @@ namespace Rpg.Client.App
             };
             _ui.OnRegisterClicked = (account, password, confirm) =>
             {
+                account = account?.Trim() ?? string.Empty;
+                password = password ?? string.Empty;
+                confirm = confirm ?? string.Empty;
                 SyncSelectedZoneFromList(_cachedZones);
 
                 if (_cachedZones.Count > 0)

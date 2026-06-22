@@ -132,27 +132,33 @@ namespace Rpg.Client.EditorTools
 
             var authPanel = CreatePanel(canvasGo.transform, "AuthPanel", false);
             var accountInput = CreateInputField(authPanel.transform, "AccountInput", "账号", font);
-            SetAnchored(accountInput.GetComponent<RectTransform>(), new Vector2(0.5f, 0.58f), new Vector2(320, 40));
+            SetAnchored(accountInput.GetComponent<RectTransform>(), new Vector2(0.5f, 0.60f), new Vector2(320, 40));
             var passwordInput = CreateInputField(authPanel.transform, "PasswordInput", "密码", font, true);
-            SetAnchored(passwordInput.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2(320, 40));
+            SetAnchored(passwordInput.GetComponent<RectTransform>(), new Vector2(0.5f, 0.52f), new Vector2(320, 40));
+            var showLoginPasswordToggle = CreateToggle(authPanel.transform, "ShowLoginPasswordToggle", "显示密码", font);
+            SetAnchored(showLoginPasswordToggle.GetComponent<RectTransform>(), new Vector2(0.5f, 0.45f), new Vector2(200, 30));
             var rememberToggle = CreateToggle(authPanel.transform, "RememberToggle", "记住账号", font);
-            SetAnchored(rememberToggle.GetComponent<RectTransform>(), new Vector2(0.5f, 0.42f), new Vector2(200, 30));
+            SetAnchored(rememberToggle.GetComponent<RectTransform>(), new Vector2(0.5f, 0.38f), new Vector2(200, 30));
             var loginBtn = CreateButton(authPanel.transform, "LoginBtn", "登录", font);
-            SetAnchored(loginBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.32f), new Vector2(200, 44));
+            SetAnchored(loginBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.30f), new Vector2(200, 44));
             var gotoRegisterBtn = CreateButton(authPanel.transform, "GotoRegisterBtn", "注册账号", font);
-            SetAnchored(gotoRegisterBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.24f), new Vector2(200, 44));
+            SetAnchored(gotoRegisterBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.22f), new Vector2(200, 44));
+            var authSelectServerBtn = CreateButton(authPanel.transform, "AuthSelectServerBtn", "选择服务器", font);
+            SetAnchored(authSelectServerBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.14f), new Vector2(200, 44));
 
             var registerPanel = CreatePanel(canvasGo.transform, "RegisterPanel", false);
             var regAccount = CreateInputField(registerPanel.transform, "RegAccount", "账号", font);
-            SetAnchored(regAccount.GetComponent<RectTransform>(), new Vector2(0.5f, 0.58f), new Vector2(320, 40));
+            SetAnchored(regAccount.GetComponent<RectTransform>(), new Vector2(0.5f, 0.60f), new Vector2(320, 40));
             var regPassword = CreateInputField(registerPanel.transform, "RegPassword", "密码", font, true);
-            SetAnchored(regPassword.GetComponent<RectTransform>(), new Vector2(0.5f, 0.5f), new Vector2(320, 40));
+            SetAnchored(regPassword.GetComponent<RectTransform>(), new Vector2(0.5f, 0.52f), new Vector2(320, 40));
             var regConfirm = CreateInputField(registerPanel.transform, "RegConfirm", "确认密码", font, true);
-            SetAnchored(regConfirm.GetComponent<RectTransform>(), new Vector2(0.5f, 0.42f), new Vector2(320, 40));
+            SetAnchored(regConfirm.GetComponent<RectTransform>(), new Vector2(0.5f, 0.44f), new Vector2(320, 40));
+            var showRegisterPasswordToggle = CreateToggle(registerPanel.transform, "ShowRegisterPasswordToggle", "显示密码", font);
+            SetAnchored(showRegisterPasswordToggle.GetComponent<RectTransform>(), new Vector2(0.5f, 0.37f), new Vector2(200, 30));
             var registerBtn = CreateButton(registerPanel.transform, "RegisterBtn", "提交注册", font);
-            SetAnchored(registerBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.32f), new Vector2(200, 44));
+            SetAnchored(registerBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.28f), new Vector2(200, 44));
             var backToLoginBtn = CreateButton(registerPanel.transform, "BackToLoginBtn", "返回登录", font);
-            SetAnchored(backToLoginBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.24f), new Vector2(200, 44));
+            SetAnchored(backToLoginBtn.GetComponent<RectTransform>(), new Vector2(0.5f, 0.20f), new Vector2(200, 44));
 
             var characterPanel = CreatePanel(canvasGo.transform, "CharacterPanel", false);
             var characterSelect = characterPanel.AddComponent<CharacterSelectPanel>();
@@ -199,8 +205,9 @@ namespace Rpg.Client.EditorTools
 
             WireUiController(ui, zoneHomePanel, serverListPanelGo, serverList, authPanel, registerPanel, characterPanel,
                 characterSelect, gameHudPanel, exitDialog, zoneNameText, selectServerBtn, enterGameBtn, accountInput,
-                passwordInput, rememberToggle, loginBtn, gotoRegisterBtn, regAccount, regPassword, regConfirm,
-                registerBtn, backToLoginBtn, statusText, errorText, exitReturnCharBtn, exitReturnLoginBtn, exitQuitBtn);
+                passwordInput, showLoginPasswordToggle, rememberToggle, loginBtn, gotoRegisterBtn, authSelectServerBtn,
+                regAccount, regPassword, regConfirm, showRegisterPasswordToggle, registerBtn, backToLoginBtn,
+                statusText, errorText, exitReturnCharBtn, exitReturnLoginBtn, exitQuitBtn);
 
             WireGameApp(gameApp, ui, world);
             WireWorld(world, entityManager);
@@ -659,10 +666,10 @@ namespace Rpg.Client.EditorTools
             GameObject characterPanel, CharacterSelectPanel characterSelect, GameObject gameHudPanel,
             GameObject exitDialog,
             Text zoneNameText, Button selectServerBtn, Button enterGameBtn, InputField accountInput,
-            InputField passwordInput, Toggle rememberToggle, Button loginBtn, Button gotoRegisterBtn,
-            InputField regAccount, InputField regPassword, InputField regConfirm, Button registerBtn,
-            Button backToLoginBtn, Text statusText, Text errorText,
-            Button exitReturnCharBtn, Button exitReturnLoginBtn, Button exitQuitBtn)
+            InputField passwordInput, Toggle showLoginPasswordToggle, Toggle rememberToggle, Button loginBtn,
+            Button gotoRegisterBtn, Button authSelectServerBtn, InputField regAccount, InputField regPassword,
+            InputField regConfirm, Toggle showRegisterPasswordToggle, Button registerBtn, Button backToLoginBtn,
+            Text statusText, Text errorText, Button exitReturnCharBtn, Button exitReturnLoginBtn, Button exitQuitBtn)
         {
             var so = new SerializedObject(ui);
             so.FindProperty("_zoneHomePanel").objectReferenceValue = zoneHomePanel;
@@ -679,12 +686,15 @@ namespace Rpg.Client.EditorTools
             so.FindProperty("_enterGameBtn").objectReferenceValue = enterGameBtn;
             so.FindProperty("_accountInput").objectReferenceValue = accountInput;
             so.FindProperty("_passwordInput").objectReferenceValue = passwordInput;
+            so.FindProperty("_showLoginPasswordToggle").objectReferenceValue = showLoginPasswordToggle;
             so.FindProperty("_rememberToggle").objectReferenceValue = rememberToggle;
             so.FindProperty("_loginBtn").objectReferenceValue = loginBtn;
             so.FindProperty("_gotoRegisterBtn").objectReferenceValue = gotoRegisterBtn;
+            so.FindProperty("_authSelectServerBtn").objectReferenceValue = authSelectServerBtn;
             so.FindProperty("_regAccount").objectReferenceValue = regAccount;
             so.FindProperty("_regPassword").objectReferenceValue = regPassword;
             so.FindProperty("_regConfirm").objectReferenceValue = regConfirm;
+            so.FindProperty("_showRegisterPasswordToggle").objectReferenceValue = showRegisterPasswordToggle;
             so.FindProperty("_registerBtn").objectReferenceValue = registerBtn;
             so.FindProperty("_backToLoginBtn").objectReferenceValue = backToLoginBtn;
             so.FindProperty("_statusText").objectReferenceValue = statusText;

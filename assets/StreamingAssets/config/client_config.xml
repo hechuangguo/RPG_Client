@@ -8,12 +8,10 @@
     <windowHeight>720</windowHeight>
     <logLevel>info</logLevel>
     <logToConsole>false</logToConsole>
-    <loginHost>127.0.0.1</loginHost>
+    <loginHost>192.168.45.128</loginHost>
     <loginPort>9010</loginPort>
-    <!-- 可选：覆盖服务端 S2C_GATEWAY_INFO 下发的 IP -->
-    <!-- <gatewayHost>192.168.1.100</gatewayHost> -->
-    <!-- Login/Gateway 同机且服务端 IP 过期时设为 1 -->
-    <!-- <gatewayUseLoginHost>1</gatewayUseLoginHost> -->
+    <!-- Login 与 Gateway 同机但服务端下发旧 IP 时设为 1 -->
+    <gatewayUseLoginHost>1</gatewayUseLoginHost>
     <!-- 网络时序（毫秒）；联调时可适当缩短以便快速发现超时 -->
     <connectTimeoutMs>10000</connectTimeoutMs>
     <responseTimeoutMs>15000</responseTimeoutMs>

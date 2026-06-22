@@ -54,6 +54,24 @@ namespace Rpg.Client.Net
             return "登录失败：" + PreferServerMsg(serverMsg, fallback);
         }
 
+        /// <summary>Gateway 阶段 S2CLoginRsp（鉴权结果，非 LoginServer 账号登录）。</summary>
+        public static string GatewayLoginResultText(int code, string serverMsg)
+        {
+            if (code == (int)LoginResultCode.LoginResultOk)
+            {
+                return string.Empty;
+            }
+
+            var msg = PreferServerMsg(serverMsg, "服务器错误");
+            if (msg.Contains("票据"))
+            {
+                return "Gateway 鉴权失败：" + msg
+                       + "（票据一次性有效，请从登录页重新登录；若反复出现请检查服务端 Record→Super→Login 外联）";
+            }
+
+            return "Gateway 鉴权失败：" + msg;
+        }
+
         public static string RegisterResultText(int code, string serverMsg)
         {
             if (code == (int)RegisterResultCode.RegisterOk)
@@ -108,6 +126,12 @@ namespace Rpg.Client.Net
             };
         }
 
+        public static string GatewayConnectFailedText(string host, ushort port)
+        {
+            var endpoint = string.IsNullOrWhiteSpace(host) ? $"端口 {port}" : $"{host}:{port}";
+            return $"无法连接游戏网关 {endpoint}，请确认 Gateway 已启动且防火墙已放行 {port}/tcp";
+        }
+
         public static string LocalErrorText(ClientLocalError err, LoginTimeoutContext ctx = LoginTimeoutContext.Generic)
         {
             return err switch
@@ -117,7 +141,10 @@ namespace Rpg.Client.Net
                 {
                     LoginTimeoutContext.ZoneList => "区列表响应超时",
                     LoginTimeoutContext.LogoutTimeout => "离世界响应超时",
-                    LoginTimeoutContext.UserList => "角色列表响应超时",
+                    LoginTimeoutContext.Gateway =>
+                        "Gateway 鉴权响应超时，请确认 Record 已启动且 Super 已外联 LoginServer",
+                    LoginTimeoutContext.UserList =>
+                        "角色列表响应超时，请确认 Record 已启动且可访问角色库",
                     _ => "服务器响应超时"
                 },
                 ClientLocalError.ZoneListTimeout => "区列表响应超时",

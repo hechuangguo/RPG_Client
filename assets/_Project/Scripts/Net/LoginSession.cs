@@ -46,9 +46,9 @@ namespace Rpg.Client.Net
         private bool _gatewayConnected;
         private bool _gotLoginRsp;
         private bool _gotGatewayInfo;
+        private bool _gotGatewayAuthRsp;
         private bool _gotUserList;
         private bool _intentionalDisconnect;
-        private bool _userListRetried;
         private bool _isRegisterFlow;
         private byte[] _loginNonce;
         private long _lastHeartbeatMs;
@@ -160,8 +160,7 @@ namespace Rpg.Client.Net
         {
             _state = State.Idle;
             _gatewayConnected = false;
-            _gotLoginRsp = _gotGatewayInfo = _gotUserList = false;
-            _userListRetried = false;
+            _gotLoginRsp = _gotGatewayInfo = _gotGatewayAuthRsp = _gotUserList = false;
             _intentionalDisconnect = false;
             _isRegisterFlow = false;
             _loginNonce = null;
@@ -197,7 +196,6 @@ namespace Rpg.Client.Net
             _highlightUserId = highlightUserId;
             _gatewayConnected = true;
             _gotUserList = false;
-            _userListRetried = false;
             _state = State.WaitUserList;
             _waitStartMs = TimeUtil.NowMs();
             _lastHeartbeatMs = TimeUtil.NowMs();
@@ -233,9 +231,18 @@ namespace Rpg.Client.Net
                      or State.WaitLoginChallenge) &&
                 TimeUtil.ElapsedMs(now, _connectStartMs) > connectTimeout)
             {
-                Fail(_state == State.WaitLoginChallenge
-                    ? ClientLocalError.ResponseTimeout
-                    : ClientLocalError.ConnectTimeout);
+                if (_state == State.WaitLoginChallenge)
+                {
+                    Fail(ClientLocalError.ResponseTimeout);
+                }
+                else if (_state == State.ConnectGateway)
+                {
+                    Fail(ClientErrorText.GatewayConnectFailedText(_gatewayHost, _gatewayPort));
+                }
+                else
+                {
+                    Fail(ClientLocalError.ConnectTimeout);
+                }
                 return;
             }
 
@@ -254,19 +261,9 @@ namespace Rpg.Client.Net
                 return;
             }
 
-            if (_state == State.WaitUserList && !_userListRetried && _gatewayConnected &&
-                _loginRsp != null && !string.IsNullOrEmpty(_loginRsp.LoginToken))
-            {
-                ClientLogger.Instance.Info("LoginSession：角色列表超时，尝试重发 Gateway 鉴权");
-                _userListRetried = true;
-                _waitStartMs = now;
-                _tcp.SendRaw(ClientMsgHandler.BuildGatewayAuthReq(
-                    _account, _loginRsp.LoginToken, _zoneId, _gameType));
-                return;
-            }
-
             var ctx = _state switch
             {
+                State.WaitUserList when !_gotGatewayAuthRsp => LoginTimeoutContext.Gateway,
                 State.WaitUserList => LoginTimeoutContext.UserList,
                 State.RegisterWaitRsp => LoginTimeoutContext.Register,
                 _ => LoginTimeoutContext.Generic
@@ -293,14 +290,18 @@ namespace Rpg.Client.Net
                     NotifyStatus("等待注册挑战...");
                     break;
                 case State.ConnectGateway:
+                    var tokenLen = _loginRsp?.LoginToken?.Length ?? 0;
                     ClientLogger.Instance.InfoFormat(
-                        "LoginSession：发送 Gateway 票据鉴权 账号={0} 区服={1}", _account, _zoneId);
+                        "LoginSession：发送 Gateway 票据鉴权 账号={0} 区服={1} gameType={2} tokenLen={3}",
+                        _account, _zoneId, _gameType, tokenLen);
                     _tcp.SendRaw(ClientMsgHandler.BuildGatewayAuthReq(
                         _account, _loginRsp.LoginToken, _zoneId, _gameType));
                     _state = State.WaitUserList;
+                    _gotGatewayAuthRsp = false;
                     _waitStartMs = TimeUtil.NowMs();
                     _gatewayConnected = true;
                     _lastHeartbeatMs = TimeUtil.NowMs();
+                    NotifyStatus("正在验证登录票据...");
                     break;
             }
         }
@@ -315,6 +316,12 @@ namespace Rpg.Client.Net
 
             if (_state != State.Idle)
             {
+                if (_state == State.ConnectGateway)
+                {
+                    Fail(ClientErrorText.GatewayConnectFailedText(_gatewayHost, _gatewayPort));
+                    return;
+                }
+
                 Fail(ClientLocalError.Disconnected);
             }
         }
@@ -384,6 +391,8 @@ namespace Rpg.Client.Net
             }
 
             _loginNonce = challenge.Nonce.ToByteArray();
+            ClientLogger.Instance.InfoFormat(
+                "LoginSession：收到登录挑战 nonceLen={0}", _loginNonce.Length);
             if (_isRegisterFlow)
             {
                 _tcp.SendRaw(ClientMsgHandler.BuildRegisterReq(
@@ -410,14 +419,17 @@ namespace Rpg.Client.Net
                     return;
                 }
 
-                var gatewayErr = ClientErrorText.LoginResultText(gwRsp.Code, gwRsp.Msg);
+                var gatewayErr = ClientErrorText.GatewayLoginResultText(gwRsp.Code, gwRsp.Msg);
                 if (!string.IsNullOrEmpty(gatewayErr))
                 {
                     Fail(gatewayErr);
                     return;
                 }
 
+                _gotGatewayAuthRsp = true;
+                _waitStartMs = TimeUtil.NowMs();
                 ClientLogger.Instance.Info("LoginSession：Gateway 鉴权成功");
+                NotifyStatus("正在获取角色列表...");
                 return;
             }
 
@@ -509,10 +521,7 @@ namespace Rpg.Client.Net
             _gotGatewayInfo = true;
             _gatewayHost = info.GatewayIp ?? string.Empty;
             _gatewayPort = (ushort)info.GatewayPort;
-            if (IsLoopback(_gatewayHost))
-            {
-                _gatewayHost = _config.LoginHost;
-            }
+            ApplyGatewayHostOverride();
 
             TryConnectGateway();
         }
@@ -534,7 +543,6 @@ namespace Rpg.Client.Net
             }
 
             _gotUserList = true;
-            _userListRetried = false;
             _state = State.WaitUserAction;
             _cachedCharacters.Clear();
             _cachedCharacters.AddRange(chars);
@@ -594,6 +602,35 @@ namespace Rpg.Client.Net
             _state = State.Idle;
             ClientLogger.Instance.InfoFormat("LoginSession：进入游戏 mapId={0}", enter.MapId);
             OnEnterGame?.Invoke(enter);
+        }
+
+        private void ApplyGatewayHostOverride()
+        {
+            var serverHost = _gatewayHost;
+            if (!string.IsNullOrWhiteSpace(_config?.GatewayHost))
+            {
+                _gatewayHost = _config.GatewayHost.Trim();
+                ClientLogger.Instance.InfoFormat(
+                    "LoginSession：Gateway 地址已覆盖为配置 gatewayHost={0}（服务端下发 {1}）",
+                    _gatewayHost, serverHost);
+                return;
+            }
+
+            if (_config?.GatewayUseLoginHost == true)
+            {
+                _gatewayHost = _config.LoginHost;
+                ClientLogger.Instance.InfoFormat(
+                    "LoginSession：gatewayUseLoginHost，Gateway 地址改用 loginHost={0}（服务端下发 {1}）",
+                    _gatewayHost, serverHost);
+                return;
+            }
+
+            if (IsLoopback(_gatewayHost))
+            {
+                _gatewayHost = _config.LoginHost;
+                ClientLogger.Instance.InfoFormat(
+                    "LoginSession：Gateway 回环地址已替换为 loginHost={0}", _gatewayHost);
+            }
         }
 
         private static bool IsLoopback(string host) =>
