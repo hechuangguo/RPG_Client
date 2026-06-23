@@ -58,6 +58,9 @@ namespace Rpg.Client.UI
         [SerializeField] private Text _statusText;
         [SerializeField] private Text _errorText;
 
+        [Header("Backdrop")]
+        [SerializeField] private LoginFlowBackdrop _loginFlowBackdrop;
+
         public event Action OnSelectServerClicked;
         public event Action OnCancelServerList;
         public event Action OnGoToRegister;
@@ -178,12 +181,26 @@ namespace Rpg.Client.UI
             {
                 _rememberToggle.isOn = remember;
             }
+
+            UpdateLoginFlowBackdrop(state);
+        }
+
+        private void UpdateLoginFlowBackdrop(AppState state)
+        {
+            if (_loginFlowBackdrop == null)
+            {
+                return;
+            }
+
+            var show = state != AppState.Game;
+            _loginFlowBackdrop.SetVisible(show);
         }
 
         public void ShowServerList(List<GameZoneEntry> zones, uint selectedZoneId)
         {
             ResolveServerList();
             _serverListPanel?.SetActive(true);
+            UpdateLoginFlowBackdrop(AppState.ServerList);
 
             if (_serverList == null)
             {
@@ -218,6 +235,7 @@ namespace Rpg.Client.UI
         {
             ResolveCharacterSelect();
             _characterPanel?.SetActive(true);
+            UpdateLoginFlowBackdrop(AppState.CharacterSelect);
             if (_characterSelect == null)
             {
                 ClientLogger.Instance.Err("GameUiController：CharacterSelectPanel 未绑定，无法显示角色列表");

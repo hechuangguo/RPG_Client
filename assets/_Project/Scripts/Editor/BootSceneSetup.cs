@@ -21,11 +21,16 @@ namespace Rpg.Client.EditorTools
         private const string ScenePath = "assets/_Project/Scenes/Boot.unity";
         private const string ZoneListItemPrefabPath = "assets/_Project/Prefabs/UI/ZoneListItem.prefab";
         private const string CharacterListItemPrefabPath = "assets/_Project/Prefabs/UI/CharacterListItem.prefab";
+        private const string BackdropArtRoot = "assets/_Project/Art/UI/LoginFlowBackdrop";
+        private static readonly Color PanelOverlayColor = new Color(0.08f, 0.1f, 0.14f, 0.5f);
         private const float RefWidth = 1280f;
         private const float RefHeight = 720f;
 
         /// <summary>batchmode：Unity -executeMethod Rpg.Client.EditorTools.BootSceneSetup.SetupBootSceneBatch</summary>
         public static void SetupBootSceneBatch() => SetupBootSceneInternal(forceOverwrite: true);
+
+        /// <summary>batchmode：Unity -executeMethod Rpg.Client.EditorTools.BootSceneSetup.AddLoginFlowBackdropBatch</summary>
+        public static void AddLoginFlowBackdropBatch() => AddLoginFlowBackdrop();
 
         private static bool GuardNotPlaying(string action)
         {
@@ -56,6 +61,49 @@ namespace Rpg.Client.EditorTools
         }
 
         /// <summary>修复 Boot 场景中 Missing Script（如 VocationDropdown / SexDropdown 的 UGUI Dropdown）。</summary>
+        [MenuItem("RPG/Add Login Flow Backdrop")]
+        public static void AddLoginFlowBackdrop()
+        {
+            if (!GuardNotPlaying("添加登录流程背景"))
+            {
+                return;
+            }
+
+            if (!File.Exists(ScenePath))
+            {
+                Debug.LogWarning("BootSceneSetup：未找到 Boot.unity，请先执行 Setup Boot Scene");
+                return;
+            }
+
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var canvas = Object.FindObjectOfType<Canvas>();
+            var ui = Object.FindObjectOfType<GameUiController>();
+            if (canvas == null || ui == null)
+            {
+                Debug.LogWarning("BootSceneSetup：场景中缺少 Canvas 或 GameUiController");
+                return;
+            }
+
+            var existing = canvas.GetComponentInChildren<LoginFlowBackdrop>(true);
+            if (existing != null)
+            {
+                WireLoginFlowBackdrop(ui, existing);
+                SoftenLoginFlowPanels(canvas.transform);
+                EditorSceneManager.MarkSceneDirty(scene);
+                EditorSceneManager.SaveScene(scene);
+                Debug.Log("BootSceneSetup：已重新绑定 LoginFlowBackdrop");
+                return;
+            }
+
+            var backdrop = CreateLoginFlowBackdrop(canvas.transform);
+            backdrop.transform.SetAsFirstSibling();
+            WireLoginFlowBackdrop(ui, backdrop);
+            SoftenLoginFlowPanels(canvas.transform);
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            Debug.Log("BootSceneSetup：已添加 LoginFlowBackdrop");
+        }
+
         [MenuItem("RPG/Fix Boot Scene Missing Scripts")]
         public static void FixBootSceneMissingScripts()
         {
@@ -189,6 +237,8 @@ namespace Rpg.Client.EditorTools
             eventSystemGo.AddComponent<StandaloneInputModule>();
 
             var canvasGo = CreateCanvasRoot();
+            var loginFlowBackdrop = CreateLoginFlowBackdrop(canvasGo.transform);
+            loginFlowBackdrop.transform.SetAsFirstSibling();
             var ui = canvasGo.AddComponent<GameUiController>();
 
             var statusBar = CreateStretchPanel(canvasGo.transform, "StatusBar", new Color(0, 0, 0, 0.35f));
@@ -307,6 +357,7 @@ namespace Rpg.Client.EditorTools
                 passwordInput, showLoginPasswordToggle, rememberToggle, loginBtn, gotoRegisterBtn, authSelectServerBtn,
                 regAccount, regPassword, regConfirm, showRegisterPasswordToggle, registerBtn, backToLoginBtn,
                 statusText, errorText, exitReturnCharBtn, exitReturnLoginBtn, exitQuitBtn);
+            WireLoginFlowBackdrop(ui, loginFlowBackdrop);
 
             WireGameApp(gameApp, ui, world);
             WireWorld(world, entityManager);
@@ -387,9 +438,139 @@ namespace Rpg.Client.EditorTools
 
         private static GameObject CreatePanel(Transform parent, string name, bool active)
         {
-            var panel = CreateStretchPanel(parent, name, new Color(0.08f, 0.1f, 0.14f, 0.85f));
+            var panel = CreateStretchPanel(parent, name, PanelOverlayColor);
             panel.SetActive(active);
             return panel;
+        }
+
+        private static LoginFlowBackdrop CreateLoginFlowBackdrop(Transform canvasRoot)
+        {
+            var rootGo = new GameObject("LoginFlowBackdrop", typeof(RectTransform), typeof(LoginFlowBackdrop));
+            rootGo.transform.SetParent(canvasRoot, false);
+            StretchFull(rootGo.GetComponent<RectTransform>());
+
+            var baseLayer = CreateBackdropLayer(rootGo.transform, "Base",
+                LoadBackdropSprite("backdrop_base.png"), Color.white);
+            var water = CreateBackdropLayer(rootGo.transform, "Water",
+                LoadBackdropSprite("backdrop_water.png"), new Color(1f, 1f, 1f, 0.55f));
+            SetAnchorBottomBand(water.rectTransform, 0f, 0.32f);
+            var waterfall = CreateBackdropLayer(rootGo.transform, "Waterfall",
+                LoadBackdropSprite("backdrop_waterfall.png"), new Color(1f, 1f, 1f, 0.75f));
+            SetAnchorRightBand(waterfall.rectTransform, 0.12f, 0.55f);
+            var trees = CreateBackdropLayer(rootGo.transform, "Trees",
+                LoadBackdropSprite("backdrop_trees.png"), new Color(1f, 1f, 1f, 0.92f));
+            SetAnchorBottomBand(trees.rectTransform, 0f, 0.42f);
+            // base 已是完整场景图，以下叠层默认关闭，避免底部出现「第二张图」
+            water.gameObject.SetActive(false);
+            waterfall.gameObject.SetActive(false);
+            trees.gameObject.SetActive(false);
+            var mistFar = CreateBackdropLayer(rootGo.transform, "MistFar",
+                LoadBackdropSprite("backdrop_mist.png"), new Color(1f, 1f, 1f, 0.14f));
+            var mistNear = CreateBackdropLayer(rootGo.transform, "MistNear",
+                LoadBackdropSprite("backdrop_mist.png"), new Color(1f, 1f, 1f, 0.22f));
+
+            var birdRootGo = new GameObject("Birds", typeof(RectTransform));
+            birdRootGo.transform.SetParent(rootGo.transform, false);
+            StretchFull(birdRootGo.GetComponent<RectTransform>());
+
+            foreach (var img in new[] { baseLayer, water, waterfall, trees, mistFar, mistNear })
+            {
+                if (img != null)
+                {
+                    img.raycastTarget = false;
+                }
+            }
+
+            var backdrop = rootGo.GetComponent<LoginFlowBackdrop>();
+            backdrop.BindLayers(baseLayer, water, waterfall, trees, mistNear, mistFar,
+                birdRootGo.GetComponent<RectTransform>(), LoadBackdropSprite("bird.png"));
+            return backdrop;
+        }
+
+        private static Image CreateBackdropLayer(Transform parent, string name, Sprite sprite, Color color)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            go.transform.SetParent(parent, false);
+            StretchFull(go.GetComponent<RectTransform>());
+            var image = go.GetComponent<Image>();
+            image.sprite = sprite;
+            image.color = color;
+            image.type = Image.Type.Simple;
+            image.preserveAspect = false;
+            return image;
+        }
+
+        private static void StretchFull(RectTransform rt)
+        {
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+        }
+
+        private static void SetAnchorBottomBand(RectTransform rt, float ymin, float ymax)
+        {
+            rt.anchorMin = new Vector2(0f, ymin);
+            rt.anchorMax = new Vector2(1f, ymax);
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+        }
+
+        private static void SetAnchorRightBand(RectTransform rt, float width, float height)
+        {
+            rt.anchorMin = new Vector2(1f, 0.35f);
+            rt.anchorMax = new Vector2(1f, 0.35f);
+            rt.pivot = new Vector2(1f, 0.5f);
+            rt.sizeDelta = new Vector2(width * RefWidth, height * RefHeight);
+            rt.anchoredPosition = new Vector2(-24f, 40f);
+        }
+
+        private static Sprite LoadBackdropSprite(string fileName)
+        {
+            var path = $"{BackdropArtRoot}/{fileName}";
+            var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+            if (sprite != null)
+            {
+                return sprite;
+            }
+
+            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (tex == null)
+            {
+                Debug.LogWarningFormat("BootSceneSetup：未找到背景图 {0}", path);
+                return null;
+            }
+
+            return Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        private static void WireLoginFlowBackdrop(GameUiController ui, LoginFlowBackdrop backdrop)
+        {
+            var so = new SerializedObject(ui);
+            so.FindProperty("_loginFlowBackdrop").objectReferenceValue = backdrop;
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SoftenLoginFlowPanels(Transform canvasRoot)
+        {
+            var names = new[]
+            {
+                "ZoneHomePanel", "ServerListPanel", "AuthPanel", "RegisterPanel", "CharacterPanel"
+            };
+            foreach (var panelName in names)
+            {
+                var panel = canvasRoot.Find(panelName);
+                if (panel == null)
+                {
+                    continue;
+                }
+
+                var image = panel.GetComponent<Image>();
+                if (image != null)
+                {
+                    image.color = PanelOverlayColor;
+                }
+            }
         }
 
         private static Text CreateText(Transform parent, string name, string content, Font font, int size,
