@@ -3,7 +3,8 @@
     "rootNamespace": "Rpg.Client",
     "references": [
         "RpgProto",
-        "Unity.InputSystem"
+        "Unity.InputSystem",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -8,19 +8,8 @@
     <windowHeight>720</windowHeight>
     <logLevel>info</logLevel>
     <logToConsole>false</logToConsole>
-    <loginHost>192.168.45.128</loginHost>
+    <loginHost>192.168.65.128</loginHost>
     <loginPort>9010</loginPort>
-    <!-- Login 与 Gateway 同机但服务端下发旧 IP 时设为 1 -->
-    <gatewayUseLoginHost>1</gatewayUseLoginHost>
-    <!-- 网络时序（毫秒）；联调时可适当缩短以便快速发现超时 -->
-    <connectTimeoutMs>10000</connectTimeoutMs>
-    <responseTimeoutMs>15000</responseTimeoutMs>
-    <zoneListResponseTimeoutMs>10000</zoneListResponseTimeoutMs>
-    <heartbeatIntervalMs>10000</heartbeatIntervalMs>
-    <moveSendIntervalMs>100</moveSendIntervalMs>
-    <moveMinDelta>0.01</moveMinDelta>
-    <maxFlushBytesPerPoll>16384</maxFlushBytesPerPoll>
-    <logoutTimeoutMs>15000</logoutTimeoutMs>
-    <!-- TLS：ca.crt 从服务端 config/tls 复制；联调可设 insecureSkipVerify=1 -->
+    <!-- 联调无 ca.crt 时可设 insecureSkipVerify=1；正式环境复制 ca.crt 后改回 0 -->
     <Tls enabled="1" ca="config/tls/ca.crt" insecureSkipVerify="1" minVersion="1.2"/>
 </ClientConfig>
