@@ -1,5 +1,6 @@
 /// <summary>
 /// UI 列表项轻量对象池：隐藏复用，避免反复 Instantiate/Destroy。
+/// Rent() 使用 Queue 实现 O(1) 出租。
 /// </summary>
 using System.Collections.Generic;
 using UnityEngine;
@@ -10,7 +11,8 @@ namespace Rpg.Client.UI
     {
         private readonly T _prefab;
         private readonly Transform _parent;
-        private readonly List<T> _instances = new List<T>();
+        private readonly Queue<T> _available = new Queue<T>();
+        private readonly List<T> _allInstances = new List<T>();
 
         public UiViewPool(T prefab, Transform parent)
         {
@@ -18,11 +20,13 @@ namespace Rpg.Client.UI
             _parent = parent;
         }
 
+        /// <summary>O(1) 获取一个已隐藏的实例，若池空则 Instantiate 新实例。</summary>
         public T Rent()
         {
-            foreach (var item in _instances)
+            while (_available.Count > 0)
             {
-                if (item != null && !item.gameObject.activeSelf)
+                var item = _available.Dequeue();
+                if (item != null)
                 {
                     item.gameObject.SetActive(true);
                     return item;
@@ -35,26 +39,31 @@ namespace Rpg.Client.UI
             }
 
             var instance = Object.Instantiate(_prefab, _parent);
-            _instances.Add(instance);
+            _allInstances.Add(instance);
             return instance;
         }
 
+        /// <summary>隐藏所有实例并归还到可用队列。</summary>
         public void ReleaseAll()
         {
-            foreach (var item in _instances)
+            _available.Clear();
+            foreach (var item in _allInstances)
             {
                 if (item != null)
                 {
                     item.gameObject.SetActive(false);
+                    _available.Enqueue(item);
                 }
             }
         }
 
+        /// <summary>将手动创建的 fallback 实例加入池管理。</summary>
         public void Track(T instance)
         {
-            if (instance != null && !_instances.Contains(instance))
+            if (instance != null && !_allInstances.Contains(instance))
             {
-                _instances.Add(instance);
+                _allInstances.Add(instance);
+                _available.Enqueue(instance);
             }
         }
     }

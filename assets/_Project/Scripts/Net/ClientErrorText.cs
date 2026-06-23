@@ -25,7 +25,12 @@ namespace Rpg.Client.Net
                 return string.Empty;
             }
 
-            return "获取角色列表失败：" + PreferServerMsg(serverMsg, "服务器错误");
+            return "获取角色列表失败：" + (code switch
+            {
+                -1 => "存档服务错误，请确认 RecordServer 已连接数据库且 CharBase 表含 accid/gamezone 字段",
+                (int)UserListResultCode.UserListServerError => "服务器错误",
+                _ => PreferServerMsg(serverMsg, "服务器错误")
+            });
         }
 
         public static string GatewayInfoResultText(int code, string serverMsg)
@@ -92,10 +97,12 @@ namespace Rpg.Client.Net
                 return string.Empty;
             }
 
-            var fallback = code == (int)CreateCharacterResultCode.CreateCharacterDuplicateName
-                ? "角色名不可用"
-                : "系统错误";
-            return "创建角色失败：" + PreferServerMsg(serverMsg, fallback);
+            if (code == (int)CreateCharacterResultCode.CreateCharacterDuplicateName)
+            {
+                return PreferServerMsg(serverMsg, "角色名已存在，请更换");
+            }
+
+            return "创建角色失败：" + PreferServerMsg(serverMsg, "系统错误");
         }
 
         public static string GatewayErrorText(S2CError err)

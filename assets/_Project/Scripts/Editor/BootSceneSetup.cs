@@ -27,9 +27,24 @@ namespace Rpg.Client.EditorTools
         /// <summary>batchmode：Unity -executeMethod Rpg.Client.EditorTools.BootSceneSetup.SetupBootSceneBatch</summary>
         public static void SetupBootSceneBatch() => SetupBootSceneInternal(forceOverwrite: true);
 
+        private static bool GuardNotPlaying(string action)
+        {
+            if (!EditorApplication.isPlaying && !EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                return true;
+            }
+
+            Debug.LogWarningFormat("BootSceneSetup：Play 模式下无法{0}，请先停止运行", action);
+            return false;
+        }
+
         [MenuItem("RPG/Setup Boot Scene")]
         public static void SetupBootScene()
         {
+            if (!GuardNotPlaying("重建 Boot 场景"))
+            {
+                return;
+            }
             var force = !File.Exists(ScenePath) ||
                         EditorUtility.DisplayDialog("Setup Boot Scene", "Boot.unity 已存在，是否覆盖？", "覆盖", "取消");
             if (!force)
@@ -38,6 +53,90 @@ namespace Rpg.Client.EditorTools
             }
 
             SetupBootSceneInternal(forceOverwrite: true);
+        }
+
+        /// <summary>修复 Boot 场景中 Missing Script（如 VocationDropdown / SexDropdown 的 UGUI Dropdown）。</summary>
+        [MenuItem("RPG/Fix Boot Scene Missing Scripts")]
+        public static void FixBootSceneMissingScripts()
+        {
+            if (!GuardNotPlaying("修复 Boot 场景"))
+            {
+                return;
+            }
+
+            if (!File.Exists(ScenePath))
+            {
+                Debug.LogWarning("BootSceneSetup：未找到 Boot.unity，请先执行 Setup Boot Scene");
+                return;
+            }
+
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var removed = 0;
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                removed += RemoveMissingScriptsRecursive(root.transform);
+            }
+
+            if (RebuildCharacterSelectDropdowns())
+            {
+                EditorSceneManager.MarkSceneDirty(scene);
+                EditorSceneManager.SaveScene(scene);
+                Debug.LogFormat("BootSceneSetup：已修复 Missing Script（清理 {0} 处）并重建职业/性别 Dropdown", removed);
+            }
+            else
+            {
+                Debug.LogWarning("BootSceneSetup：未找到 CharacterSelectPanel，仅清理 Missing Script");
+            }
+        }
+
+        private static int RemoveMissingScriptsRecursive(Transform node)
+        {
+            var removed = GameObjectUtility.RemoveMonoBehavioursWithMissingScript(node.gameObject);
+            for (var i = 0; i < node.childCount; i++)
+            {
+                removed += RemoveMissingScriptsRecursive(node.GetChild(i));
+            }
+
+            return removed;
+        }
+
+        private static bool RebuildCharacterSelectDropdowns()
+        {
+            var panel = Object.FindObjectOfType<CharacterSelectPanel>(true);
+            if (panel == null)
+            {
+                return false;
+            }
+
+            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
+                       ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
+            var parent = panel.transform;
+
+            DestroyIfExists(parent, "VocationDropdown");
+            DestroyIfExists(parent, "SexDropdown");
+
+            var vocationDropdown = CreateDropdown(parent, "VocationDropdown", font,
+                new List<string> { "战士", "法师" });
+            SetAnchored(vocationDropdown.GetComponent<RectTransform>(), new Vector2(0.35f, 0.3f), new Vector2(140, 36));
+
+            var sexDropdown = CreateDropdown(parent, "SexDropdown", font,
+                new List<string> { "男", "女" });
+            SetAnchored(sexDropdown.GetComponent<RectTransform>(), new Vector2(0.65f, 0.3f), new Vector2(140, 36));
+
+            var so = new SerializedObject(panel);
+            so.FindProperty("_vocationDropdown").objectReferenceValue = vocationDropdown;
+            so.FindProperty("_sexDropdown").objectReferenceValue = sexDropdown;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            return true;
+        }
+
+        private static void DestroyIfExists(Transform parent, string childName)
+        {
+            var child = parent.Find(childName);
+            if (child != null)
+            {
+                Object.DestroyImmediate(child.gameObject);
+            }
         }
 
         private static void SetupBootSceneInternal(bool forceOverwrite)
@@ -724,7 +823,26 @@ namespace Rpg.Client.EditorTools
         {
             var so = new SerializedObject(entityManager);
             so.FindProperty("_entityRoot").objectReferenceValue = entityRoot;
+            so.FindProperty("_playerPrefab").objectReferenceValue = CreateEditorPlayerPrefab(entityManager.transform);
             so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static GameObject CreateEditorPlayerPrefab(Transform parent)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            go.name = "PlayerPrefab";
+            go.SetActive(false);
+            go.transform.SetParent(parent, false);
+            var renderer = go.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.sharedMaterial = new Material(Shader.Find("Standard"))
+                {
+                    color = new Color(0.25f, 0.55f, 1f)
+                };
+            }
+
+            return go;
         }
     }
 }

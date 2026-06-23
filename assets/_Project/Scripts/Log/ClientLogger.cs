@@ -27,9 +27,17 @@ namespace Rpg.Client.Log
         private StreamWriter _writer;
         private long _lastFlushMs;
 
-        /// <summary>初始化日志路径（Boot 场景启动时调用一次）。</summary>
+        /// <summary>初始化日志路径（幂等：已初始化则跳过，避免 GameBootstrap 与 GameApp 双重调用丢日志）。</summary>
         public void Initialize(string repoRoot = null)
         {
+            lock (_lock)
+            {
+                if (_writer != null)
+                {
+                    return; // 已初始化，幂等跳过
+                }
+            }
+
             var root = repoRoot;
             if (string.IsNullOrEmpty(root))
             {

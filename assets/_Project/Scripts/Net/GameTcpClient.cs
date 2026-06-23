@@ -98,9 +98,27 @@ namespace Rpg.Client.Net
         /// <summary>主线程每帧调用。</summary>
         public void Poll()
         {
-            while (_mainThreadQueue.Count > 0)
+            // 加锁批量取出，避免后台线程 EnqueueMain 和主线程消费产生竞态
+            Action[] pending;
+            lock (_mainThreadQueue)
             {
-                _mainThreadQueue.Dequeue()?.Invoke();
+                if (_mainThreadQueue.Count == 0)
+                {
+                    pending = null;
+                }
+                else
+                {
+                    pending = _mainThreadQueue.ToArray();
+                    _mainThreadQueue.Clear();
+                }
+            }
+
+            if (pending != null)
+            {
+                foreach (var action in pending)
+                {
+                    action?.Invoke();
+                }
             }
 
             if (!IsConnected || _stream == null)

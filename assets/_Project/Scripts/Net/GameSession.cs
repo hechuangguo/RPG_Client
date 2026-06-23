@@ -1,7 +1,9 @@
 /// <summary>
 /// 游戏内网络会话。职责：Gateway 心跳、移动同步、离世界、实体与脚本消息分发。
+/// OnMessage 使用字典 O(1) 分发替代 if 链，支持运行时动态扩展。
 /// </summary>
 using System;
+using System.Collections.Generic;
 using Rpg.Client.Config;
 using Rpg.Client.Log;
 using Rpg.Client.Scripting;
@@ -16,7 +18,7 @@ using Rpg.Proto.System;
 
 namespace Rpg.Client.Net
 {
-    public sealed class GameSession
+    public sealed class GameSession : ISession
     {
         private GameTcpClient _tcp;
         private ClientConfigLoader _config;
@@ -25,8 +27,14 @@ namespace Rpg.Client.Net
         private ulong _localUserId;
         private long _lastHeartbeatMs;
         private long _lastMoveSendMs;
-        private uint _heartbeatSeq;
+        private uint _heartbeatSeq = 1;
         private ulong _serverTimeMs;
+
+        // RTT 追踪
+        private readonly Dictionary<uint, long> _heartbeatSendTimes = new Dictionary<uint, long>();
+        private double _smoothRttMs;
+        private const double RttSmoothingAlpha = 0.125; // 指数移动平均平滑系数
+
         private float _lastSentX;
         private float _lastSentY;
         private float _lastSentZ;
@@ -36,6 +44,10 @@ namespace Rpg.Client.Net
         private bool _waitingLogout;
         private LogoutAction _pendingLogoutAction;
         private long _logoutWaitStartMs;
+
+        /// <summary>模块+子命令 → 处理函数的映射表，O(1) 分发。</summary>
+        private readonly Dictionary<(byte module, byte sub), Action<byte[]>> _msgHandlers
+            = new Dictionary<(byte, byte), Action<byte[]>>();
 
         public Action<S2CSpawnEntity> OnSpawn;
         public Action<S2CMoveNotify> OnMove;
@@ -67,6 +79,7 @@ namespace Rpg.Client.Net
             _waitingLogout = false;
             _hasLastSentPos = false;
             _lastHeartbeatMs = TimeUtil.NowMs();
+            InitHandlers();
             _tcp.SetOnMessage(OnMessage);
             _tcp.SetOnDisconnected(() =>
             {
@@ -90,7 +103,9 @@ namespace Rpg.Client.Net
             if (TimeUtil.ElapsedMs(now, _lastHeartbeatMs) >= heartbeatInterval)
             {
                 _lastHeartbeatMs = now;
-                _tcp.SendRaw(ClientMsgHandler.BuildHeartbeat(_heartbeatSeq++));
+                var seq = _heartbeatSeq++;
+                _heartbeatSendTimes[seq] = now;
+                _tcp.SendRaw(ClientMsgHandler.BuildHeartbeat(seq));
             }
 
             if (_waitingLogout &&
@@ -196,6 +211,8 @@ namespace Rpg.Client.Net
 
         public void LeaveWorld() => _inWorld = false;
 
+        public void Cancel() => Disconnect();
+
         public void Disconnect()
         {
             _inWorld = false;
@@ -216,96 +233,94 @@ namespace Rpg.Client.Net
         public bool IsWaitingLogout => _waitingLogout;
         public ulong LocalUserId => _localUserId;
         public ulong ServerTimeMs => _serverTimeMs;
+        /// <summary>平滑 RTT（毫秒）。首次心跳后有效，未测量过返回 -1。</summary>
+        public double SmoothRttMs => _smoothRttMs > 0 ? _smoothRttMs : -1;
         public S2CEnterGame EnterGameInfo => _enterInfo;
 
-        private void OnMessage(byte module, byte sub, byte[] body)
+        /// <summary>注册消息分发表。调用一次后不可更改；新增模块应在此处注册。</summary>
+        private void InitHandlers()
         {
-            if (module == (byte)ClientModule.System)
-            {
-                HandleSystemMessage(sub, body);
-                return;
-            }
+            _msgHandlers.Clear();
 
-            if (module == (byte)ClientModule.Login && sub == (byte)LoginMsgSub.S2CLogoutRsp)
+            // System 模块 — 多子命令，单独处理
+            RegisterHandler(ClientModule.System, (byte)SystemMsgSub.S2CError,
+                body => { if (ClientMsgHandler.TryParseGatewayError(body, out var err)) OnError?.Invoke(ClientErrorText.GatewayErrorText(err)); });
+            RegisterHandler(ClientModule.System, (byte)SystemMsgSub.S2CKick, body =>
             {
-                HandleLogoutRsp(body);
-                return;
-            }
-
-            if (module == (byte)ClientModule.Scene)
-            {
-                HandleSceneMessage(sub, body);
-                return;
-            }
-
-            if (module == (byte)ClientModule.Chat && sub == (byte)ChatMsgSub.S2CChatNotify)
-            {
-                if (ClientMsgHandler.TryParseChatNotify(body, out var chat))
+                ClientLogger.Instance.Warn("GameSession：收到踢线通知");
+                string reason;
+                if (ClientMsgHandler.TryParseKick(body, out var kick))
+                    reason = string.IsNullOrEmpty(kick.Reason) ? "已被服务器踢下线" : kick.Reason;
+                else
+                    reason = "已被服务器踢下线";
+                OnError?.Invoke(reason);
+                Disconnect();
+            });
+            RegisterHandler(ClientModule.System, (byte)SystemMsgSub.S2CHeartbeat,
+                body =>
                 {
-                    _scriptHost?.OnChat(chat);
-                }
-
-                return;
-            }
-
-            if (module == (byte)ClientModule.Quest && sub == (byte)QuestMsgSub.S2CQuestInfo)
-            {
-                if (ClientMsgHandler.TryParseQuestInfo(body, out var info))
-                {
-                    _scriptHost?.OnQuestInfo(info);
-                }
-
-                return;
-            }
-
-            if (module == (byte)ClientModule.Bag && sub == (byte)BagMsgSub.S2CBagInfoRsp)
-            {
-                if (ClientMsgHandler.TryParseBagInfoRsp(body, out var bag))
-                {
-                    _scriptHost?.OnBagInfo(bag);
-                }
-            }
-        }
-
-        private void HandleSystemMessage(byte sub, byte[] body)
-        {
-            switch ((SystemMsgSub)sub)
-            {
-                case SystemMsgSub.S2CError:
-                    if (ClientMsgHandler.TryParseGatewayError(body, out var err))
-                    {
-                        OnError?.Invoke(ClientErrorText.GatewayErrorText(err));
-                    }
-
-                    break;
-                case SystemMsgSub.S2CKick:
-                    ClientLogger.Instance.Warn("GameSession：收到踢线通知");
-                    if (ClientMsgHandler.TryParseKick(body, out var kick))
-                    {
-                        var reason = string.IsNullOrEmpty(kick.Reason) ? "已被服务器踢下线" : kick.Reason;
-                        OnError?.Invoke(reason);
-                    }
-                    else
-                    {
-                        OnError?.Invoke("已被服务器踢下线");
-                    }
-
-                    Disconnect();
-                    break;
-                case SystemMsgSub.S2CHeartbeat:
                     if (ClientMsgHandler.TryParseHeartbeat(body, out var hb))
                     {
                         _serverTimeMs = hb.ServerTime;
-                    }
+                        // 计算 RTT：echo seq 反查发送时间
+                        if (_heartbeatSendTimes.TryGetValue(hb.Seq, out var sendMs))
+                        {
+                            var rtt = TimeUtil.NowMs() - sendMs;
+                            if (_smoothRttMs <= 0)
+                                _smoothRttMs = rtt;
+                            else
+                                _smoothRttMs = _smoothRttMs * (1.0 - RttSmoothingAlpha) + rtt * RttSmoothingAlpha;
+                            _heartbeatSendTimes.Remove(hb.Seq);
+                        }
 
-                    break;
-                case SystemMsgSub.S2CNotice:
-                    if (ClientMsgHandler.TryParseNotice(body, out var notice))
-                    {
-                        _scriptHost?.OnNotice(notice.Content);
+                        // 清理过旧的条目（心跳超时未回复）
+                        if (_heartbeatSendTimes.Count > 16)
+                        {
+                            var hbInterval = _config?.HeartbeatIntervalMs ?? ClientTimingDefaults.HeartbeatIntervalMs;
+                            var cutoff = TimeUtil.NowMs() - hbInterval * 4;
+                            var stale = new List<uint>();
+                            foreach (var kv in _heartbeatSendTimes)
+                                if (kv.Value < cutoff)
+                                    stale.Add(kv.Key);
+                            foreach (var key in stale)
+                                _heartbeatSendTimes.Remove(key);
+                        }
                     }
+                });
+            RegisterHandler(ClientModule.System, (byte)SystemMsgSub.S2CNotice,
+                body => { if (ClientMsgHandler.TryParseNotice(body, out var notice)) _scriptHost?.OnNotice(notice.Content); });
 
-                    break;
+            // Login 模块 — 仅 LogoutRsp
+            RegisterHandler(ClientModule.Login, (byte)LoginMsgSub.S2CLogoutRsp,
+                body => HandleLogoutRsp(body));
+
+            // Scene 模块 — 多子命令
+            RegisterHandler(ClientModule.Scene, (byte)MapDataMsgSub.S2CSpawnEntity,
+                body => { if (ClientMsgHandler.TryParseSpawnEntity(body, out var s)) OnSpawn?.Invoke(s); });
+            RegisterHandler(ClientModule.Scene, (byte)MapDataMsgSub.S2CMoveNotify,
+                body => { if (ClientMsgHandler.TryParseMoveNotify(body, out var m)) OnMove?.Invoke(m); });
+            RegisterHandler(ClientModule.Scene, (byte)MapDataMsgSub.S2CDespawnEntity,
+                body => { if (ClientMsgHandler.TryParseDespawnEntity(body, out var d)) OnDespawn?.Invoke(d); });
+
+            // Chat / Quest / Bag — 各一个子命令
+            RegisterHandler(ClientModule.Chat, (byte)ChatMsgSub.S2CChatNotify,
+                body => { if (ClientMsgHandler.TryParseChatNotify(body, out var c)) _scriptHost?.OnChat(c); });
+            RegisterHandler(ClientModule.Quest, (byte)QuestMsgSub.S2CQuestInfo,
+                body => { if (ClientMsgHandler.TryParseQuestInfo(body, out var q)) _scriptHost?.OnQuestInfo(q); });
+            RegisterHandler(ClientModule.Bag, (byte)BagMsgSub.S2CBagInfoRsp,
+                body => { if (ClientMsgHandler.TryParseBagInfoRsp(body, out var b)) _scriptHost?.OnBagInfo(b); });
+        }
+
+        private void RegisterHandler(ClientModule module, byte sub, Action<byte[]> handler)
+        {
+            _msgHandlers[((byte)module, sub)] = handler;
+        }
+
+        private void OnMessage(byte module, byte sub, byte[] body)
+        {
+            if (_msgHandlers.TryGetValue((module, sub), out var handler))
+            {
+                handler(body);
             }
         }
 
@@ -332,34 +347,6 @@ namespace Rpg.Client.Net
                 var msg = !string.IsNullOrEmpty(rsp.Msg) ? rsp.Msg : "离世界失败";
                 ClientLogger.Instance.WarnFormat("GameSession：离世界失败 {0}", msg);
                 OnError?.Invoke(msg);
-            }
-        }
-
-        private void HandleSceneMessage(byte sub, byte[] body)
-        {
-            switch ((MapDataMsgSub)sub)
-            {
-                case MapDataMsgSub.S2CSpawnEntity:
-                    if (ClientMsgHandler.TryParseSpawnEntity(body, out var spawn))
-                    {
-                        OnSpawn?.Invoke(spawn);
-                    }
-
-                    break;
-                case MapDataMsgSub.S2CMoveNotify:
-                    if (ClientMsgHandler.TryParseMoveNotify(body, out var move))
-                    {
-                        OnMove?.Invoke(move);
-                    }
-
-                    break;
-                case MapDataMsgSub.S2CDespawnEntity:
-                    if (ClientMsgHandler.TryParseDespawnEntity(body, out var despawn))
-                    {
-                        OnDespawn?.Invoke(despawn);
-                    }
-
-                    break;
             }
         }
     }

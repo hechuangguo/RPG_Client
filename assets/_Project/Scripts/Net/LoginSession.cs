@@ -14,7 +14,7 @@ using Rpg.Proto.System;
 
 namespace Rpg.Client.Net
 {
-    public sealed class LoginSession
+    public sealed class LoginSession : ISession
     {
         private enum State
         {
@@ -52,7 +52,7 @@ namespace Rpg.Client.Net
         private bool _isRegisterFlow;
         private byte[] _loginNonce;
         private long _lastHeartbeatMs;
-        private uint _heartbeatSeq;
+        private uint _heartbeatSeq = 1;
         private readonly List<CharacterEntry> _cachedCharacters = new List<CharacterEntry>();
 
         public Action<S2CEnterGame> OnEnterGame;
@@ -60,6 +60,8 @@ namespace Rpg.Client.Net
         public Action OnRegisterSuccess;
         public Action<List<CharacterEntry>, ulong> OnUserList;
         public Action<string> OnStatus;
+        /// <summary>创角可恢复失败（如重名）；不断开 Gateway。</summary>
+        public Action<string> OnCreateCharacterFailed;
 
         public LoginSession()
         {
@@ -68,6 +70,7 @@ namespace Rpg.Client.Net
 
         public void SetConfig(ClientConfigLoader config) => _config = config;
         public bool GatewayConnected => _gatewayConnected;
+        public bool IsCharSelectReady => _state == State.WaitUserAction && _gatewayConnected;
         public string GatewayHost => _gatewayHost;
         public ushort GatewayPort => _gatewayPort;
 
@@ -113,7 +116,8 @@ namespace Rpg.Client.Net
 
             if (!CanSendUserAction())
             {
-                ClientLogger.Instance.WarnFormat("LoginSession：当前状态 {0} 不允许选角进世界", _state);
+                ClientLogger.Instance.WarnFormat(
+                    "LoginSession：当前状态 {0} gateway={1} 不允许选角进世界", _state, _gatewayConnected);
                 return;
             }
 
@@ -128,7 +132,8 @@ namespace Rpg.Client.Net
         {
             if (!CanSendUserAction())
             {
-                ClientLogger.Instance.WarnFormat("LoginSession：当前状态 {0} 不允许创角", _state);
+                ClientLogger.Instance.WarnFormat(
+                    "LoginSession：当前状态 {0} gateway={1} 不允许创角", _state, _gatewayConnected);
                 return;
             }
 
@@ -154,6 +159,7 @@ namespace Rpg.Client.Net
             OnRegisterSuccess = null;
             OnUserList = null;
             OnStatus = null;
+            OnCreateCharacterFailed = null;
         }
 
         public void Cancel()
@@ -530,6 +536,8 @@ namespace Rpg.Client.Net
         {
             if (!ClientMsgHandler.TryParseUserList(body, out var list))
             {
+                ClientLogger.Instance.WarnFormat(
+                    "LoginSession：S2C_USER_LIST 解析失败 bodyLen={0}", body?.Length ?? 0);
                 Fail(ClientLocalError.ParseError);
                 return;
             }
@@ -538,6 +546,8 @@ namespace Rpg.Client.Net
             var chars = ClientMsgHandler.ToCharacterEntries(list);
             if (!string.IsNullOrEmpty(err))
             {
+                ClientLogger.Instance.WarnFormat(
+                    "LoginSession：角色列表失败 code={0} count={1}", list.Code, chars.Count);
                 Fail(err);
                 return;
             }
@@ -564,6 +574,12 @@ namespace Rpg.Client.Net
             var userId = rsp.UserId;
             if (!string.IsNullOrEmpty(err))
             {
+                if (rsp.Code == (int)CreateCharacterResultCode.CreateCharacterDuplicateName)
+                {
+                    RestoreCharSelectAfterCreateFailure(rsp.Code, err);
+                    return;
+                }
+
                 Fail(err);
                 return;
             }
@@ -583,6 +599,15 @@ namespace Rpg.Client.Net
             }
 
             NotifyStatus("创角成功");
+        }
+
+        private void RestoreCharSelectAfterCreateFailure(int code, string message)
+        {
+            _state = State.WaitUserAction;
+            ClientLogger.Instance.WarnFormat("LoginSession：创角失败 code={0}，保持 Gateway 连接", code);
+            var highlight = _cachedCharacters.Count > 0 ? _cachedCharacters[0].UserId : 0UL;
+            OnUserList?.Invoke(new List<CharacterEntry>(_cachedCharacters), highlight);
+            OnCreateCharacterFailed?.Invoke(message);
         }
 
         private void HandleEnterGame(byte[] body)

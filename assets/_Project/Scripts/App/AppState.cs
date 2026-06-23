@@ -7,7 +7,6 @@ namespace Rpg.Client.App
     {
         ZoneHome,
         ServerList,
-        LoadingAuth,
         AuthLogin,
         Register,
         Connecting,

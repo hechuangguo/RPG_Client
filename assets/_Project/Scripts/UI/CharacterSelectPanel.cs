@@ -31,7 +31,6 @@ namespace Rpg.Client.UI
         private Action<ulong> _onEnterWorld;
         private Action<string, byte, byte> _onCreateCharacter;
         private ScrollRect _scrollRect;
-        private bool _listContentPrepared;
 
         private void Awake()
         {
@@ -72,7 +71,6 @@ namespace Rpg.Client.UI
             {
                 SetHint("暂无角色，请创建");
                 SetEnterWorldEnabled(false);
-                UpdateContentHeight();
                 return;
             }
 
@@ -331,24 +329,37 @@ namespace Rpg.Client.UI
 
         private void PrepareListContent()
         {
-            if (_listContentPrepared || _listContent == null)
+            if (_listContent == null)
             {
                 return;
             }
 
             var vlg = _listContent.GetComponent<VerticalLayoutGroup>();
-            if (vlg != null)
+            if (vlg == null)
             {
-                vlg.enabled = false;
+                vlg = _listContent.gameObject.AddComponent<VerticalLayoutGroup>();
             }
+
+            vlg.enabled = true;
+            vlg.spacing = ItemSpacing;
+            vlg.padding = new RectOffset(
+                (int)ContentPadding, (int)ContentPadding,
+                (int)ContentPadding, (int)ContentPadding);
+            vlg.childAlignment = TextAnchor.UpperCenter;
+            vlg.childControlWidth = true;
+            vlg.childControlHeight = false;
+            vlg.childForceExpandWidth = true;
+            vlg.childForceExpandHeight = false;
 
             var fitter = _listContent.GetComponent<ContentSizeFitter>();
-            if (fitter != null)
+            if (fitter == null)
             {
-                fitter.enabled = false;
+                fitter = _listContent.gameObject.AddComponent<ContentSizeFitter>();
             }
 
-            _listContentPrepared = true;
+            fitter.enabled = true;
+            fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
         }
 
         private void LayoutListItems()
@@ -358,49 +369,35 @@ namespace Rpg.Client.UI
                 return;
             }
 
-            for (var i = 0; i < _items.Count; i++)
+            foreach (var item in _items)
             {
-                var item = _items[i];
-                if (item == null)
+                if (item != null)
                 {
-                    continue;
+                    EnsureListItemLayoutElement(item);
                 }
-
-                var rt = item.GetComponent<RectTransform>();
-                rt.anchorMin = new Vector2(0f, 1f);
-                rt.anchorMax = new Vector2(1f, 1f);
-                rt.pivot = new Vector2(0.5f, 1f);
-                rt.sizeDelta = new Vector2(0f, ItemHeight);
-                rt.anchoredPosition = new Vector2(0f, -(ContentPadding + i * (ItemHeight + ItemSpacing)));
             }
 
-            UpdateContentHeight();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
+            Canvas.ForceUpdateCanvases();
 
             if (_scrollRect != null)
             {
                 _scrollRect.verticalNormalizedPosition = 1f;
             }
-
-            Canvas.ForceUpdateCanvases();
         }
 
-        private void UpdateContentHeight()
+        private static void EnsureListItemLayoutElement(CharacterListItemView item)
         {
-            if (_listContent is not RectTransform contentRt)
-            {
-                return;
-            }
+            var rt = item.GetComponent<RectTransform>();
+            var layout = item.GetComponent<LayoutElement>() ?? item.gameObject.AddComponent<LayoutElement>();
+            layout.minHeight = ItemHeight;
+            layout.preferredHeight = ItemHeight;
+            layout.flexibleWidth = 1f;
 
-            if (_items.Count == 0)
-            {
-                contentRt.sizeDelta = new Vector2(0f, 0f);
-                return;
-            }
-
-            var totalHeight = ContentPadding * 2f
-                              + _items.Count * ItemHeight
-                              + (_items.Count - 1) * ItemSpacing;
-            contentRt.sizeDelta = new Vector2(0f, totalHeight);
+            rt.anchorMin = new Vector2(0f, 0.5f);
+            rt.anchorMax = new Vector2(1f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(0f, ItemHeight);
         }
 
         private CharacterListItemView CreateListItem()
@@ -439,11 +436,11 @@ namespace Rpg.Client.UI
             go.transform.SetParent(_listContent, false);
 
             var bg = go.GetComponent<Image>();
-            bg.color = new Color(0.14f, 0.16f, 0.2f, 0.95f);
+            UiViewFactory.EnsureListItemBackground(bg);
 
-            var nameText = CreateRowText(go.transform, "NameText", font, 18, TextAnchor.MiddleLeft,
+            var nameText = UiViewFactory.CreateRowText(go.transform, "NameText", font, 18, TextAnchor.MiddleLeft,
                 new Vector2(12f, 0f), new Vector2(-80f, 0f));
-            var levelText = CreateRowText(go.transform, "LevelText", font, 16, TextAnchor.MiddleRight,
+            var levelText = UiViewFactory.CreateRowText(go.transform, "LevelText", font, 16, TextAnchor.MiddleRight,
                 new Vector2(12f, 0f), new Vector2(-12f, 0f));
 
             var item = go.GetComponent<CharacterListItemView>();
@@ -451,25 +448,6 @@ namespace Rpg.Client.UI
             btn.targetGraphic = bg;
             item.InitVisuals(nameText, levelText, bg, btn);
             return item;
-        }
-
-        private static Text CreateRowText(Transform parent, string name, Font font, int size,
-            TextAnchor anchor, Vector2 offsetMin, Vector2 offsetMax)
-        {
-            var textGo = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-            textGo.transform.SetParent(parent, false);
-            var rt = textGo.GetComponent<RectTransform>();
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = offsetMin;
-            rt.offsetMax = offsetMax;
-
-            var text = textGo.GetComponent<Text>();
-            text.font = font;
-            text.fontSize = size;
-            text.alignment = anchor;
-            text.color = Color.white;
-            return text;
         }
 
         private void ClearItems()

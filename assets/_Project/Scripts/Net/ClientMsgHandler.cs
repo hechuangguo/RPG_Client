@@ -2,8 +2,12 @@
 /// 客户端 Protobuf 消息构造与解析。
 /// 全部 Build/TryParse 均对应 Common/*Msg.proto 生成类型，禁止手写定长 struct body。
 /// </summary>
+using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Text;
 using Google.Protobuf;
+using Rpg.Client.Log;
 using Rpg.Client.Util;
 using Rpg.Proto.Bag;
 using Rpg.Proto.Chat;
@@ -103,6 +107,12 @@ namespace Rpg.Client.Net
 
         public static byte[] BuildHeartbeat(uint seq)
         {
+            // Gateway 校验 C2S_HEARTBEAT minLen=1；proto3 下 seq=0 会序列化为空 body
+            if (seq == 0)
+            {
+                seq = 1;
+            }
+
             var req = new C2SHeartbeat { Seq = seq };
             return PacketCodec.Encode(SystemModule, (byte)SystemMsgSub.C2SHeartbeat, req);
         }
@@ -165,8 +175,78 @@ namespace Rpg.Client.Net
         public static bool TryParseEnterGame(byte[] body, out S2CEnterGame enter) =>
             ProtoParse.TryParse(body, S2CEnterGame.Parser, out enter, "S2CEnterGame");
 
-        public static bool TryParseUserList(byte[] body, out S2CUserList list) =>
-            ProtoParse.TryParse(body, S2CUserList.Parser, out list, "S2CUserList");
+        public static bool TryParseUserList(byte[] body, out S2CUserList list)
+        {
+            if (ProtoParse.TryParse(body, S2CUserList.Parser, out list, "S2CUserList"))
+            {
+                return true;
+            }
+
+            if (TryParseLegacyUserListWire(body, out list))
+            {
+                ClientLogger.Instance.InfoFormat(
+                    "ClientMsgHandler：S2C_USER_LIST 已用 legacy wire 解析 code={0} count={1}",
+                    list.Code, list.Entries.Count);
+                return true;
+            }
+
+            return false;
+        }
+
+        // 旧 Gateway 定长 body：int32 code + uint16 count + count×EntryWire(48B)
+        private const int LegacyUserListHeaderSize = 6;
+        private const int UserListEntryWireSize = 48;
+        private const int NameWireSize = 32;
+
+        private static bool TryParseLegacyUserListWire(byte[] body, out S2CUserList list)
+        {
+            list = null;
+            if (body == null || body.Length < LegacyUserListHeaderSize)
+            {
+                return false;
+            }
+
+            var code = BinaryPrimitives.ReadInt32LittleEndian(body.AsSpan(0, 4));
+            var count = BinaryPrimitives.ReadUInt16LittleEndian(body.AsSpan(4, 2));
+            var expected = LegacyUserListHeaderSize + count * UserListEntryWireSize;
+            if (body.Length != expected)
+            {
+                return false;
+            }
+
+            list = new S2CUserList { Code = code };
+            var offset = LegacyUserListHeaderSize;
+            for (var i = 0; i < count; i++)
+            {
+                list.Entries.Add(ReadUserListEntryWire(body, offset));
+                offset += UserListEntryWireSize;
+            }
+
+            return true;
+        }
+
+        private static UserListEntry ReadUserListEntryWire(byte[] body, int offset)
+        {
+            return new UserListEntry
+            {
+                UserId = BinaryPrimitives.ReadUInt64LittleEndian(body.AsSpan(offset, 8)),
+                Name = ReadWireCString(body, offset + 8, NameWireSize),
+                Level = BinaryPrimitives.ReadUInt32LittleEndian(body.AsSpan(offset + 40, 4)),
+                Vocation = body[offset + 44],
+                Sex = body[offset + 45]
+            };
+        }
+
+        private static string ReadWireCString(byte[] body, int offset, int maxLen)
+        {
+            var len = 0;
+            while (len < maxLen && body[offset + len] != 0)
+            {
+                len++;
+            }
+
+            return len == 0 ? string.Empty : Encoding.UTF8.GetString(body, offset, len);
+        }
 
         public static bool TryParseCreateUserRsp(byte[] body, out S2CCreateUserRsp rsp) =>
             ProtoParse.TryParse(body, S2CCreateUserRsp.Parser, out rsp, "S2CCreateUserRsp");

@@ -32,7 +32,6 @@ namespace Rpg.Client.UI
         private bool _viewportMaskFixed;
 
         private static Font _cachedFont;
-        private static Sprite _whiteSprite;
 
         private void Awake()
         {
@@ -294,6 +293,23 @@ namespace Rpg.Client.UI
             }
         }
 
+        private void ResolveUIFont()
+        {
+            if (_cachedFont != null)
+            {
+                return;
+            }
+
+            if (_hintText?.font != null)
+            {
+                _cachedFont = _hintText.font;
+            }
+            else
+            {
+                _cachedFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            }
+        }
+
         private ZoneListItemView CreateListItem()
         {
             if (_listContent == null)
@@ -307,7 +323,7 @@ namespace Rpg.Client.UI
                 var instance = _itemPool?.Rent();
                 if (instance != null && instance.HasValidVisuals())
                 {
-                    EnsureListItemBackground(instance.GetComponent<Image>());
+                    UiViewFactory.EnsureListItemBackground(instance.GetComponent<Image>());
                     EnsureListItemLayoutElement(instance);
                     return instance;
                 }
@@ -325,18 +341,18 @@ namespace Rpg.Client.UI
 
         private ZoneListItemView CreateFallbackListItem()
         {
-            var font = ResolveUIFont();
+            ResolveUIFont();
 
             var go = new GameObject("ZoneListItem", typeof(RectTransform),
                 typeof(CanvasRenderer), typeof(Image), typeof(ZoneListItemView), typeof(Button));
             go.transform.SetParent(_listContent, false);
 
             var bg = go.GetComponent<Image>();
-            EnsureListItemBackground(bg);
+            UiViewFactory.EnsureListItemBackground(bg);
 
-            var nameText = CreateRowText(go.transform, "NameText", font, 18, TextAnchor.MiddleLeft,
+            var nameText = UiViewFactory.CreateRowText(go.transform, "NameText", _cachedFont, 18, TextAnchor.MiddleLeft,
                 new Vector2(12f, 0f), new Vector2(-280f, 0f));
-            var statusText = CreateRowText(go.transform, "StatusText", font, 16, TextAnchor.MiddleCenter,
+            var statusText = UiViewFactory.CreateRowText(go.transform, "StatusText", _cachedFont, 16, TextAnchor.MiddleCenter,
                 Vector2.zero, Vector2.zero);
             var statusRt = statusText.rectTransform;
             statusRt.anchorMin = new Vector2(0.72f, 0.5f);
@@ -345,7 +361,7 @@ namespace Rpg.Client.UI
             statusRt.sizeDelta = new Vector2(80f, 28f);
             statusRt.anchoredPosition = Vector2.zero;
 
-            var onlineText = CreateRowText(go.transform, "OnlineText", font, 14, TextAnchor.MiddleRight,
+            var onlineText = UiViewFactory.CreateRowText(go.transform, "OnlineText", _cachedFont, 14, TextAnchor.MiddleRight,
                 new Vector2(12f, 0f), new Vector2(-12f, 0f));
 
             var item = go.GetComponent<ZoneListItemView>();
@@ -355,76 +371,6 @@ namespace Rpg.Client.UI
             btn.targetGraphic = bg;
             EnsureListItemLayoutElement(item);
             return item;
-        }
-
-        private static Text CreateRowText(Transform parent, string name, Font font, int size,
-            TextAnchor anchor, Vector2 offsetMin, Vector2 offsetMax)
-        {
-            var textGo = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-            textGo.transform.SetParent(parent, false);
-            var rt = textGo.GetComponent<RectTransform>();
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = offsetMin;
-            rt.offsetMax = offsetMax;
-
-            var text = textGo.GetComponent<Text>();
-            text.font = font;
-            text.fontSize = size;
-            text.alignment = anchor;
-            text.color = Color.white;
-            text.supportRichText = false;
-            text.horizontalOverflow = HorizontalWrapMode.Overflow;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
-            return text;
-        }
-
-        private static void EnsureListItemBackground(Image image)
-        {
-            if (image == null)
-            {
-                return;
-            }
-
-            image.sprite = GetWhiteSprite();
-            image.type = Image.Type.Simple;
-            image.color = new Color(0.14f, 0.16f, 0.2f, 0.95f);
-        }
-
-        private static Sprite GetWhiteSprite()
-        {
-            if (_whiteSprite != null)
-            {
-                return _whiteSprite;
-            }
-
-            var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false);
-            tex.SetPixel(0, 0, Color.white);
-            tex.Apply(false, true);
-            _whiteSprite = Sprite.Create(tex, new Rect(0f, 0f, 1f, 1f), new Vector2(0.5f, 0.5f), 100f);
-            return _whiteSprite;
-        }
-
-        private Font ResolveUIFont()
-        {
-            if (_hintText != null && _hintText.font != null)
-            {
-                return _hintText.font;
-            }
-
-            if (_cachedFont != null)
-            {
-                return _cachedFont;
-            }
-
-            _cachedFont = Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei UI", "SimHei", "Arial" }, 16);
-            if (_cachedFont == null)
-            {
-                _cachedFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf")
-                              ?? Resources.GetBuiltinResource<Font>("Arial.ttf");
-            }
-
-            return _cachedFont;
         }
 
         private void ClearItems()

@@ -2,7 +2,8 @@
     "name": "RpgClient",
     "rootNamespace": "Rpg.Client",
     "references": [
-        "RpgProto"
+        "RpgProto",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

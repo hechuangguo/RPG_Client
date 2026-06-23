@@ -24,6 +24,7 @@ namespace Rpg.Client.UI
         [SerializeField] private GameObject _characterPanel;
         [SerializeField] private CharacterSelectPanel _characterSelect;
         [SerializeField] private GameObject _gameHudPanel;
+        [SerializeField] private GameHudPanel _gameHud;
         [SerializeField] private GameObject _exitDialog;
 
         [Header("Zone Home")]
@@ -57,17 +58,17 @@ namespace Rpg.Client.UI
         [SerializeField] private Text _statusText;
         [SerializeField] private Text _errorText;
 
-        public Action OnSelectServerClicked;
-        public Action OnCancelServerList;
-        public Action OnGoToRegister;
-        public Action OnBackToLogin;
-        public Action<uint, byte, string> OnZoneConfirmed;
-        public Action OnEnterGameFromHome;
-        public Action<string, string, bool> OnLoginClicked;
-        public Action<string, string, string> OnRegisterClicked;
-        public Action<ulong> OnSelectCharacter;
-        public Action<string, byte, byte> OnCreateCharacter;
-        public Action<LogoutAction> OnExitGameAction;
+        public event Action OnSelectServerClicked;
+        public event Action OnCancelServerList;
+        public event Action OnGoToRegister;
+        public event Action OnBackToLogin;
+        public event Action<uint, byte, string> OnZoneConfirmed;
+        public event Action OnEnterGameFromHome;
+        public event Action<string, string, bool> OnLoginClicked;
+        public event Action<string, string, string> OnRegisterClicked;
+        public event Action<ulong> OnSelectCharacter;
+        public event Action<string, byte, byte> OnCreateCharacter;
+        public event Action<LogoutAction> OnExitGameAction;
 
         private bool _registerBusy;
 
@@ -75,6 +76,7 @@ namespace Rpg.Client.UI
         {
             ResolveServerList();
             ResolveCharacterSelect();
+            ResolveGameHud();
             EnsureAuthRegisterUiRefs();
             _selectServerBtn?.onClick.AddListener(() => OnSelectServerClicked?.Invoke());
             _enterGameBtn?.onClick.AddListener(() => OnEnterGameFromHome?.Invoke());
@@ -268,6 +270,26 @@ namespace Rpg.Client.UI
         public void ShowExitDialog(bool show) => _exitDialog?.SetActive(show);
 
         public void SetServerListHint(string message) => _serverList?.SetHint(message ?? string.Empty);
+
+        /// <summary>获取 GameHudPanel 引用（延迟解析后可用）。</summary>
+        public GameHudPanel GameHud => _gameHud;
+
+        private void ResolveGameHud()
+        {
+            if (_gameHud != null)
+            {
+                return;
+            }
+
+            if (_gameHudPanel != null)
+            {
+                _gameHud = _gameHudPanel.GetComponent<GameHudPanel>();
+                if (_gameHud == null)
+                {
+                    _gameHud = _gameHudPanel.AddComponent<GameHudPanel>();
+                }
+            }
+        }
 
         private void ResolveServerList()
         {

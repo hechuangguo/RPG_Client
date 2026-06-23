@@ -1,6 +1,7 @@
 /// <summary>
-/// 游戏脚本宿主。职责：接收 GameSession 消息并更新 Quest/Bag 模型；XLua 对接预留。
+/// 游戏脚本宿主。职责：接收 GameSession 消息并更新 Quest/Bag 模型；聊天/任务/背包消息回调。
 /// </summary>
+using System;
 using Rpg.Client.Game;
 using Rpg.Client.Log;
 using Rpg.Proto.Bag;
@@ -16,6 +17,11 @@ namespace Rpg.Client.Scripting
 
         public QuestModel Quests => _quests;
         public ItemBagModel Bag => _bag;
+
+        /// <summary>聊天消息回调 (channel, senderName, content)。HUD 面板订阅此事件显示聊天。</summary>
+        public event Action<string, string, string> OnChatMessage;
+        /// <summary>系统公告回调。</summary>
+        public event Action<string> OnNoticeMessage;
 
         public void OnEnterGame(ulong userId, uint mapId)
         {
@@ -39,11 +45,17 @@ namespace Rpg.Client.Scripting
                 chat.Channel,
                 chat.FromName ?? string.Empty,
                 chat.Content ?? string.Empty);
+
+            OnChatMessage?.Invoke(
+                chat.Channel.ToString(),
+                chat.FromName ?? string.Empty,
+                chat.Content ?? string.Empty);
         }
 
         public void OnNotice(string content)
         {
             ClientLogger.Instance.InfoFormat("GameScriptHost：公告 {0}", content ?? string.Empty);
+            OnNoticeMessage?.Invoke(content ?? string.Empty);
         }
 
         public void OnQuestInfo(QuestProto.S2CQuestInfo info)

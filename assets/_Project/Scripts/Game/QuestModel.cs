@@ -1,6 +1,7 @@
 /// <summary>
 /// 任务运行时状态。
 /// </summary>
+using System;
 using System.Collections.Generic;
 
 namespace Rpg.Client.Game
@@ -20,7 +21,14 @@ namespace Rpg.Client.Game
 
         public IReadOnlyDictionary<uint, QuestEntry> Entries => _entries;
 
-        public void Clear() => _entries.Clear();
+        /// <summary>数据变更时触发，UI 可订阅以自动刷新。</summary>
+        public event Action OnChanged;
+
+        public void Clear()
+        {
+            _entries.Clear();
+            OnChanged?.Invoke();
+        }
 
         public void Upsert(QuestEntry entry)
         {
@@ -30,6 +38,25 @@ namespace Rpg.Client.Game
             }
 
             _entries[entry.QuestId] = entry;
+            OnChanged?.Invoke();
+        }
+
+        /// <summary>移除指定任务（任务完成/放弃后调用）。</summary>
+        public bool Remove(uint questId)
+        {
+            if (_entries.Remove(questId))
+            {
+                OnChanged?.Invoke();
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>按 QuestId 查找任务实体。</summary>
+        public bool TryGetEntry(uint questId, out QuestEntry entry)
+        {
+            return _entries.TryGetValue(questId, out entry);
         }
     }
 }

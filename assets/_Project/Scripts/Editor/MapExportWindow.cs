@@ -3,6 +3,7 @@
 /// 菜单：RPG → Export Map Package
 /// </summary>
 using System.IO;
+using System.Text;
 using Rpg.Client.World;
 using UnityEditor;
 using UnityEngine;
@@ -42,24 +43,30 @@ namespace Rpg.Client.EditorTools
             File.WriteAllText(Path.Combine(clientRoot, "manifest.json"), JsonUtility.ToJson(manifest, true));
 
             var markers = Object.FindObjectsOfType<MapLogicMarker>();
-            var spawnJson = "{\"spawns\":[";
-            for (var i = 0; i < markers.Length; i++)
+
+            // 先收集所有 SpawnPoint，再拼接 JSON，避免逗号多出 Bug
+            var sb = new StringBuilder();
+            sb.Append("{\"spawns\":[");
+            var first = true;
+            foreach (var m in markers)
             {
-                var m = markers[i];
                 if (m.MarkerType != MapLogicMarkerType.SpawnPoint)
                 {
                     continue;
                 }
 
-                var p = m.transform.position;
-                spawnJson += $"{{\"id\":\"{m.MarkerId}\",\"x\":{p.x},\"y\":{p.y},\"z\":{p.z}}}";
-                if (i < markers.Length - 1)
+                if (!first)
                 {
-                    spawnJson += ",";
+                    sb.Append(',');
                 }
+
+                first = false;
+                var p = m.transform.position;
+                sb.Append($"{{\"id\":\"{m.MarkerId}\",\"x\":{p.x},\"y\":{p.y},\"z\":{p.z}}}");
             }
 
-            spawnJson += "]}";
+            sb.Append("]}");
+            var spawnJson = sb.ToString();
             Directory.CreateDirectory(Path.Combine(clientRoot, "logic"));
             File.WriteAllText(Path.Combine(clientRoot, "logic", "spawn_points.json"), spawnJson);
 
