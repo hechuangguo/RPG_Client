@@ -1,20 +1,20 @@
 # UI 原型图提示词 (UI Prompts)
 
-> 根据 `docs/Product-Spec.md` 生成。登录流程共用仙侠背景（**近视图拆分底图 + 动效层**）。
+> 根据 `docs/Product-Spec.md` 生成。登录流程共用静态仙侠背景 `backdrop_base.png`。
 
 ---
 
 ## 设计风格与配色
 
-**视觉风格**：中国仙侠 × 青绿山水 × 金霞远景 × **低机位近视图**
+**视觉风格**：中国仙侠 × 青绿山水 × 金霞远景
 
 **构图原则**：
-- 近景水面/树冠约占屏高 **40~42%**
-- 远景山峦压缩在上部 **50~55%**
-- 低机位略仰视，增强近景湖水与枝叶体量感
+- 单张全屏底图，远景山峦与霞光天空占主体
+- 下部可柔和渐变至透明，便于与 UI 面板衔接
+- 无分层动效、无飞鸟/渔船等叠加特效
 
 **配色方案**：
-- **主色** `#2a6b5a` — 湖水、近景植被
+- **主色** `#2a6b5a` — 湖水、植被基调
 - **远山** `#4a7c8c` — 雾气中山体
 - **强调** `#d4a574` — 霞光、高光
 - **面板** `rgba(20,26,36,0.5)` — 全屏半透明遮罩
@@ -22,128 +22,98 @@
 
 ---
 
-## 核心 UI 提示词（近视图拆分模式）
+## 登录背景：backdrop_base
 
-登录背景采用 **远景 base + 近景动效层 + 前景 FX**：
+**目录**：`assets/_Project/Art/UI/LoginFlowBackdrop/`
 
-| 层 | 动效 |
-|----|------|
-| Base | 静态：天空 + 远山 |
-| Waterfall | Shader UV 下落 |
-| Water | Shader 流水波纹 |
-| Trees | Shader 风吹摇摆 |
-| BirdFx | 序列帧横穿 |
-| FishingBoat | 漂移 + 起伏 |
-
-### backdrop_base — 远景-only（天空 + 远山）
-
-**功能描述**：低机位近视图构图；上部 50~55% 为天空与远山；**不含湖面与左侧近景树冠**；下部 40~45% 透明或青绿柔和渐变，供水面层衔接。
+**功能描述**：登录流程（ZoneHome ~ CharacterSelect）共用一张静态 16:9 仙侠山水底图；进 Game 后由 `LoginFlowBackdrop` 隐藏。
 
 **提示词**：
 ```
-Chinese xianxia game background, low near camera angle slight upward view,
-upper 55% golden hour sky and layered misty far mountains, distant pagoda peaks,
-right cliff with distant waterfall hint, lower 45% fades to transparent soft teal gradient,
-NO lake surface NO foreground pine trees NO water ripples,
-cinematic 16:9 1920x1080, PNG with alpha channel, game UI backdrop layer
+Chinese xianxia MMORPG login background, panoramic ink-wash landscape,
+golden hour sky with layered misty mountains and distant pagoda peaks,
+serene lake or valley in mid-ground, soft atmospheric perspective,
+cinematic 16:9 1920x1080, full-bleed game UI backdrop,
+elegant teal-green and warm gold palette, no text no UI chrome,
+high detail painterly style suitable for PC game login screen
 ```
 
-**落盘路径**：`assets/_Project/Art/UI/LoginFlowBackdrop/backdrop_base.png`
+**导出要求**：
+- 比例 **16:9**，建议 **1920×1080**
+- PNG；若下部需与面板融合，可使用真实 alpha 渐变
+- 替换后执行 Unity 菜单 **RPG → Add Login Flow Backdrop** 重新绑定
 
 ---
 
-### backdrop_water — 近景可平铺湖面
+## 区服首页 (ZoneHome)
+
+**功能描述**：显示当前区名、「选择区服」「进入游戏」；半透明遮罩叠在静态背景上。
 
 **提示词**：
 ```
-Seamless tileable near-view jade lake surface, stronger top-down ripple texture,
-xianxia ink wash style, horizontal repeat only, subtle green-blue tones,
-no objects no shore, alpha channel, no hard horizontal seam, 1024x512 PNG
+Chinese xianxia MMORPG server home screen mockup, 1280x720,
+dark semi-transparent panel overlay on full-screen landscape background,
+centered zone name text area, two primary buttons (select server, enter game),
+Simplified Chinese labels, UGUI-style flat buttons with subtle gold border,
+teal and warm gold color scheme, clean readable layout
 ```
-
-**落盘路径**：`assets/_Project/Art/UI/LoginFlowBackdrop/backdrop_water.png`
 
 ---
 
-### backdrop_trees — 左侧近景树冠/枝叶
+## 区列表 (ServerList)
+
+**功能描述**：可滚动区服列表，显示区名、负载、维护状态；确认/取消按钮。
 
 **提示词**：
 ```
-Foreground pine tree canopy and branches left frame only, xianxia ink silhouette,
-transparent background, tall branches reaching upper middle for wind sway,
-NO sky NO water NO mountain, covers lower 58% height left 42% width,
-806x418 proportional to 1920x1080 layout, PNG with alpha
+Chinese xianxia game server list panel, 1280x720,
+scrollable server rows on semi-transparent dark overlay,
+each row shows server name load indicator and status,
+confirm and cancel buttons at bottom,
+Simplified Chinese, UGUI list style, teal gold palette
 ```
-
-**落盘路径**：`assets/_Project/Art/UI/LoginFlowBackdrop/backdrop_trees.png`
 
 ---
 
-### backdrop_waterfall — 右侧远景瀑帘条带
+## 登录 (AuthLogin)
+
+**功能描述**：账号、密码输入框，记住密码，登录/注册切换。
 
 **提示词**：
 ```
-Vertical waterfall strip on cliff edge, xianxia style soft white water mist,
-tileable vertically, transparent sides, right-side composition element,
-256x512 PNG with alpha
+Chinese xianxia MMORPG login form, 1280x720,
+account and password input fields on translucent dark panel,
+remember password checkbox, login button, link to register,
+Simplified Chinese labels, elegant minimal UGUI form,
+background visible through panel, teal and gold accents
 ```
-
-**落盘路径**：`assets/_Project/Art/UI/LoginFlowBackdrop/backdrop_waterfall.png`
 
 ---
 
-### fx_bird_sheet — 飞鸟序列帧（4 帧）
+## 注册 (Register)
+
+**功能描述**：账号、密码、确认密码；注册/返回登录。
 
 **提示词**：
 ```
-Bird flight cycle sprite sheet, 4 frames horizontal strip, 96x48 per frame,
-light pale bird silhouette on transparent, side view wing flap loop,
-384x48 PNG, visible against golden sky, no background
+Chinese xianxia game registration form, 1280x720,
+three input fields account password confirm password,
+register and back to login buttons,
+Simplified Chinese, same visual style as login screen,
+semi-transparent panel over landscape backdrop
 ```
-
-**落盘路径**：`assets/_Project/Art/UI/LoginFlowBackdrop/fx_bird_sheet.png`
 
 ---
 
-### fx_boat_fisherman — 渔船 + 渔夫
+## 选角/创角 (CharacterSelect)
+
+**功能描述**：角色列表与创角表单同屏；选角进入世界。
 
 **提示词**：
 ```
-Traditional Chinese wooden fishing boat with seated fisherman silhouette,
-side view, fisherman holding fishing rod, xianxia ink style on transparent,
-about 200x100 pixels, game UI prop, PNG with alpha
+Chinese xianxia character select screen, 1280x720,
+character list on left or center, create character form on same screen,
+name input vocation and gender selectors, enter world button,
+Simplified Chinese, dark translucent panels, landscape background,
+MMORPG login flow consistent art style
 ```
-
-**落盘路径**：`assets/_Project/Art/UI/LoginFlowBackdrop/fx_boat_fisherman.png`
-
----
-
-## 交互流程提示词
-
-### 流程：区服首页 → 登录 → 选角
-
-**流程描述**：同一近视图背景连续显示，仅前景面板切换；顶部 StatusBar 固定。
-
-**关键界面**：ZoneHome、ServerList、AuthLogin、Register、CharacterSelect
-
-**Mock 提示词（含 UI，仅作布局参考）**：
-```
-PC game login UI mockup 1280x720, Chinese xianxia near-view lake background,
-large foreground water bottom, distant mountains top, dark semi-transparent center panel,
-account password fields Chinese labels 账号 密码 登录, status bar top, PNG
-```
-
----
-
-## 设计建议
-
-- 面板 alpha 保持 0.45~0.55；对比度不足时加居中卡片
-- 替换分层图后 Unity 非 Play 模式执行 **RPG → Add Login Flow Backdrop** 重新绑定
-- `scripts/generate_login_backdrop_placeholders.py` 仅生成 FX 占位；分层底图请用 AI 按上文提示词出图后覆盖
-- **勿使用** `bird.png`（全景误用）作为飞鸟资源
-
----
-
-**文档版本**：0.3  
-**最后更新**：2026-06-24  
-**对应的产品文档**：docs/Product-Spec.md

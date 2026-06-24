@@ -13,7 +13,7 @@ Set-Location $root
 $dest = Join-Path $root "assets\StreamingAssets"
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
-foreach ($dir in @("config", "script", "database", "basefile")) {
+foreach ($dir in @("config", "script", "database", "basefile", "map")) {
     $src = Join-Path $root $dir
     if (-not (Test-Path $src)) { continue }
     $target = Join-Path $dest $dir

@@ -6,6 +6,7 @@ using UnityEngine.UI;
 
 namespace Rpg.Client.UI
 {
+    [DefaultExecutionOrder(-100)]
     public sealed class LoginFlowBackdrop : MonoBehaviour
     {
         private static readonly string[] LegacyLayerNames =
@@ -18,6 +19,13 @@ namespace Rpg.Client.UI
         private void Awake()
         {
             TryBindFromChildren();
+            EnsureNonBlockingRoot();
+            EnsureBehindUiPanels();
+            ApplyBaseOnlyPolicy();
+        }
+
+        private void Start()
+        {
             EnsureBehindUiPanels();
             ApplyBaseOnlyPolicy();
         }
@@ -52,6 +60,14 @@ namespace Rpg.Client.UI
             ApplyBaseOnlyPolicy();
         }
 
+        /// <summary>确保背景不拦截 UI 点击（供 GameUiController 在 Awake 后再调一次）。</summary>
+        public void EnsureNonBlocking()
+        {
+            EnsureNonBlockingRoot();
+            EnsureBehindUiPanels();
+            ApplyBaseOnlyPolicy();
+        }
+
         private void ApplyBaseOnlyPolicy()
         {
             if (_base != null)
@@ -68,6 +84,18 @@ namespace Rpg.Client.UI
         private void EnsureBehindUiPanels()
         {
             transform.SetAsFirstSibling();
+        }
+
+        private void EnsureNonBlockingRoot()
+        {
+            var group = GetComponent<CanvasGroup>();
+            if (group == null)
+            {
+                group = gameObject.AddComponent<CanvasGroup>();
+            }
+
+            group.blocksRaycasts = false;
+            group.interactable = false;
         }
 
         private void DisableAllSubtreeRaycasts()

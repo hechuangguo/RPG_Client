@@ -9,9 +9,9 @@ $ErrorActionPreference = "Stop"
 $root = git rev-parse --show-toplevel
 Set-Location $root
 
-$configPath = Join-Path $root "assets/StreamingAssets/config/client_config.xml"
+$configPath = Join-Path $root "config/client_config.xml"
 if (-not (Test-Path $configPath)) {
-    $configPath = Join-Path $root "config/client_config.xml"
+    $configPath = Join-Path $root "assets/StreamingAssets/config/client_config.xml"
 }
 
 if (-not (Test-Path $configPath)) {

@@ -1,6 +1,5 @@
 -- 客户端 Lua 入口（Phase 3 设计稿；运行时由 C# GameScriptHost 驱动，尚未接入 VM）
 -- 真源目录：script/client/；构建前由 sync_streaming_assets.ps1 同步至 StreamingAssets/script/
-require("client.event_bus")
 require("client.quest_client")
 require("client.item_client")
 require("client.map_ambient")

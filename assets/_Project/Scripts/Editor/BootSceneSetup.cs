@@ -91,6 +91,7 @@ namespace Rpg.Client.EditorTools
                 RefreshLoginFlowBackdropAssets(existing);
                 WireLoginFlowBackdrop(ui, existing);
                 SoftenLoginFlowPanels(canvas.transform);
+                RemoveForegroundFxLayer(canvas.transform);
                 EditorSceneManager.MarkSceneDirty(scene);
                 EditorSceneManager.SaveScene(scene);
                 Debug.Log("BootSceneSetup：已重新绑定并刷新 LoginFlowBackdrop 资源");
@@ -449,9 +450,14 @@ namespace Rpg.Client.EditorTools
 
         private static LoginFlowBackdrop CreateLoginFlowBackdrop(Transform canvasRoot)
         {
-            var rootGo = new GameObject("LoginFlowBackdrop", typeof(RectTransform), typeof(LoginFlowBackdrop));
+            var rootGo = new GameObject("LoginFlowBackdrop", typeof(RectTransform), typeof(CanvasRenderer),
+                typeof(CanvasGroup), typeof(LoginFlowBackdrop));
             rootGo.transform.SetParent(canvasRoot, false);
             StretchFull(rootGo.GetComponent<RectTransform>());
+
+            var group = rootGo.GetComponent<CanvasGroup>();
+            group.blocksRaycasts = false;
+            group.interactable = false;
 
             var baseLayer = CreateBackdropLayer(rootGo.transform, "Base",
                 LoadBackdropSprite("backdrop_base.png"), Color.white);
@@ -459,6 +465,8 @@ namespace Rpg.Client.EditorTools
 
             var backdrop = rootGo.GetComponent<LoginFlowBackdrop>();
             backdrop.BindBase(baseLayer, baseLayer.sprite);
+            RemoveLegacyBackdropLayers(rootGo.transform);
+            RemoveForegroundFxLayer(canvasRoot);
             return backdrop;
         }
 
@@ -513,7 +521,44 @@ namespace Rpg.Client.EditorTools
             var baseLayer = FindBackdropLayerImage(root, "Base");
             AssignBackdropSprite(baseLayer, "backdrop_base.png");
             backdrop.BindBase(baseLayer, baseLayer != null ? baseLayer.sprite : null);
+            RemoveLegacyBackdropLayers(root);
+            RemoveForegroundFxLayer(root.GetComponentInParent<Canvas>()?.transform);
             EditorUtility.SetDirty(backdrop);
+        }
+
+        private static void RemoveLegacyBackdropLayers(Transform backdropRoot)
+        {
+            if (backdropRoot == null)
+            {
+                return;
+            }
+
+            var legacyNames = new[]
+            {
+                "Water", "Waterfall", "Trees", "BirdFxRoot", "Birds", "FishingBoat", "MistNear", "MistFar"
+            };
+            foreach (var layerName in legacyNames)
+            {
+                var layer = backdropRoot.Find(layerName);
+                if (layer != null)
+                {
+                    Object.DestroyImmediate(layer.gameObject);
+                }
+            }
+        }
+
+        private static void RemoveForegroundFxLayer(Transform canvasRoot)
+        {
+            if (canvasRoot == null)
+            {
+                return;
+            }
+
+            var fxLayer = canvasRoot.Find("LoginFlowForegroundFx");
+            if (fxLayer != null)
+            {
+                Object.DestroyImmediate(fxLayer.gameObject);
+            }
         }
 
         private static Image FindBackdropLayerImage(Transform root, string layerName)

@@ -115,6 +115,13 @@ config/client_config.xml.meta
 assets/StreamingAssets/config/client_config.xml
 assets/StreamingAssets/config/client_config.xml.meta
 
+# sync_streaming_assets.ps1 生成物（真源：config/ script/ database/ basefile/ map/）
+assets/StreamingAssets/config/
+assets/StreamingAssets/script/
+assets/StreamingAssets/database/
+assets/StreamingAssets/basefile/
+assets/StreamingAssets/map/
+
 # 字体与本地测试
 assets/fonts/NotoSansSC-Regular.otf
 _sizeof_test.*

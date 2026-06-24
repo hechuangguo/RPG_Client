@@ -16,7 +16,7 @@
 ## 结论（当前阶段）
 
 - **Phase 1–2**：登录/进世界/移动 **不依赖 Lua**；`StreamingAssets/script` 随包挂载但 **不执行**
-- **当前**：`GameSession` → `GameScriptHost` → C# 模型 → `GameHudPanel`；Lua 回调与 `EventBus` 预留
+- **当前**：`GameSession` → `GameScriptHost` → C# 模型 → `GameHudPanel`；跨模块通知由 C# `event Action` 承担
 - **Phase 3 推荐**：引入 **XLua**，在 `GameScriptHost` 内调用 `script/client/init.lua` 的 `OnEnterGame`/`OnTick` 等
 
 ## 对接点

@@ -10,7 +10,7 @@
 
 ## 视觉基调（仙侠 MMORPG）
 
-- 主调：青绿山水 + 金霞远景 + 薄雾层次
+- 主调：青绿山水 + 金霞远景
 - 面板：深色半透明遮罩（约 `rgba(20,26,36,0.45~0.55)`），不挡全屏背景
 - 文案：**简体中文**（按钮、标题、表单标签）
 - 避免：强烈「AI 塑料感」、霓虹赛博、西式奇幻城堡
@@ -27,34 +27,29 @@
 
 进游戏（`Game`）后仅 HUD，**不使用**登录背景。
 
-## 分层背景资源规范（静态 PNG + 代码动效）
+## 登录背景资源规范（静态 PNG）
 
-目录：`assets/_Project/Art/UI/<FeatureName>/`
+目录：`assets/_Project/Art/UI/LoginFlowBackdrop/`
 
-| 文件 | 用途 | 注意 |
-|------|------|------|
-| `backdrop_base.png` | 天空 + 远山 + 主场景 | **要么完整场景，要么仅远景+透明底** |
-| `backdrop_water.png` | 可平铺水面 | 仅当 base 不含水面时使用 |
-| `backdrop_waterfall.png` | 可平铺瀑布条 | 仅当 base 不含瀑布时使用 |
-| `backdrop_trees.png` | 近景树（下半透明） | 仅当 base 不含树木时使用 |
-| `backdrop_mist.png` | 可平铺雾气 | 全屏薄雾叠层 |
-| `bird.png` | 飞鸟剪影 | 小图，16~48px 级 |
+| 文件 | 用途 |
+|------|------|
+| `backdrop_base.png` | 登录流程唯一底图：仙侠山水全屏静态背景 |
 
-**禁止**：`backdrop_base` 已是完整山水时，再叠 water/trees 全宽条带（会出现「上下两张图」接缝）。
+**当前实现**：仅 `backdrop_base.png`，无分层动效、无 Shader 叠层、无飞鸟/渔船特效。
 
 导出要求：
 
-- 比例 **16:9**，建议 **1920×1080** 或 **1280×720**
-- PNG，带 alpha 的层需真实透明通道
-- 命名与上表一致，便于 `BootSceneSetup` / `LoginFlowBackdrop` 自动绑定
+- 比例 **16:9**，建议 **1920×1080**
+- PNG；下部可与 UI 面板融合时使用 alpha 渐变
+- 替换后执行 **RPG → Add Login Flow Backdrop** 重新绑定
 
 ## 提示词输出用途
 
 生成的提示词用于：
 
-1. **Midjourney / DALL·E / SD** 等生成概念稿或分层素材
-2. 导出 PNG 后放入 `assets/_Project/Art/UI/...`
-3. 在 Unity 中由 `LoginFlowBackdrop` 等组件驱动动效（UV 滚动、雾、鸟）
+1. **Midjourney / DALL·E / SD** 等生成概念稿或正式美术
+2. 导出 PNG 后放入 `assets/_Project/Art/UI/LoginFlowBackdrop/`
+3. Unity 中由 `LoginFlowBackdrop` 全屏 stretch 显示
 
 ## 生成物落盘路径
 

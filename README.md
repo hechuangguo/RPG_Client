@@ -14,9 +14,9 @@ RPG_Client/
   Protobuf/            # protoc 生成 *.cs（gitignore，clone 后 sync_protobuf.ps1）
   3Party/              # protoc、Google.Protobuf（离线 bundle）
   assets/_Project/     # Unity 脚本、场景、Editor
-  assets/StreamingAssets/  # config/script/database（sync_streaming_assets.ps1）
+  assets/StreamingAssets/  # 生成物（见 README.md；sync_streaming_assets.ps1）
   ProjectSettings/ Packages/
-  config/ script/ database/ map/   # script/ 为 Lua 真源；StreamingAssets 由 sync 脚本生成
+  config/ script/ database/ basefile/ map/   # 运行时数据真源；同步至 StreamingAssets
   scripts/             # sync_*.ps1、build_unity_client.ps1
   docs/
 ```
@@ -40,7 +40,7 @@ git submodule update --init Common
 
 Hub 打开工程 → 等待 Package Manager 解析 URP / Addressables / InputSystem（勿 Upgrade 无关包）。
 
-**首次构建检查清单**：`Common` submodule 已初始化 → `sync_protobuf.ps1` → `sync_streaming_assets.ps1` → 复制 `config/client_config.xml.example` 为 `client_config.xml` 并按本机修改。
+**首次构建检查清单**：`Common` submodule 已初始化 → `sync_protobuf.ps1` → `sync_streaming_assets.ps1`（生成 `assets/StreamingAssets/`）→ 复制 `config/client_config.xml.example` 为 `client_config.xml` 并按本机修改 → Hub Play 前若改过真源目录须重新 sync。
 
 菜单 **RPG → Setup Boot Scene**（或 `.\scripts\setup_boot_scene.ps1`）生成 Boot 场景（含区服列表 ScrollView UI）。
 

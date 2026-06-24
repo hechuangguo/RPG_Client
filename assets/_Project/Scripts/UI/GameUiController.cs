@@ -542,6 +542,8 @@ namespace Rpg.Client.UI
             {
                 _zoneNameText.raycastTarget = false;
             }
+
+            _loginFlowBackdrop?.EnsureNonBlocking();
         }
 
         private static void DisablePanelBackgroundRaycast(GameObject panel)

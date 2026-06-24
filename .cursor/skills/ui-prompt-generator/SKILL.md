@@ -1,6 +1,6 @@
 ---
 name: ui-prompt-generator
-description: "RPG_Client 专用：根据 docs/Product-Spec.md 生成 Unity UGUI / 分层 PNG 出图提示词，输出到 docs/ui-prompts/UI-Prompts.md。"
+description: "RPG_Client 专用：根据 docs/Product-Spec.md 生成 Unity UGUI / 静态背景出图提示词，输出到 docs/ui-prompts/UI-Prompts.md。"
 compatibility: "Cursor / Claude Code / OpenCode"
 ---
 
@@ -13,7 +13,7 @@ compatibility: "Cursor / Claude Code / OpenCode"
 ## 角色职责
 
 1. 读 `docs/Product-Spec.md`，提炼界面与美术优先级
-2. 功能需求 → UGUI 布局描述 + 分层 PNG 出图提示词
+2. 功能需求 → UGUI 布局描述 + 静态 `backdrop_base.png` 出图提示词
 3. 登录链路多屏共用同一视觉语言
 4. 提示词对应 `assets/_Project/Art/UI/` 文件名与尺寸
 5. 每个核心界面至少 2 个提示词变体
@@ -26,7 +26,7 @@ compatibility: "Cursor / Claude Code / OpenCode"
 ## 工作流程
 
 1. 读 `docs/Product-Spec.md` 与 `references/rpg-client-constraints.md`
-2. 登录背景任务参考 `templates/unity-layered-backdrop-template.md`
+2. 登录背景：仅生成 `backdrop_base.png` 静态全屏底图提示词（无分层动效）
 3. 默认风格：仙侠 × 青绿山水 × 金霞 × 半透明深色面板
 4. 按 `templates/ui-prompt-template.md` 写入 **`docs/ui-prompts/UI-Prompts.md`**
 5. 注明 PNG 落盘路径与 Unity 集成（`LoginFlowBackdrop`、`RPG → Add Login Flow Backdrop`）

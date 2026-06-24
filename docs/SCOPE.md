@@ -5,7 +5,7 @@
 - Unity C# 客户端：`assets/_Project/`、`ProjectSettings/`、`Packages/`
 - 构建依赖：`3Party/`（protoc、Google.Protobuf）
 - 协议生成物：根目录 `Protobuf/*.cs`（`scripts/sync_protobuf.ps1` 生成，**已 gitignore，不提交**）
-- 运行时数据：`config/`、`script/`、`database/`、`map/` → `assets/StreamingAssets/`
+- 运行时数据真源：`config/`、`script/`、`database/`、`basefile/`、`map/` → 经 `scripts/sync_streaming_assets.ps1` 生成 `assets/StreamingAssets/`（生成物不提交）
 - 脚本：`sync_all.bat`、`build_unity_client.ps1` 等
 
 ## 本仓不包含
