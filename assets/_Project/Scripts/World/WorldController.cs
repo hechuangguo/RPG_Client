@@ -38,6 +38,9 @@ namespace Rpg.Client.World
         // InputSystem
         private InputAction _moveAction;
 
+        /// <summary>地图场景加载完成时触发。</summary>
+        public event System.Action OnMapLoaded;
+
         /// <summary>本地玩家当前世界坐标。</summary>
         public Vector3 EntityPosition => _entities != null ? _entities.LocalPosition : Vector3.zero;
 
@@ -158,6 +161,8 @@ namespace Rpg.Client.World
             RenderSettings.ambientMode = AmbientMode.Flat;
             RenderSettings.ambientLight = new Color(0.5f, 0.55f, 0.6f, 1f);
             RenderSettings.ambientIntensity = 1f;
+
+            OnMapLoaded?.Invoke();
         }
 
         public void BindSession(GameSession session)

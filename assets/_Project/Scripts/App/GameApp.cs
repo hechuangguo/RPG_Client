@@ -42,6 +42,7 @@ namespace Rpg.Client.App
         private bool _suppressDisconnectNav;
         private bool _exitDialogVisible;
         private bool _registerInProgress;
+        private bool _mapLoading;
         private LogoutAction? _pendingExitAction;
         private long _lastHudStatusMs;
         private const long HudStatusIntervalMs = 250;
@@ -62,6 +63,7 @@ namespace Rpg.Client.App
             _sessions.Add(_game);
 
             WireCallbacks();
+            _world.OnMapLoaded += OnMapSceneLoaded;
             SetState(AppState.ZoneHome);
         }
 
@@ -179,6 +181,8 @@ namespace Rpg.Client.App
                 }
 
                 _ui.SetCharacterBusy(false);
+                _mapLoading = true;
+                _ui.SetStatus("正在进入游戏...");
                 var tcp = _login.TakeTcpClient();
                 _game.Start(tcp, enter);
                 _scriptHost.OnEnterGame(enter.UserId, enter.MapId);
@@ -460,6 +464,11 @@ namespace Rpg.Client.App
 
         private void UpdateHudStatus()
         {
+            if (_mapLoading)
+            {
+                return;
+            }
+
             var now = TimeUtil.NowMs();
             if (TimeUtil.ElapsedMs(now, _lastHudStatusMs) < HudStatusIntervalMs)
             {
@@ -478,6 +487,13 @@ namespace Rpg.Client.App
             var rtt = _game.SmoothRttMs > 0 ? $" RTT:{_game.SmoothRttMs:F0}ms" : "";
             var fps = $" FPS:{Mathf.RoundToInt(1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f))}";
             hud.SetStatus($"坐标 ({pos.x:F1}, {pos.y:F1}, {pos.z:F1}){rtt}{fps}");
+        }
+
+        private void OnMapSceneLoaded()
+        {
+            _mapLoading = false;
+            _ui.SetStatus(string.Empty);
+            ClientLogger.Instance.Info("GameApp：地图场景加载完成");
         }
 
         private void RestoreZoneFromSettings()
@@ -520,6 +536,7 @@ namespace Rpg.Client.App
 
         private void OnDestroy()
         {
+            _world.OnMapLoaded -= OnMapSceneLoaded;
             _zoneList.ClearHandlers();
             foreach (var session in _sessions)
             {
