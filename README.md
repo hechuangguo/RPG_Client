@@ -109,6 +109,19 @@ Hub 打开工程 → 等待 Package Manager 解析 URP / Addressables / InputSys
 | [`scripts/sync_protobuf.ps1`](scripts/sync_protobuf.ps1) | `Common/*.proto` → `Protobuf/*.cs` |
 | [`scripts/commit_push_all.ps1`](scripts/commit_push_all.ps1) | 默认先提交/推送 Common，再提交/推送主仓；`-SkipCommon` 可跳过 |
 
+## 3D 地图 CDN（双端拉取）
+
+Unity 场景真源在 `assets/_Project/Scenes/World_{mapId}.unity`；MapExport 产出 client/server 双端包 + Addressables Remote。契约见 [`docs/RPG_WorldData.md`](docs/RPG_WorldData.md)。
+
+```powershell
+# 编辑器菜单（或 batchmode）：Setup World Scene 1002 → Setup Map Addressables → Export Map Package
+.\scripts\build_map_packages.ps1    # 全量构建
+.\scripts\serve_map_cdn.ps1         # 本地 CDN http://127.0.0.1:8765/rpg/map/
+.\scripts\fetch_map_package.ps1     # SceneServer 集成测试拉取
+```
+
+`client_config.xml` 配置 `mapCdnBaseUrl` 后，运行时由 [`MapLoader`](assets/_Project/Scripts/World/MapLoader.cs) 拉 manifest 并加载场景；未配置时回退 `Common/map/`。
+
 ## 联调
 
 - 配置：[`docs/CONFIG.md`](docs/CONFIG.md)（`client_config.xml` 模板 `config/client_config.xml.example`）
@@ -121,6 +134,7 @@ Hub 打开工程 → 等待 Package Manager 解析 URP / Addressables / InputSys
 - [`docs/SCOPE.md`](docs/SCOPE.md) — 实施范围
 - [`docs/CONFIG.md`](docs/CONFIG.md) — 配置格式（XML/JSON/Lua）
 - [`docs/SECURITY.md`](docs/SECURITY.md) — 登录 nonce 与服务端对接
-- [`docs/LUA_BRIDGE.md`](docs/LUA_BRIDGE.md) — Lua 桥接（Phase 3）
+- [`docs/RPG_WorldData.md`](docs/RPG_WorldData.md) — 3D 地图 CDN 契约
+- [`docs/MAP_SERVER_FETCH.md`](docs/MAP_SERVER_FETCH.md) — SceneServer 拉取规范
 - [`docs/UI_PROMPT_WORKFLOW.md`](docs/UI_PROMPT_WORKFLOW.md) — UI 出图提示词工作流（`/ui-prompt-generator`）
 - `scripts/sync_protobuf.ps1` — 从 Common 生成 `Protobuf/*.cs`（本地，不提交）

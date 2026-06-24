@@ -141,5 +141,8 @@ assets/_Project/Protobuf/
 .com-unity-codely.json
 .codely-cli/
 
-# skills CLI 安装副本（以 .cursor/skills 为准）
-.agents/
+# 地图 CDN 构建产物（MapExport + Addressables）
+build/map_cdn/
+ServerData/
+build/map_cache/
+

@@ -143,67 +143,29 @@ namespace Rpg.Client.World
             _npcs.Clear();
         }
 
-        /// <summary>读取 Common/map/{mapId}/ambient.json，返回 NPC 配置列表。</summary>
+        /// <summary>读取 Common/map/{mapId}/npc_spawns.json（回退 ambient.json）。</summary>
         private static List<NpcSpawnDef> ParseAmbientJson(uint mapId)
         {
-            // 优先使用 MapDataLoader 统一路径（Common/map/），回退到旧 map/ 目录
-            var mapDir = MapDataLoader.GetMapDir(mapId);
-            var candidates = new[]
-            {
-                Path.Combine(mapDir, "ambient.json"),
-                Path.GetFullPath(Path.Combine(Application.dataPath, "..", "map", mapId.ToString(), "ambient.json")),
-                Path.Combine(Application.streamingAssetsPath, "map", mapId.ToString(), "ambient.json")
-            };
-
-            string path = null;
-            foreach (var candidate in candidates)
-            {
-                if (File.Exists(candidate))
-                {
-                    path = candidate;
-                    break;
-                }
-            }
-
-            if (path == null)
+            var data = MapDataLoader.Load(mapId);
+            if (data?.AmbientNpcs == null || data.AmbientNpcs.Count == 0)
             {
                 ClientLogger.Instance.WarnFormat(
-                    "MapAmbient：未找到 ambient 配置 map/{0}/ambient.json（已检查工程 map 与 StreamingAssets）", mapId);
+                    "MapAmbient：地图 {0} 无 npc_spawns/ambient 配置，跳过 NPC 生成", mapId);
                 return null;
             }
 
-            try
+            var defs = new List<NpcSpawnDef>(data.AmbientNpcs.Count);
+            foreach (var entry in data.AmbientNpcs)
             {
-                var json = File.ReadAllText(path).Trim();
-                var defs = new List<NpcSpawnDef>();
-
-                // 简单手动解析，避免依赖第三方 JSON 库
-                // 格式：{ "vendors": 5, "civilians": 10, "guards": 3 }
-                var content = json.Trim('{', '}', ' ', '\r', '\n', '\t');
-                var pairs = content.Split(',');
-                foreach (var pair in pairs)
+                if (entry.Count <= 0)
                 {
-                    var colonIdx = pair.IndexOf(':');
-                    if (colonIdx < 0)
-                    {
-                        continue;
-                    }
-
-                    var key = pair.Substring(0, colonIdx).Trim().Trim('"');
-                    var valStr = pair.Substring(colonIdx + 1).Trim();
-                    if (int.TryParse(valStr, out var count) && count > 0)
-                    {
-                        defs.Add(new NpcSpawnDef { Type = key, Count = count });
-                    }
+                    continue;
                 }
 
-                return defs.Count > 0 ? defs : null;
+                defs.Add(new NpcSpawnDef { Type = entry.Type, Count = entry.Count });
             }
-            catch (System.Exception ex)
-            {
-                ClientLogger.Instance.ErrFormat("MapAmbient：解析 ambient.json 失败 {0}", ex.Message);
-                return null;
-            }
+
+            return defs.Count > 0 ? defs : null;
         }
 
         /// <summary>程序化生成一个 NPC GameObject（胶囊体 + 名字标签）。</summary>

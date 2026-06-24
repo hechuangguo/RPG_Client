@@ -1,10 +1,10 @@
 /// <summary>
 /// 世界场景控制器。职责：绑定 GameSession、加载地图、驱动 EntityManager。
-/// 进世界时通过 MapDataLoader 读取 Common/map/{mapId}/meta.json 获取场景路径，
-/// 附加加载对应 Unity 3D 场景，离世界时卸载。
-/// 输入使用 Unity InputSystem，支持键盘(WASD/方向键)和手柄左摇杆。
+/// 进世界时通过 MapLoader 拉 CDN manifest + Addressables，或回退 Common/map meta.json。
 /// </summary>
 using System.Collections;
+using Rpg.Client.Config;
+using Rpg.Client.Log;
 using Rpg.Client.Net;
 using Rpg.Proto.Login;
 using Rpg.Proto.MapData;
@@ -17,7 +17,6 @@ namespace Rpg.Client.World
 {
     public sealed class WorldController : MonoBehaviour
     {
-        /// <summary>移动包发送最小间隔（毫秒）。默认 100ms ≈ 10 包/秒，兼顾流畅度与带宽。</summary>
         private const long MoveSendIntervalMs = 100;
 
         [SerializeField] private EntityManager _entities;
@@ -31,37 +30,32 @@ namespace Rpg.Client.World
         private bool _hasSentPos;
         private long _lastMoveSendMs;
         private bool _mapSceneLoaded;
-        private string _loadedScenePath;
+        private MapLoadResult _mapLoadResult;
         private MapData _mapData;
         private Camera _bootCamera;
+        private ClientConfigLoader _config;
 
-        // InputSystem
         private InputAction _moveAction;
 
-        /// <summary>地图场景加载完成时触发。</summary>
         public event System.Action OnMapLoaded;
+        public event System.Action<string> OnMapLoadError;
 
-        /// <summary>本地玩家当前世界坐标。</summary>
         public Vector3 EntityPosition => _entities != null ? _entities.LocalPosition : Vector3.zero;
 
         private void OnEnable()
         {
             _moveAction = new InputAction("Move", InputActionType.Value);
-            // 键盘主键位
             _moveAction.AddCompositeBinding("2DVector")
                 .With("Up", "<Keyboard>/w")
                 .With("Down", "<Keyboard>/s")
                 .With("Left", "<Keyboard>/a")
                 .With("Right", "<Keyboard>/d");
-            // 键盘方向键
             _moveAction.AddCompositeBinding("2DVector")
                 .With("Up", "<Keyboard>/upArrow")
                 .With("Down", "<Keyboard>/downArrow")
                 .With("Left", "<Keyboard>/leftArrow")
                 .With("Right", "<Keyboard>/rightArrow");
-            // 手柄左摇杆
             _moveAction.AddBinding("<Gamepad>/leftStick");
-
             _moveAction.Enable();
         }
 
@@ -72,88 +66,127 @@ namespace Rpg.Client.World
             _moveAction = null;
         }
 
-        public void LoadMap(S2CEnterGame enter, uint modelId = 0)
+        public void LoadMap(S2CEnterGame enter, uint modelId, ClientConfigLoader config)
         {
+            _config = config;
             _localUserId = enter.UserId;
             _active = true;
             _hasSentPos = false;
             _lastMoveSendMs = 0;
             _entities?.Clear();
 
-            // 加载地图数据（从 Common/map/{mapId}/）
-            _mapData = MapDataLoader.Load(enter.MapId);
-
-            // 自动解析 MapAmbient 组件
-            if (_mapAmbient == null)
-            {
-                _mapAmbient = GetComponent<MapAmbientController>();
-                if (_mapAmbient == null)
-                {
-                    _mapAmbient = gameObject.AddComponent<MapAmbientController>();
-                }
-            }
-
+            EnsureMapAmbient();
             _mapAmbient?.LoadAmbient(enter.MapId);
 
             if (enter.Pos != null)
             {
-                var mid = modelId > 0 ? modelId : Rpg.Client.Net.CharacterDef.ModelDefault;
+                var mid = modelId > 0 ? modelId : CharacterDef.ModelDefault;
                 _entities?.SpawnLocalPlayer(enter.UserId, enter.Name, mid, enter.Pos.X, enter.Pos.Y, enter.Pos.Z);
             }
 
-            // 根据 meta.json 的 scenePath 附加加载 Unity 3D 场景
-            if (!_mapSceneLoaded && _mapData?.Meta != null && !string.IsNullOrEmpty(_mapData.Meta.scenePath))
+            _bootCamera = Camera.main;
+            StartCoroutine(LoadMapRoutine(enter.MapId));
+        }
+
+        private void EnsureMapAmbient()
+        {
+            if (_mapAmbient != null)
             {
-                _bootCamera = Camera.main;
-                _loadedScenePath = _mapData.Meta.scenePath;
-                StartCoroutine(LoadMapScene());
+                return;
+            }
+
+            _mapAmbient = GetComponent<MapAmbientController>();
+            if (_mapAmbient == null)
+            {
+                _mapAmbient = gameObject.AddComponent<MapAmbientController>();
             }
         }
 
-        /// <summary>
-        /// 异步附加加载地图场景，将 CityRoot 挂入 World 层级，
-        /// 清理重复摄像机，并设置环境渲染设置。
-        /// </summary>
-        private IEnumerator LoadMapScene()
+        private IEnumerator LoadMapRoutine(uint mapId)
         {
-            var op = SceneManager.LoadSceneAsync(_loadedScenePath, LoadSceneMode.Additive);
-            while (op != null && !op.isDone)
+            MapLoadResult result = null;
+            string error = null;
+
+            yield return MapLoader.LoadAsync(
+                mapId,
+                _config,
+                r => result = r,
+                e => error = e);
+
+            if (!string.IsNullOrEmpty(error))
             {
-                yield return null;
+                ClientLogger.Instance.ErrFormat("WorldController：地图加载失败 — {0}", error);
+                OnMapLoadError?.Invoke(error);
+                yield break;
             }
 
+            if (result == null)
+            {
+                OnMapLoadError?.Invoke("地图加载无结果");
+                yield break;
+            }
+
+            _mapData = result.LocalData;
+            _mapLoadResult = result;
             _mapSceneLoaded = true;
 
-            // 将场景根对象挂入 World 层级
-            var scene = SceneManager.GetSceneByPath(_loadedScenePath);
-            if (scene.IsValid())
-            {
-                foreach (var rootObj in scene.GetRootGameObjects())
-                {
-                    // 跳过摄像机（用 Boot 场景的）
-                    var cam = rootObj.GetComponent<Camera>();
-                    if (cam != null)
-                    {
-                        // 同步摄像机参数到 Boot 摄像机
-                        if (_bootCamera != null)
-                        {
-                            _bootCamera.transform.position = cam.transform.position;
-                            _bootCamera.transform.rotation = cam.transform.rotation;
-                            _bootCamera.fieldOfView = cam.fieldOfView;
-                            _bootCamera.farClipPlane = cam.farClipPlane;
-                            _bootCamera.nearClipPlane = cam.nearClipPlane;
-                            _bootCamera.clearFlags = cam.clearFlags;
-                        }
-                        Destroy(cam.gameObject);
-                        continue;
-                    }
+            FinalizeLoadedScene(result);
+            OnMapLoaded?.Invoke();
+        }
 
-                    // 将 CityRoot / 其他根对象挂入 World
-                    rootObj.transform.SetParent(transform, false);
+        private void FinalizeLoadedScene(MapLoadResult result)
+        {
+            Scene scene;
+            if (result.UsedAddressables && result.SceneHandle.IsValid())
+            {
+                scene = result.SceneHandle.Result.Scene;
+            }
+            else
+            {
+                scene = SceneManager.GetSceneByPath(result.ScenePath);
+            }
+
+            if (!scene.IsValid())
+            {
+                for (var i = 0; i < SceneManager.sceneCount; i++)
+                {
+                    var candidate = SceneManager.GetSceneAt(i);
+                    if (candidate.name.StartsWith("World_"))
+                    {
+                        scene = candidate;
+                        break;
+                    }
                 }
             }
 
-            // 附加加载不传递 RenderSettings，手动设置氛围
+            if (!scene.IsValid())
+            {
+                ClientLogger.Instance.Warn("WorldController：未找到地图场景根对象，跳过挂载");
+                return;
+            }
+
+            foreach (var rootObj in scene.GetRootGameObjects())
+            {
+                var cam = rootObj.GetComponent<Camera>();
+                if (cam != null)
+                {
+                    if (_bootCamera != null)
+                    {
+                        _bootCamera.transform.position = cam.transform.position;
+                        _bootCamera.transform.rotation = cam.transform.rotation;
+                        _bootCamera.fieldOfView = cam.fieldOfView;
+                        _bootCamera.farClipPlane = cam.farClipPlane;
+                        _bootCamera.nearClipPlane = cam.nearClipPlane;
+                        _bootCamera.clearFlags = cam.clearFlags;
+                    }
+
+                    Destroy(cam.gameObject);
+                    continue;
+                }
+
+                rootObj.transform.SetParent(transform, false);
+            }
+
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = new Color(0.6f, 0.7f, 0.75f, 1f);
@@ -162,8 +195,6 @@ namespace Rpg.Client.World
             RenderSettings.ambientMode = AmbientMode.Flat;
             RenderSettings.ambientLight = new Color(0.5f, 0.55f, 0.6f, 1f);
             RenderSettings.ambientIntensity = 1f;
-
-            OnMapLoaded?.Invoke();
         }
 
         public void BindSession(GameSession session)
@@ -202,12 +233,11 @@ namespace Rpg.Client.World
             _entities?.Clear();
             _mapAmbient?.Clear();
 
-            // 卸载地图场景
-            if (_mapSceneLoaded && !string.IsNullOrEmpty(_loadedScenePath))
+            if (_mapSceneLoaded && _mapLoadResult != null)
             {
-                SceneManager.UnloadSceneAsync(_loadedScenePath);
+                MapLoader.Unload(_mapLoadResult);
                 _mapSceneLoaded = false;
-                _loadedScenePath = null;
+                _mapLoadResult = null;
             }
 
             _mapData = null;
@@ -240,8 +270,7 @@ namespace Rpg.Client.World
                 return;
             }
 
-            // 频率节流：两次发包间隔不低于 MoveSendIntervalMs
-            var nowMs = (long)(UnityEngine.Time.realtimeSinceStartupAsDouble * 1000.0);
+            var nowMs = (long)(Time.realtimeSinceStartupAsDouble * 1000.0);
             if (_hasSentPos && (nowMs - _lastMoveSendMs) < MoveSendIntervalMs)
             {
                 return;

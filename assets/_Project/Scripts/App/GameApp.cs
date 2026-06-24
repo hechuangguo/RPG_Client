@@ -64,6 +64,7 @@ namespace Rpg.Client.App
 
             WireCallbacks();
             _world.OnMapLoaded += OnMapSceneLoaded;
+            _world.OnMapLoadError += OnMapLoadFailed;
             SetState(AppState.ZoneHome);
         }
 
@@ -187,7 +188,7 @@ namespace Rpg.Client.App
                 _game.Start(tcp, enter);
                 _scriptHost.OnEnterGame(enter.UserId, enter.MapId);
                 _world.BindSession(_game);
-                _world.LoadMap(enter, enter.ModelId);
+                _world.LoadMap(enter, enter.ModelId, _config);
                 _ui.GameHud?.BindModels(_scriptHost.Quests, _scriptHost.Bag);
                 SetState(AppState.Game);
             };
@@ -496,6 +497,14 @@ namespace Rpg.Client.App
             ClientLogger.Instance.Info("GameApp：地图场景加载完成");
         }
 
+        private void OnMapLoadFailed(string message)
+        {
+            _mapLoading = false;
+            _ui.ShowError(message);
+            _ui.SetStatus(message);
+            ClientLogger.Instance.ErrFormat("GameApp：地图加载失败 — {0}", message);
+        }
+
         private void RestoreZoneFromSettings()
         {
             _selectedZoneId = _localSettings.LastZoneId;
@@ -537,6 +546,7 @@ namespace Rpg.Client.App
         private void OnDestroy()
         {
             _world.OnMapLoaded -= OnMapSceneLoaded;
+            _world.OnMapLoadError -= OnMapLoadFailed;
             _zoneList.ClearHandlers();
             foreach (var session in _sessions)
             {

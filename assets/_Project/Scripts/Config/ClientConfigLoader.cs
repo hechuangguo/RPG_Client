@@ -31,6 +31,10 @@ namespace Rpg.Client.Config
         public int MaxFlushBytesPerPoll { get; private set; } = ClientTimingDefaults.MaxFlushBytesPerPoll;
         public long LogoutTimeoutMs { get; private set; } = ClientTimingDefaults.LogoutTimeoutMs;
         public ClientTlsConfig Tls { get; } = new ClientTlsConfig();
+        /// <summary>地图 CDN 根 URL（如 http://127.0.0.1:8765/rpg/map/）。空则仅用本地 Common/map。</summary>
+        public string MapCdnBaseUrl { get; private set; } = string.Empty;
+        /// <summary>Addressables Remote Catalog 完整 URL；空则从 manifest.cdn 拼接。</summary>
+        public string AddressablesRemoteUrl { get; private set; } = string.Empty;
 
         /// <summary>从 StreamingAssets 或仓库 config/ 加载。</summary>
         public bool Load()
@@ -94,6 +98,8 @@ namespace Rpg.Client.Config
             MoveMinDelta = ParseFloat(root, "moveMinDelta", MoveMinDelta);
             MaxFlushBytesPerPoll = (int)ParseLong(root, "maxFlushBytesPerPoll", MaxFlushBytesPerPoll);
             LogoutTimeoutMs = ParseLong(root, "logoutTimeoutMs", LogoutTimeoutMs);
+            MapCdnBaseUrl = root.Element("mapCdnBaseUrl")?.Value?.Trim() ?? string.Empty;
+            AddressablesRemoteUrl = root.Element("addressablesRemoteUrl")?.Value?.Trim() ?? string.Empty;
 
             var tls = root.Element("Tls");
             if (tls != null)

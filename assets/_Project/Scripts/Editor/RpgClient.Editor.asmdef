@@ -2,7 +2,11 @@
     "name": "RpgClient.Editor",
     "rootNamespace": "Rpg.Client.EditorTools",
     "references": [
-        "RpgClient"
+        "RpgClient",
+        "Unity.Addressables",
+        "Unity.Addressables.Editor",
+        "Unity.AI.Navigation",
+        "Unity.AI.Navigation.Editor"
     ],
     "includePlatforms": [
         "Editor"

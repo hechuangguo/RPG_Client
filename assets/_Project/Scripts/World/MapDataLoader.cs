@@ -59,6 +59,13 @@ namespace Rpg.Client.World
     }
 
     [Serializable]
+    public sealed class NpcSpawnEntry
+    {
+        public string type;
+        public int count;
+    }
+
+    [Serializable]
     public struct BuildingDef
     {
         public string id;
@@ -93,6 +100,9 @@ namespace Rpg.Client.World
 
     [Serializable]
     public sealed class SpawnList { public List<SpawnPointDef> spawns; }
+
+    [Serializable]
+    public sealed class NpcSpawnList { public List<NpcSpawnEntry> npcs; }
 
     /// <summary>包裹 ambient.json 手动解析结果的可序列化结构。</summary>
     [Serializable]
@@ -237,6 +247,12 @@ namespace Rpg.Client.World
 
         private static List<NpcSpawnDef> LoadAmbient(uint mapId)
         {
+            var npcJson = ReadJsonFile(mapId, "npc_spawns.json");
+            if (!string.IsNullOrEmpty(npcJson))
+            {
+                return ParseNpcSpawnsJson(npcJson);
+            }
+
             var json = ReadJsonFile(mapId, "ambient.json");
             if (string.IsNullOrEmpty(json))
             {
@@ -269,6 +285,40 @@ namespace Rpg.Client.World
             catch (Exception ex)
             {
                 ClientLogger.Instance.ErrFormat("MapDataLoader：解析 ambient.json 失败 {0}", ex.Message);
+                return null;
+            }
+        }
+
+        private static List<NpcSpawnDef> ParseNpcSpawnsJson(string json)
+        {
+            try
+            {
+                var list = JsonUtility.FromJson<NpcSpawnList>(json);
+                if (list?.npcs == null || list.npcs.Count == 0)
+                {
+                    return null;
+                }
+
+                var defs = new List<NpcSpawnDef>(list.npcs.Count);
+                foreach (var entry in list.npcs)
+                {
+                    if (entry == null || entry.count <= 0)
+                    {
+                        continue;
+                    }
+
+                    defs.Add(new NpcSpawnDef
+                    {
+                        Type = entry.type ?? string.Empty,
+                        Count = entry.count
+                    });
+                }
+
+                return defs.Count > 0 ? defs : null;
+            }
+            catch (Exception ex)
+            {
+                ClientLogger.Instance.ErrFormat("MapDataLoader：解析 npc_spawns.json 失败 {0}", ex.Message);
                 return null;
             }
         }

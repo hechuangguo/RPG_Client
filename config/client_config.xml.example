@@ -23,6 +23,8 @@
     <moveMinDelta>0.01</moveMinDelta>
     <maxFlushBytesPerPoll>16384</maxFlushBytesPerPoll>
     <logoutTimeoutMs>15000</logoutTimeoutMs>
-    <!-- TLS：将服务端 config/tls/ca.crt 复制到 config/tls/；生产环境保持 insecureSkipVerify=0 -->
+    <!-- 地图 CDN（开发期本地 serve_map_cdn.ps1 默认端口 8765） -->
+    <!-- <mapCdnBaseUrl>http://127.0.0.1:8765/rpg/map/</mapCdnBaseUrl> -->
+    <!-- <addressablesRemoteUrl>http://127.0.0.1:8765/rpg/map/addressables/StandaloneWindows64/catalog_1.0.json</addressablesRemoteUrl> -->
     <Tls enabled="1" ca="config/tls/ca.crt" insecureSkipVerify="0" minVersion="1.2"/>
 </ClientConfig>
