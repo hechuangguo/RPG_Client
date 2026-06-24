@@ -143,11 +143,14 @@ namespace Rpg.Client.World
             _npcs.Clear();
         }
 
-        /// <summary>读取 map/{mapId}/ambient.json，返回 NPC 配置列表。</summary>
+        /// <summary>读取 Common/map/{mapId}/ambient.json，返回 NPC 配置列表。</summary>
         private static List<NpcSpawnDef> ParseAmbientJson(uint mapId)
         {
+            // 优先使用 MapDataLoader 统一路径（Common/map/），回退到旧 map/ 目录
+            var mapDir = MapDataLoader.GetMapDir(mapId);
             var candidates = new[]
             {
+                Path.Combine(mapDir, "ambient.json"),
                 Path.GetFullPath(Path.Combine(Application.dataPath, "..", "map", mapId.ToString(), "ambient.json")),
                 Path.Combine(Application.streamingAssetsPath, "map", mapId.ToString(), "ambient.json")
             };
