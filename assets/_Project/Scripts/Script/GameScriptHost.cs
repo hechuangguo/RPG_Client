@@ -2,6 +2,7 @@
 /// 游戏脚本宿主。职责：接收 GameSession 消息并更新 Quest/Bag 模型；聊天/任务/背包消息回调。
 /// </summary>
 using System;
+using System.Collections.Generic;
 using Rpg.Client.Game;
 using Rpg.Client.Log;
 using Rpg.Proto.Bag;
@@ -14,6 +15,7 @@ namespace Rpg.Client.Scripting
     {
         private readonly QuestModel _quests = new QuestModel();
         private readonly ItemBagModel _bag = new ItemBagModel();
+        private readonly List<BagSlotEntry> _bagSyncScratch = new List<BagSlotEntry>();
 
         public QuestModel Quests => _quests;
         public ItemBagModel Bag => _bag;
@@ -68,15 +70,16 @@ namespace Rpg.Client.Scripting
             if (info.Code != 0)
             {
                 ClientLogger.Instance.WarnFormat("GameScriptHost：任务同步失败 code={0}", info.Code);
+                OnNoticeMessage?.Invoke($"任务同步失败（code={info.Code}）");
                 return;
             }
 
-            _quests.Clear();
+            var entries = new List<Game.QuestEntry>();
             if (info.Entries != null)
             {
                 foreach (var e in info.Entries)
                 {
-                    _quests.Upsert(new Game.QuestEntry
+                    entries.Add(new Game.QuestEntry
                     {
                         QuestId = e.QuestId,
                         Name = e.Name ?? string.Empty,
@@ -93,6 +96,8 @@ namespace Rpg.Client.Scripting
                         e.Done);
                 }
             }
+
+            _quests.ReplaceAll(entries);
         }
 
         public void OnBagInfo(S2CBagInfoRsp rsp)
@@ -105,20 +110,21 @@ namespace Rpg.Client.Scripting
             if (rsp.Code != 0)
             {
                 ClientLogger.Instance.WarnFormat("GameScriptHost：背包同步失败 code={0}", rsp.Code);
+                OnNoticeMessage?.Invoke($"背包同步失败（code={rsp.Code}）");
                 return;
             }
 
-            var slots = new System.Collections.Generic.List<BagSlotEntry>();
+            _bagSyncScratch.Clear();
             if (rsp.Slots != null)
             {
                 foreach (var s in rsp.Slots)
                 {
-                    slots.Add(new BagSlotEntry { ItemId = s.ItemId, Count = s.Count });
+                    _bagSyncScratch.Add(new BagSlotEntry { ItemId = s.ItemId, Count = s.Count });
                 }
             }
 
-            _bag.SetSlots(slots);
-            ClientLogger.Instance.InfoFormat("GameScriptHost：背包同步 {0} 格", slots.Count);
+            _bag.SetSlots(_bagSyncScratch);
+            ClientLogger.Instance.InfoFormat("GameScriptHost：背包同步 {0} 格", _bagSyncScratch.Count);
         }
     }
 }

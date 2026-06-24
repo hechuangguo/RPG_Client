@@ -22,6 +22,9 @@ namespace Rpg.Client.Log
 
         public Level MinLevel { get; set; } = Level.Info;
 
+        /// <summary>是否镜像日志到 Unity Console（由 client_config.xml logToConsole 控制）。</summary>
+        public bool LogToConsole { get; set; } = true;
+
         private readonly object _lock = new object();
         private string _logPath;
         private StreamWriter _writer;
@@ -123,17 +126,20 @@ namespace Rpg.Client.Log
                 }
             }
 
-            if (level == Level.Err)
+            if (LogToConsole)
             {
-                Debug.LogError(line);
-            }
-            else if (level == Level.Warn)
-            {
-                Debug.LogWarning(line);
-            }
-            else
-            {
-                Debug.Log(line);
+                if (level == Level.Err)
+                {
+                    Debug.LogError(line);
+                }
+                else if (level == Level.Warn)
+                {
+                    Debug.LogWarning(line);
+                }
+                else
+                {
+                    Debug.Log(line);
+                }
             }
         }
 

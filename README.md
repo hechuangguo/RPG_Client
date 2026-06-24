@@ -16,7 +16,7 @@ RPG_Client/
   assets/_Project/     # Unity 脚本、场景、Editor
   assets/StreamingAssets/  # config/script/database（sync_streaming_assets.ps1）
   ProjectSettings/ Packages/
-  config/ script/ database/ map/
+  config/ script/ database/ map/   # script/ 为 Lua 真源；StreamingAssets 由 sync 脚本生成
   scripts/             # sync_*.ps1、build_unity_client.ps1
   docs/
 ```
@@ -39,6 +39,8 @@ git submodule update --init Common
 ```
 
 Hub 打开工程 → 等待 Package Manager 解析 URP / Addressables / InputSystem（勿 Upgrade 无关包）。
+
+**首次构建检查清单**：`Common` submodule 已初始化 → `sync_protobuf.ps1` → `sync_streaming_assets.ps1` → 复制 `config/client_config.xml.example` 为 `client_config.xml` 并按本机修改。
 
 菜单 **RPG → Setup Boot Scene**（或 `.\scripts\setup_boot_scene.ps1`）生成 Boot 场景（含区服列表 ScrollView UI）。
 
@@ -117,4 +119,5 @@ git commit -m "chore: bump Common submodule"
 - [`docs/CONFIG.md`](docs/CONFIG.md) — 配置格式（XML/JSON/Lua）
 - [`docs/SECURITY.md`](docs/SECURITY.md) — 登录 nonce 与服务端对接
 - [`docs/LUA_BRIDGE.md`](docs/LUA_BRIDGE.md) — Lua 桥接（Phase 3）
+- [`docs/UI_PROMPT_WORKFLOW.md`](docs/UI_PROMPT_WORKFLOW.md) — UI 出图提示词工作流（`/ui-prompt-generator`）
 - `scripts/sync_protobuf.ps1` — 从 Common 生成 `Protobuf/*.cs`（本地，不提交）

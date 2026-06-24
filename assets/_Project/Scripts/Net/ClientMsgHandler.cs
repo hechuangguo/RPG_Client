@@ -172,6 +172,9 @@ namespace Rpg.Client.Net
         public static bool TryParseGatewayInfo(byte[] body, out S2CGatewayInfo info) =>
             ProtoParse.TryParse(body, S2CGatewayInfo.Parser, out info, "S2CGatewayInfo");
 
+        public static bool TryParseGatewayAuthRsp(byte[] body, out S2CGatewayAuthRsp rsp) =>
+            ProtoParse.TryParse(body, S2CGatewayAuthRsp.Parser, out rsp, "S2CGatewayAuthRsp");
+
         public static bool TryParseEnterGame(byte[] body, out S2CEnterGame enter) =>
             ProtoParse.TryParse(body, S2CEnterGame.Parser, out enter, "S2CEnterGame");
 

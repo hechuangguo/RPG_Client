@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "skills": {
+    "algorithmic-complexity-review": {
+      "source": "pproenca/dot-skills",
+      "sourceType": "github",
+      "skillPath": "skills/.experimental/algorithmic-complexity-review/SKILL.md",
+      "computedHash": "6636ed2d7e08c72539c8945fb91494f4c69df0a369094e1069637afa918273ef"
+    },
+    "django-perf-review": {
+      "source": "getsentry/skills",
+      "sourceType": "github",
+      "skillPath": "skills/django-perf-review/SKILL.md",
+      "computedHash": "b1d1255806ea3cec9843ded6d32ed70313edfb87d3d76b88bc3b2041c4139a59"
+    },
+    "types-generate": {
+      "source": "manastalukdar/claude-devstudio",
+      "sourceType": "github",
+      "skillPath": "skills/types-generate/SKILL.md",
+      "computedHash": "a15a22f36492766b421bb0dc8b6b6c3f65850043fd2a71280ddefcb07ec27f87",
+      "projectPath": ".cursor/skills/types-generate"
+    },
+    "ui-prompt-generator": {
+      "source": "zinohome/cozyengine",
+      "sourceType": "github",
+      "skillPath": ".github/skills/ui-prompt-generator/SKILL.md",
+      "computedHash": "4b9a13bd635e11e35a7973db3d9a6674fdf39310a826c44ab1f7ae6bf35cf658",
+      "projectPath": ".cursor/skills/ui-prompt-generator",
+      "note": "本地已按 RPG_Client 定制，升级上游后请 diff 并合并 references/rpg-client-constraints.md"
+    },
+    "ui-ux-pro-max": {
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "sourceType": "github",
+      "skillPath": ".claude/skills/ui-ux-pro-max/SKILL.md",
+      "computedHash": "c7ddcc95cc869b281b766df85bef629acf655bfb516cb32647d5b8215cab2f4e"
+    }
+  }
+}

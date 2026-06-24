@@ -321,7 +321,11 @@ namespace Rpg.Client.Net
             if (_msgHandlers.TryGetValue((module, sub), out var handler))
             {
                 handler(body);
+                return;
             }
+
+            ClientLogger.Instance.WarnFormat(
+                "GameSession：未处理消息 module=0x{0:X2} sub=0x{1:X2}", module, sub);
         }
 
         private void HandleLogoutRsp(byte[] body)

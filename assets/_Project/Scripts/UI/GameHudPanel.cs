@@ -1,11 +1,10 @@
 /// <summary>
-/// 游戏内 HUD 面板。职责：聊天消息展示/输入、状态栏（坐标 / RTT / FPS）、小地图占位。
-/// 阶段一：聊天 + 状态。阶段二：任务追踪。阶段三：背包快捷栏。
+/// 游戏内 HUD 面板。职责：聊天消息展示/输入、状态栏（坐标 / RTT / FPS）、任务追踪、背包摘要。
 /// 布局全部程序化生成，无需 Prefab。
 /// </summary>
 using System.Collections.Generic;
-using Rpg.Client.Log;
-using Rpg.Proto.Chat;
+using System.Text;
+using Rpg.Client.Game;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -22,7 +21,11 @@ namespace Rpg.Client.UI
         private const float InputHeight = 40f;
         private const float StatusBarHeight = 28f;
         private const float MinimapSize = 140f;
+        private const float QuestPanelWidth = 260f;
+        private const float QuestPanelHeight = 120f;
+        private const float BagBarHeight = 36f;
         private const float Padding = 8f;
+        private const int MaxBagPreviewSlots = 8;
 
         [Header("Chat")]
         [SerializeField] private ScrollRect _chatScroll;
@@ -36,12 +39,40 @@ namespace Rpg.Client.UI
         [Header("Minimap (Phase 2)")]
         [SerializeField] private RawImage _minimapPlaceholder;
 
+        [Header("Quest / Bag")]
+        [SerializeField] private Text _questTrackerText;
+        [SerializeField] private Text _bagBarText;
+
         private readonly List<string> _chatLines = new List<string>();
+        private readonly StringBuilder _chatBuilder = new StringBuilder(1024);
+        private int _chatDisplayedCount;
         private System.Func<string, bool> _onChatSend;
         private Canvas _canvas;
+        private QuestModel _quests;
+        private ItemBagModel _bag;
 
         /// <summary>注册聊天发送回调。返回 true 表示发送成功（HUD 清空输入框）。</summary>
         public void SetChatSendCallback(System.Func<string, bool> callback) => _onChatSend = callback;
+
+        /// <summary>绑定任务/背包模型并订阅变更。</summary>
+        public void BindModels(QuestModel quests, ItemBagModel bag)
+        {
+            UnbindModels();
+            _quests = quests;
+            _bag = bag;
+            if (_quests != null)
+            {
+                _quests.OnChanged += RefreshQuestTracker;
+            }
+
+            if (_bag != null)
+            {
+                _bag.OnChanged += RefreshBagBar;
+            }
+
+            RefreshQuestTracker();
+            RefreshBagBar();
+        }
 
         private void Awake()
         {
@@ -60,6 +91,7 @@ namespace Rpg.Client.UI
             while (_chatLines.Count > MaxChatLines)
             {
                 _chatLines.RemoveAt(0);
+                _chatDisplayedCount = Mathf.Max(0, _chatDisplayedCount - 1);
             }
 
             RefreshChatLog();
@@ -73,6 +105,7 @@ namespace Rpg.Client.UI
             while (_chatLines.Count > MaxChatLines)
             {
                 _chatLines.RemoveAt(0);
+                _chatDisplayedCount = Mathf.Max(0, _chatDisplayedCount - 1);
             }
 
             RefreshChatLog();
@@ -88,6 +121,86 @@ namespace Rpg.Client.UI
             }
         }
 
+        private void RefreshQuestTracker()
+        {
+            if (_questTrackerText == null)
+            {
+                return;
+            }
+
+            if (_quests == null || _quests.Entries.Count == 0)
+            {
+                _questTrackerText.text = "任务：暂无";
+                return;
+            }
+
+            _chatBuilder.Clear();
+            _chatBuilder.AppendLine("任务追踪");
+            foreach (var entry in _quests.Entries.Values)
+            {
+                if (entry == null)
+                {
+                    continue;
+                }
+
+                var status = entry.Done ? "已完成" : $"{entry.Progress}/{entry.Target}";
+                _chatBuilder.Append("• ");
+                _chatBuilder.Append(string.IsNullOrEmpty(entry.Name) ? $"#{entry.QuestId}" : entry.Name);
+                _chatBuilder.Append(" (");
+                _chatBuilder.Append(status);
+                _chatBuilder.AppendLine(")");
+            }
+
+            _questTrackerText.text = _chatBuilder.ToString().TrimEnd();
+        }
+
+        private void RefreshBagBar()
+        {
+            if (_bagBarText == null)
+            {
+                return;
+            }
+
+            if (_bag == null || _bag.Slots.Count == 0)
+            {
+                _bagBarText.text = "背包：空";
+                return;
+            }
+
+            _chatBuilder.Clear();
+            _chatBuilder.Append("背包：");
+            var shown = 0;
+            foreach (var slot in _bag.Slots)
+            {
+                if (slot == null || slot.ItemId == 0)
+                {
+                    continue;
+                }
+
+                if (shown > 0)
+                {
+                    _chatBuilder.Append(" | ");
+                }
+
+                _chatBuilder.Append('#');
+                _chatBuilder.Append(slot.ItemId);
+                _chatBuilder.Append('×');
+                _chatBuilder.Append(slot.Count);
+                shown++;
+                if (shown >= MaxBagPreviewSlots)
+                {
+                    break;
+                }
+            }
+
+            if (_bag.Slots.Count > MaxBagPreviewSlots)
+            {
+                _chatBuilder.Append(" …");
+            }
+
+            _bagBarText.text = _chatBuilder.ToString();
+        }
+
         private void RefreshChatLog()
         {
             if (_chatLogText == null)
@@ -95,7 +208,39 @@ namespace Rpg.Client.UI
                 return;
             }
 
-            _chatLogText.text = string.Join("\n", _chatLines);
+            if (_chatLines.Count < _chatDisplayedCount)
+            {
+                _chatLogText.text = string.Join("\n", _chatLines);
+                _chatDisplayedCount = _chatLines.Count;
+                return;
+            }
+
+            if (_chatDisplayedCount == 0)
+            {
+                _chatLogText.text = string.Join("\n", _chatLines);
+            }
+            else if (_chatLines.Count > _chatDisplayedCount)
+            {
+                _chatBuilder.Clear();
+                if (!string.IsNullOrEmpty(_chatLogText.text))
+                {
+                    _chatBuilder.Append(_chatLogText.text);
+                }
+
+                for (var i = _chatDisplayedCount; i < _chatLines.Count; i++)
+                {
+                    if (_chatBuilder.Length > 0)
+                    {
+                        _chatBuilder.Append('\n');
+                    }
+
+                    _chatBuilder.Append(_chatLines[i]);
+                }
+
+                _chatLogText.text = _chatBuilder.ToString();
+            }
+
+            _chatDisplayedCount = _chatLines.Count;
         }
 
         private void ScrollToBottom()
@@ -141,8 +286,6 @@ namespace Rpg.Client.UI
         /// <summary>确保 UI 布局存在。优先使用序列化字段，缺失时程序化生成。</summary>
         private void EnsureLayout()
         {
-            var rt = GetComponent<RectTransform>();
-
             // ---- 状态栏（顶部全宽） ----
             if (_statusText == null)
             {
@@ -160,9 +303,6 @@ namespace Rpg.Client.UI
                 _statusText.color = new Color(0.9f, 0.9f, 0.9f, 1f);
                 _statusText.alignment = TextAnchor.MiddleLeft;
                 _statusText.horizontalOverflow = HorizontalWrapMode.Overflow;
-                var padGo = new GameObject("Padding", typeof(RectTransform), typeof(LayoutElement));
-                padGo.transform.SetParent(srt, false);
-                padGo.GetComponent<LayoutElement>().minWidth = Padding;
                 srt.SetAsFirstSibling();
             }
 
@@ -193,10 +333,72 @@ namespace Rpg.Client.UI
                 lt.text = "小地图\n(Phase 2)";
             }
 
+            // ---- 任务追踪（小地图下方） ----
+            if (_questTrackerText == null)
+            {
+                var go = new GameObject("QuestTracker", typeof(RectTransform), typeof(Image));
+                go.transform.SetParent(transform, false);
+                var qrt = go.GetComponent<RectTransform>();
+                qrt.anchorMin = new Vector2(1, 1);
+                qrt.anchorMax = new Vector2(1, 1);
+                qrt.pivot = new Vector2(1, 1);
+                qrt.sizeDelta = new Vector2(QuestPanelWidth, QuestPanelHeight);
+                qrt.anchoredPosition = new Vector2(
+                    -Padding,
+                    -StatusBarHeight - Padding - MinimapSize - Padding);
+                go.GetComponent<Image>().color = new Color(0, 0, 0, 0.35f);
+
+                var textGo = new GameObject("Text", typeof(RectTransform), typeof(Text));
+                textGo.transform.SetParent(qrt, false);
+                var trt = textGo.GetComponent<RectTransform>();
+                trt.anchorMin = Vector2.zero;
+                trt.anchorMax = Vector2.one;
+                trt.offsetMin = new Vector2(6f, 4f);
+                trt.offsetMax = new Vector2(-6f, -4f);
+                _questTrackerText = textGo.GetComponent<Text>();
+                _questTrackerText.font = Font.CreateDynamicFontFromOSFont("Arial", 12);
+                _questTrackerText.fontSize = 12;
+                _questTrackerText.color = new Color(0.92f, 0.92f, 0.92f, 1f);
+                _questTrackerText.alignment = TextAnchor.UpperLeft;
+                _questTrackerText.horizontalOverflow = HorizontalWrapMode.Wrap;
+                _questTrackerText.verticalOverflow = VerticalWrapMode.Overflow;
+                _questTrackerText.text = "任务：暂无";
+            }
+
+            // ---- 背包摘要（聊天区上方） ----
+            if (_bagBarText == null)
+            {
+                var go = new GameObject("BagBar", typeof(RectTransform), typeof(Image));
+                go.transform.SetParent(transform, false);
+                var brt = go.GetComponent<RectTransform>();
+                brt.anchorMin = new Vector2(0, 0);
+                brt.anchorMax = new Vector2(0, 0);
+                brt.pivot = new Vector2(0, 0);
+                brt.sizeDelta = new Vector2(ChatAreaWidth, BagBarHeight);
+                brt.anchoredPosition = new Vector2(
+                    Padding,
+                    Padding + InputHeight + Padding + ChatAreaHeight + Padding);
+                go.GetComponent<Image>().color = new Color(0, 0, 0, 0.3f);
+
+                var textGo = new GameObject("Text", typeof(RectTransform), typeof(Text));
+                textGo.transform.SetParent(brt, false);
+                var trt = textGo.GetComponent<RectTransform>();
+                trt.anchorMin = Vector2.zero;
+                trt.anchorMax = Vector2.one;
+                trt.offsetMin = new Vector2(6f, 0f);
+                trt.offsetMax = new Vector2(-6f, 0f);
+                _bagBarText = textGo.GetComponent<Text>();
+                _bagBarText.font = Font.CreateDynamicFontFromOSFont("Arial", 12);
+                _bagBarText.fontSize = 12;
+                _bagBarText.color = new Color(0.88f, 0.88f, 0.88f, 1f);
+                _bagBarText.alignment = TextAnchor.MiddleLeft;
+                _bagBarText.horizontalOverflow = HorizontalWrapMode.Overflow;
+                _bagBarText.text = "背包：空";
+            }
+
             // ---- 聊天区域（左下） ----
             if (_chatScroll == null)
             {
-                // ScrollRect 容器
                 var scrollGo = new GameObject("ChatArea", typeof(RectTransform), typeof(ScrollRect), typeof(Image));
                 scrollGo.transform.SetParent(transform, false);
                 var srt2 = scrollGo.GetComponent<RectTransform>();
@@ -209,7 +411,6 @@ namespace Rpg.Client.UI
 
                 _chatScroll = scrollGo.GetComponent<ScrollRect>();
 
-                // Viewport
                 var vp = new GameObject("Viewport", typeof(RectTransform), typeof(Image), typeof(Mask));
                 vp.transform.SetParent(srt2, false);
                 var vprt = vp.GetComponent<RectTransform>();
@@ -219,7 +420,6 @@ namespace Rpg.Client.UI
                 vp.GetComponent<Image>().color = Color.clear;
                 _chatScroll.viewport = vprt;
 
-                // Content
                 var content = new GameObject("Content", typeof(RectTransform));
                 content.transform.SetParent(vprt, false);
                 var crt = content.GetComponent<RectTransform>();
@@ -229,7 +429,6 @@ namespace Rpg.Client.UI
                 crt.sizeDelta = new Vector2(0, 0);
                 _chatScroll.content = crt;
 
-                // Text on Content
                 var textGo = new GameObject("ChatLog", typeof(RectTransform), typeof(Text));
                 textGo.transform.SetParent(crt, false);
                 var trt = textGo.GetComponent<RectTransform>();
@@ -327,8 +526,25 @@ namespace Rpg.Client.UI
             }
         }
 
+        private void UnbindModels()
+        {
+            if (_quests != null)
+            {
+                _quests.OnChanged -= RefreshQuestTracker;
+            }
+
+            if (_bag != null)
+            {
+                _bag.OnChanged -= RefreshBagBar;
+            }
+
+            _quests = null;
+            _bag = null;
+        }
+
         private void OnDestroy()
         {
+            UnbindModels();
             _chatInput?.onEndEdit.RemoveAllListeners();
             _sendBtn?.onClick.RemoveAllListeners();
         }

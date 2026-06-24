@@ -48,6 +48,8 @@ namespace Rpg.Client.Net
         private bool _gotGatewayInfo;
         private bool _gotGatewayAuthRsp;
         private bool _gotUserList;
+        private bool _gatewayAuthRetried;
+        private bool _resumeCharSelectFlow;
         private bool _intentionalDisconnect;
         private bool _isRegisterFlow;
         private byte[] _loginNonce;
@@ -71,11 +73,17 @@ namespace Rpg.Client.Net
         public void SetConfig(ClientConfigLoader config) => _config = config;
         public bool GatewayConnected => _gatewayConnected;
         public bool IsCharSelectReady => _state == State.WaitUserAction && _gatewayConnected;
+        public bool IsResumingCharSelect => _resumeCharSelectFlow;
         public string GatewayHost => _gatewayHost;
         public ushort GatewayPort => _gatewayPort;
 
         public void StartLogin(string account, string password, uint zoneId, byte gameType)
         {
+            if (!EnsureConfig())
+            {
+                return;
+            }
+
             Cancel();
             _isRegisterFlow = false;
             _loginNonce = null;
@@ -92,6 +100,11 @@ namespace Rpg.Client.Net
 
         public void StartRegister(string account, string password, string confirm, uint zoneId, byte gameType)
         {
+            if (!EnsureConfig())
+            {
+                return;
+            }
+
             Cancel();
             _isRegisterFlow = true;
             _loginNonce = null;
@@ -118,6 +131,7 @@ namespace Rpg.Client.Net
             {
                 ClientLogger.Instance.WarnFormat(
                     "LoginSession：当前状态 {0} gateway={1} 不允许选角进世界", _state, _gatewayConnected);
+                OnError?.Invoke("当前无法进入游戏，请稍候或重新登录");
                 return;
             }
 
@@ -134,6 +148,7 @@ namespace Rpg.Client.Net
             {
                 ClientLogger.Instance.WarnFormat(
                     "LoginSession：当前状态 {0} gateway={1} 不允许创角", _state, _gatewayConnected);
+                OnError?.Invoke("当前无法创建角色，请稍候或重新登录");
                 return;
             }
 
@@ -167,6 +182,8 @@ namespace Rpg.Client.Net
             _state = State.Idle;
             _gatewayConnected = false;
             _gotLoginRsp = _gotGatewayInfo = _gotGatewayAuthRsp = _gotUserList = false;
+            _gatewayAuthRetried = false;
+            _resumeCharSelectFlow = false;
             _intentionalDisconnect = false;
             _isRegisterFlow = false;
             _loginNonce = null;
@@ -180,6 +197,7 @@ namespace Rpg.Client.Net
             _tcp = CreateTcp();
             _gatewayConnected = false;
             _state = State.Idle;
+            ClearPasswords();
             return tcp;
         }
 
@@ -194,18 +212,36 @@ namespace Rpg.Client.Net
 
         public void ResumeGatewayForCharSelect(GameTcpClient tcp, ulong highlightUserId)
         {
-            _tcp?.Disconnect();
+            if (tcp != null && !ReferenceEquals(_tcp, tcp))
+            {
+                _tcp?.Disconnect();
+            }
+
             _tcp = tcp ?? CreateTcp();
             _tcp.SetOnMessage(OnMessage);
             _tcp.SetOnConnected(OnConnected);
             _tcp.SetOnDisconnected(OnDisconnected);
+            _resumeCharSelectFlow = true;
             _highlightUserId = highlightUserId;
             _gatewayConnected = true;
             _gotUserList = false;
+            _gotGatewayAuthRsp = true;
+            _gatewayAuthRetried = false;
             _state = State.WaitUserList;
             _waitStartMs = TimeUtil.NowMs();
             _lastHeartbeatMs = TimeUtil.NowMs();
             NotifyStatus("正在刷新角色列表...");
+            if (!_tcp.IsConnected)
+            {
+                _resumeCharSelectFlow = false;
+                Fail("Gateway 连接已断开，请重新登录");
+                return;
+            }
+
+            if (_cachedCharacters.Count > 0)
+            {
+                FinishResumeCharSelectWithCachedList();
+            }
         }
 
         private void SendGatewayHeartbeatIfNeeded()
@@ -267,6 +303,24 @@ namespace Rpg.Client.Net
                 return;
             }
 
+            if (_state == State.WaitUserList && _tcp.IsConnected && !_gotUserList)
+            {
+                if (_resumeCharSelectFlow && _cachedCharacters.Count > 0)
+                {
+                    ClientLogger.Instance.Warn("LoginSession：返回选角等待列表超时，使用缓存角色列表");
+                    FinishResumeCharSelectWithCachedList();
+                    return;
+                }
+
+                if (!_resumeCharSelectFlow && !_gatewayAuthRetried)
+                {
+                    _gatewayAuthRetried = true;
+                    ClientLogger.Instance.Warn("LoginSession：角色列表等待超时，重发 Gateway 鉴权");
+                    SendGatewayAuthRequest();
+                    return;
+                }
+            }
+
             var ctx = _state switch
             {
                 State.WaitUserList when !_gotGatewayAuthRsp => LoginTimeoutContext.Gateway,
@@ -296,18 +350,9 @@ namespace Rpg.Client.Net
                     NotifyStatus("等待注册挑战...");
                     break;
                 case State.ConnectGateway:
-                    var tokenLen = _loginRsp?.LoginToken?.Length ?? 0;
-                    ClientLogger.Instance.InfoFormat(
-                        "LoginSession：发送 Gateway 票据鉴权 账号={0} 区服={1} gameType={2} tokenLen={3}",
-                        _account, _zoneId, _gameType, tokenLen);
-                    _tcp.SendRaw(ClientMsgHandler.BuildGatewayAuthReq(
-                        _account, _loginRsp.LoginToken, _zoneId, _gameType));
                     _state = State.WaitUserList;
-                    _gotGatewayAuthRsp = false;
-                    _waitStartMs = TimeUtil.NowMs();
                     _gatewayConnected = true;
-                    _lastHeartbeatMs = TimeUtil.NowMs();
-                    NotifyStatus("正在验证登录票据...");
+                    SendGatewayAuthRequest();
                     break;
             }
         }
@@ -364,6 +409,9 @@ namespace Rpg.Client.Net
                 case LoginMsgSub.S2CLoginRsp:
                     HandleLoginRsp(body);
                     break;
+                case LoginMsgSub.S2CGatewayAuthRsp:
+                    HandleGatewayAuthRsp(body);
+                    break;
                 case LoginMsgSub.S2CRegisterRsp:
                     HandleRegisterRsp(body);
                     break;
@@ -413,6 +461,32 @@ namespace Rpg.Client.Net
             }
 
             _waitStartMs = TimeUtil.NowMs();
+        }
+
+        private void HandleGatewayAuthRsp(byte[] body)
+        {
+            if (_state != State.WaitUserList || !_gatewayConnected)
+            {
+                return;
+            }
+
+            if (!ClientMsgHandler.TryParseGatewayAuthRsp(body, out var gwRsp))
+            {
+                Fail(ClientLocalError.ParseError);
+                return;
+            }
+
+            var gatewayErr = ClientErrorText.GatewayLoginResultText(gwRsp.Code, gwRsp.Msg);
+            if (!string.IsNullOrEmpty(gatewayErr))
+            {
+                Fail(gatewayErr);
+                return;
+            }
+
+            _gotGatewayAuthRsp = true;
+            _waitStartMs = TimeUtil.NowMs();
+            ClientLogger.Instance.Info("LoginSession：Gateway 鉴权成功");
+            NotifyStatus("正在获取角色列表...");
         }
 
         private void HandleLoginRsp(byte[] body)
@@ -554,6 +628,8 @@ namespace Rpg.Client.Net
 
             _gotUserList = true;
             _state = State.WaitUserAction;
+            _resumeCharSelectFlow = false;
+            ClearPasswords();
             _cachedCharacters.Clear();
             _cachedCharacters.AddRange(chars);
             var highlight = _highlightUserId != 0 ? _highlightUserId : _loginRsp?.UserId ?? 0;
@@ -667,6 +743,7 @@ namespace Rpg.Client.Net
         {
             _state = State.Idle;
             _gatewayConnected = false;
+            _resumeCharSelectFlow = false;
             _intentionalDisconnect = false;
             _tcp.Disconnect();
             ClientLogger.Instance.WarnFormat("LoginSession：{0}", msg);
@@ -674,5 +751,66 @@ namespace Rpg.Client.Net
         }
 
         private void NotifyStatus(string msg) => OnStatus?.Invoke(msg);
+
+        private bool EnsureConfig()
+        {
+            if (_config != null)
+            {
+                return true;
+            }
+
+            ClientLogger.Instance.Err("LoginSession：配置未加载");
+            OnError?.Invoke("客户端配置未加载");
+            _state = State.Idle;
+            return false;
+        }
+
+        private void SendGatewayAuthRequest()
+        {
+            if (_loginRsp == null || string.IsNullOrEmpty(_loginRsp.LoginToken))
+            {
+                Fail("登录票据无效，请重新登录");
+                return;
+            }
+
+            var tokenLen = _loginRsp.LoginToken.Length;
+            ClientLogger.Instance.InfoFormat(
+                "LoginSession：发送 Gateway 票据鉴权 账号={0} 区服={1} gameType={2} tokenLen={3}",
+                _account, _zoneId, _gameType, tokenLen);
+            _tcp.SendRaw(ClientMsgHandler.BuildGatewayAuthReq(
+                _account, _loginRsp.LoginToken, _zoneId, _gameType));
+            _gotGatewayAuthRsp = false;
+            _waitStartMs = TimeUtil.NowMs();
+            _lastHeartbeatMs = TimeUtil.NowMs();
+            NotifyStatus("正在验证登录票据...");
+        }
+
+        private void ClearPasswords()
+        {
+            _password = string.Empty;
+            _confirmPassword = string.Empty;
+        }
+
+        private void FinishResumeCharSelectWithCachedList()
+        {
+            _gotUserList = true;
+            _state = State.WaitUserAction;
+            _resumeCharSelectFlow = false;
+            var highlight = _highlightUserId;
+            if (highlight == 0)
+            {
+                highlight = _loginRsp?.UserId ?? 0;
+            }
+
+            if (highlight == 0 && _cachedCharacters.Count > 0)
+            {
+                highlight = _cachedCharacters[0].UserId;
+            }
+
+            _highlightUserId = 0;
+            ClientLogger.Instance.InfoFormat(
+                "LoginSession：返回选角，展示缓存角色列表 数量={0}", _cachedCharacters.Count);
+            OnUserList?.Invoke(new List<CharacterEntry>(_cachedCharacters), highlight);
+        }
     }
 }

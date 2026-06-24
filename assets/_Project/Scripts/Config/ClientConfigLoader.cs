@@ -113,6 +113,7 @@ namespace Rpg.Client.Config
                 "err" => ClientLogger.Level.Err,
                 _ => ClientLogger.Level.Info
             };
+            ClientLogger.Instance.LogToConsole = LogToConsole;
         }
 
         private static uint ParseUInt(XElement root, string name, uint fallback)

@@ -76,7 +76,7 @@
 
 **Gateway 鉴权**：连接 Gateway 后服务端可能再次下发 `S2CLoginRsp`；`code != 0` 须立即 `Fail` 展示登录失败文案，不可静默等待角色列表超时。
 
-**返回选角**：`ResumeGatewayForCharSelect` 等待 `S2CUserList`；超时且 TCP 仍连接时会重发一次 `C2SGatewayAuthReq`。
+**返回选角**：`LogoutAction.ReturnCharSelect` 后 Gateway 账号会话保持，**不**重发 `C2SGatewayAuthReq`；客户端先用缓存角色列表恢复选角 UI，并等待服务端推送 `S2CUserList` 刷新。仅首次连接 Gateway 或鉴权未完成时才发送 `C2SGatewayAuthReq`。
 
 客户端输入校验见 `Util/ClientInputValidator`（区服必选、账号/密码、角色名 2–12 码点）。
 

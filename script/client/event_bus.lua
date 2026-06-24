@@ -1,3 +1,4 @@
+-- Phase 3 预留：C# GameScriptHost 接入 XLua 后由 init.lua 统一分发事件。
 EventBus = EventBus or { _handlers = {} }
 
 function EventBus.on(event, fn)

@@ -1,0 +1,33 @@
+
+# --- RPG_Client 项目补充（install_gitignore_unity.ps1 维护，勿删本节标题）---
+build_configure.log
+vs_modify.log
+out/
+
+# 本机网络配置（提交 *.example 模板即可）
+config/client_config.xml
+config/client_config.xml.meta
+assets/StreamingAssets/config/client_config.xml
+assets/StreamingAssets/config/client_config.xml.meta
+
+# 字体与本地测试
+assets/fonts/NotoSansSC-Regular.otf
+_sizeof_test.*
+
+# protoc 生成物（scripts/sync_protobuf.ps1 生成，勿提交）
+Protobuf/
+assets/_Project/Protobuf/
+!Protobuf/RpgProto.asmdef
+!Protobuf/RpgProto.asmdef.meta
+!assets/_Project/Protobuf/RpgProto.asmdef
+!assets/_Project/Protobuf/RpgProto.asmdef.meta
+
+# 第三方工具本地状态
+3Party/protoc/bin/
+3Party/protoc/include/
+3Party/google.protobuf/lib/
+.com-unity-codely.json
+.codely-cli/
+
+# skills CLI 安装副本（以 .cursor/skills 为准）
+.agents/

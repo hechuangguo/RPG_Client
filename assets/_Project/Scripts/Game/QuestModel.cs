@@ -41,6 +41,25 @@ namespace Rpg.Client.Game
             OnChanged?.Invoke();
         }
 
+        public void ReplaceAll(IEnumerable<QuestEntry> entries)
+        {
+            _entries.Clear();
+            if (entries != null)
+            {
+                foreach (var entry in entries)
+                {
+                    if (entry == null || entry.QuestId == 0)
+                    {
+                        continue;
+                    }
+
+                    _entries[entry.QuestId] = entry;
+                }
+            }
+
+            OnChanged?.Invoke();
+        }
+
         /// <summary>移除指定任务（任务完成/放弃后调用）。</summary>
         public bool Remove(uint questId)
         {

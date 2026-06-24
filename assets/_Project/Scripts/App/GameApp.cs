@@ -43,6 +43,8 @@ namespace Rpg.Client.App
         private bool _exitDialogVisible;
         private bool _registerInProgress;
         private LogoutAction? _pendingExitAction;
+        private long _lastHudStatusMs;
+        private const long HudStatusIntervalMs = 250;
 
         private void Awake()
         {
@@ -134,6 +136,13 @@ namespace Rpg.Client.App
                 }
                 else if (_state == AppState.CharacterSelect)
                 {
+                    _ui.SetCharacterBusy(false);
+                    if (_login.IsResumingCharSelect && _characters.Count > 0)
+                    {
+                        _ui.ShowCharacterSelect(_characters, 0);
+                        return;
+                    }
+
                     _login.Cancel();
                     SetState(AppState.AuthLogin);
                 }
@@ -175,6 +184,7 @@ namespace Rpg.Client.App
                 _scriptHost.OnEnterGame(enter.UserId, enter.MapId);
                 _world.BindSession(_game);
                 _world.LoadMap(enter);
+                _ui.GameHud?.BindModels(_scriptHost.Quests, _scriptHost.Bag);
                 SetState(AppState.Game);
             };
         }
@@ -217,7 +227,16 @@ namespace Rpg.Client.App
                 if (action == LogoutAction.ReturnCharSelect)
                 {
                     _login.ResumeGatewayForCharSelect(tcp, highlightUserId);
-                    SetState(AppState.CharacterSelect);
+                    if (_state != AppState.CharacterSelect && _characters.Count > 0)
+                    {
+                        _ui.ShowCharacterSelect(_characters, highlightUserId);
+                        SetState(AppState.CharacterSelect);
+                    }
+                    else if (_state != AppState.CharacterSelect)
+                    {
+                        _ui.SetCharacterBusy(true);
+                        SetState(AppState.CharacterSelect);
+                    }
                 }
                 else
                 {
@@ -423,7 +442,13 @@ namespace Rpg.Client.App
             {
                 if (action == LogoutAction.Unspecified)
                 {
-                    Application.Quit();
+                    ClientLogger.Instance.Info("GameApp：退出客户端");
+                    _exitDialogVisible = false;
+                    _ui.ShowExitDialog(false);
+                    _game.Disconnect();
+                    _login.Cancel();
+                    ClientLogger.Instance.Shutdown();
+                    ClientApplication.RequestQuit();
                     return;
                 }
 
@@ -435,6 +460,14 @@ namespace Rpg.Client.App
 
         private void UpdateHudStatus()
         {
+            var now = TimeUtil.NowMs();
+            if (TimeUtil.ElapsedMs(now, _lastHudStatusMs) < HudStatusIntervalMs)
+            {
+                return;
+            }
+
+            _lastHudStatusMs = now;
+
             var hud = _ui.GameHud;
             if (hud == null)
             {

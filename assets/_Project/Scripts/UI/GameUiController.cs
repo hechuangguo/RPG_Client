@@ -81,6 +81,7 @@ namespace Rpg.Client.UI
             ResolveCharacterSelect();
             ResolveGameHud();
             EnsureAuthRegisterUiRefs();
+            DisableDecorativePanelRaycasts();
             _selectServerBtn?.onClick.AddListener(() => OnSelectServerClicked?.Invoke());
             _enterGameBtn?.onClick.AddListener(() => OnEnterGameFromHome?.Invoke());
             _loginBtn?.onClick.AddListener(() =>
@@ -526,6 +527,35 @@ namespace Rpg.Client.UI
                 ? InputField.ContentType.Standard
                 : InputField.ContentType.Password;
             field.ForceLabelUpdate();
+        }
+
+        /// <summary>登录流程全屏遮罩仅作装饰，关闭射线避免挡住按钮。</summary>
+        private void DisableDecorativePanelRaycasts()
+        {
+            DisablePanelBackgroundRaycast(_zoneHomePanel);
+            DisablePanelBackgroundRaycast(_serverListPanel);
+            DisablePanelBackgroundRaycast(_authPanel);
+            DisablePanelBackgroundRaycast(_registerPanel);
+            DisablePanelBackgroundRaycast(_characterPanel);
+
+            if (_zoneNameText != null)
+            {
+                _zoneNameText.raycastTarget = false;
+            }
+        }
+
+        private static void DisablePanelBackgroundRaycast(GameObject panel)
+        {
+            if (panel == null)
+            {
+                return;
+            }
+
+            var image = panel.GetComponent<Image>();
+            if (image != null)
+            {
+                image.raycastTarget = false;
+            }
         }
     }
 }

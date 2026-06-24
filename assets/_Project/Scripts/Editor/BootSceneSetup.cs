@@ -87,11 +87,13 @@ namespace Rpg.Client.EditorTools
             var existing = canvas.GetComponentInChildren<LoginFlowBackdrop>(true);
             if (existing != null)
             {
+                existing.transform.SetAsFirstSibling();
+                RefreshLoginFlowBackdropAssets(existing);
                 WireLoginFlowBackdrop(ui, existing);
                 SoftenLoginFlowPanels(canvas.transform);
                 EditorSceneManager.MarkSceneDirty(scene);
                 EditorSceneManager.SaveScene(scene);
-                Debug.Log("BootSceneSetup：已重新绑定 LoginFlowBackdrop");
+                Debug.Log("BootSceneSetup：已重新绑定并刷新 LoginFlowBackdrop 资源");
                 return;
             }
 
@@ -432,7 +434,9 @@ namespace Rpg.Client.EditorTools
             rt.anchorMax = Vector2.one;
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
-            go.GetComponent<Image>().color = color;
+            var image = go.GetComponent<Image>();
+            image.color = color;
+            image.raycastTarget = false;
             return go;
         }
 
@@ -451,39 +455,10 @@ namespace Rpg.Client.EditorTools
 
             var baseLayer = CreateBackdropLayer(rootGo.transform, "Base",
                 LoadBackdropSprite("backdrop_base.png"), Color.white);
-            var water = CreateBackdropLayer(rootGo.transform, "Water",
-                LoadBackdropSprite("backdrop_water.png"), new Color(1f, 1f, 1f, 0.55f));
-            SetAnchorBottomBand(water.rectTransform, 0f, 0.32f);
-            var waterfall = CreateBackdropLayer(rootGo.transform, "Waterfall",
-                LoadBackdropSprite("backdrop_waterfall.png"), new Color(1f, 1f, 1f, 0.75f));
-            SetAnchorRightBand(waterfall.rectTransform, 0.12f, 0.55f);
-            var trees = CreateBackdropLayer(rootGo.transform, "Trees",
-                LoadBackdropSprite("backdrop_trees.png"), new Color(1f, 1f, 1f, 0.92f));
-            SetAnchorBottomBand(trees.rectTransform, 0f, 0.42f);
-            // base 已是完整场景图，以下叠层默认关闭，避免底部出现「第二张图」
-            water.gameObject.SetActive(false);
-            waterfall.gameObject.SetActive(false);
-            trees.gameObject.SetActive(false);
-            var mistFar = CreateBackdropLayer(rootGo.transform, "MistFar",
-                LoadBackdropSprite("backdrop_mist.png"), new Color(1f, 1f, 1f, 0.14f));
-            var mistNear = CreateBackdropLayer(rootGo.transform, "MistNear",
-                LoadBackdropSprite("backdrop_mist.png"), new Color(1f, 1f, 1f, 0.22f));
-
-            var birdRootGo = new GameObject("Birds", typeof(RectTransform));
-            birdRootGo.transform.SetParent(rootGo.transform, false);
-            StretchFull(birdRootGo.GetComponent<RectTransform>());
-
-            foreach (var img in new[] { baseLayer, water, waterfall, trees, mistFar, mistNear })
-            {
-                if (img != null)
-                {
-                    img.raycastTarget = false;
-                }
-            }
+            baseLayer.raycastTarget = false;
 
             var backdrop = rootGo.GetComponent<LoginFlowBackdrop>();
-            backdrop.BindLayers(baseLayer, water, waterfall, trees, mistNear, mistFar,
-                birdRootGo.GetComponent<RectTransform>(), LoadBackdropSprite("bird.png"));
+            backdrop.BindBase(baseLayer, baseLayer.sprite);
             return backdrop;
         }
 
@@ -508,23 +483,6 @@ namespace Rpg.Client.EditorTools
             rt.offsetMax = Vector2.zero;
         }
 
-        private static void SetAnchorBottomBand(RectTransform rt, float ymin, float ymax)
-        {
-            rt.anchorMin = new Vector2(0f, ymin);
-            rt.anchorMax = new Vector2(1f, ymax);
-            rt.offsetMin = Vector2.zero;
-            rt.offsetMax = Vector2.zero;
-        }
-
-        private static void SetAnchorRightBand(RectTransform rt, float width, float height)
-        {
-            rt.anchorMin = new Vector2(1f, 0.35f);
-            rt.anchorMax = new Vector2(1f, 0.35f);
-            rt.pivot = new Vector2(1f, 0.5f);
-            rt.sizeDelta = new Vector2(width * RefWidth, height * RefHeight);
-            rt.anchoredPosition = new Vector2(-24f, 40f);
-        }
-
         private static Sprite LoadBackdropSprite(string fileName)
         {
             var path = $"{BackdropArtRoot}/{fileName}";
@@ -542,6 +500,42 @@ namespace Rpg.Client.EditorTools
             }
 
             return Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+        }
+
+        private static void RefreshLoginFlowBackdropAssets(LoginFlowBackdrop backdrop)
+        {
+            if (backdrop == null)
+            {
+                return;
+            }
+
+            var root = backdrop.transform;
+            var baseLayer = FindBackdropLayerImage(root, "Base");
+            AssignBackdropSprite(baseLayer, "backdrop_base.png");
+            backdrop.BindBase(baseLayer, baseLayer != null ? baseLayer.sprite : null);
+            EditorUtility.SetDirty(backdrop);
+        }
+
+        private static Image FindBackdropLayerImage(Transform root, string layerName)
+        {
+            return root.Find(layerName)?.GetComponent<Image>();
+        }
+
+        private static void AssignBackdropSprite(Image image, string fileName)
+        {
+            if (image == null)
+            {
+                return;
+            }
+
+            var sprite = LoadBackdropSprite(fileName);
+            if (sprite == null)
+            {
+                return;
+            }
+
+            image.sprite = sprite;
+            EditorUtility.SetDirty(image);
         }
 
         private static void WireLoginFlowBackdrop(GameUiController ui, LoginFlowBackdrop backdrop)
@@ -569,6 +563,7 @@ namespace Rpg.Client.EditorTools
                 if (image != null)
                 {
                     image.color = PanelOverlayColor;
+                    image.raycastTarget = false;
                 }
             }
         }

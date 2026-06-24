@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using Rpg.Client.Config;
@@ -43,6 +44,7 @@ namespace Rpg.Client.Net
         private int _connectGeneration;
         private ClientTlsConfig _tls;
         private string _host;
+        private X509Certificate2 _customCaCert;
 
         public void SetOnMessage(MessageHandler cb) => _onMessage = cb;
         public void SetOnConnected(VoidHandler cb) => _onConnected = cb;
@@ -64,6 +66,7 @@ namespace Rpg.Client.Net
             Disconnect();
             _tls = tls ?? new ClientTlsConfig();
             _host = host;
+            LoadCustomCaIfNeeded();
             _connecting = true;
             _connected = false;
             var generation = ++_connectGeneration;
@@ -185,6 +188,8 @@ namespace Rpg.Client.Net
         {
             _disposed = true;
             Disconnect();
+            _customCaCert?.Dispose();
+            _customCaCert = null;
             ClearCallbacks();
         }
 
@@ -204,7 +209,8 @@ namespace Rpg.Client.Net
                 if (_tls.Enabled)
                 {
                     ssl = new SslStream(stream, false, ValidateCert);
-                    ssl.AuthenticateAsClient(host);
+                    var protocols = ResolveSslProtocols(_tls.MinVersion);
+                    ssl.AuthenticateAsClient(host, null, protocols, false);
                     stream = ssl;
                     EnqueueMain(() =>
                     {
@@ -294,7 +300,79 @@ namespace Rpg.Client.Net
                 return true;
             }
 
+            if (_customCaCert != null && cert != null)
+            {
+                using var serverCert = new X509Certificate2(cert);
+                using var customChain = new X509Chain();
+                customChain.ChainPolicy.ExtraStore.Add(_customCaCert);
+                customChain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+                customChain.ChainPolicy.VerificationFlags =
+                    X509VerificationFlags.AllowUnknownCertificateAuthority;
+                return customChain.Build(serverCert);
+            }
+
             return errors == SslPolicyErrors.None;
+        }
+
+        private void LoadCustomCaIfNeeded()
+        {
+            _customCaCert?.Dispose();
+            _customCaCert = null;
+
+            if (string.IsNullOrWhiteSpace(_tls?.CaPath) || _tls.InsecureSkipVerify)
+            {
+                return;
+            }
+
+            var relative = _tls.CaPath.Replace('/', Path.DirectorySeparatorChar);
+            var repoRoot = Directory.GetParent(Application.dataPath)?.FullName ?? ".";
+            foreach (var path in new[]
+                     {
+                         Path.Combine(Application.streamingAssetsPath, relative),
+                         Path.Combine(repoRoot, relative)
+                     })
+            {
+                if (!File.Exists(path))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    _customCaCert = new X509Certificate2(path);
+                    ClientLogger.Instance.InfoFormat("GameTcpClient：已加载 TLS CA {0}", path);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    ClientLogger.Instance.WarnFormat("GameTcpClient：加载 TLS CA 失败 {0}：{1}", path, ex.Message);
+                }
+            }
+
+            ClientLogger.Instance.WarnFormat("GameTcpClient：未找到 TLS CA 文件 {0}", _tls.CaPath);
+        }
+
+        private static SslProtocols ResolveSslProtocols(string minVersion)
+        {
+            if (string.IsNullOrWhiteSpace(minVersion))
+            {
+                return SslProtocols.Tls12;
+            }
+
+            switch (minVersion)
+            {
+                case "1.3":
+                    ClientLogger.Instance.Warn("GameTcpClient：当前运行时未支持 TLS 1.3，已回退为 TLS 1.2");
+                    return SslProtocols.Tls12;
+                case "1.2":
+                    return SslProtocols.Tls12;
+                case "1.1":
+                    return SslProtocols.Tls11;
+                case "1.0":
+                    return SslProtocols.Tls;
+                default:
+                    return SslProtocols.Tls12;
+            }
         }
 
         private void ReadAvailable()
