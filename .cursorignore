@@ -1,7 +1,21 @@
-﻿Library/
+﻿# Unity 生成物（索引噪音大）
+Library/
 Temp/
 obj/
+Logs/
+UserSettings/
+
+# 本机构建
 build/
 out/
-Logs/
 .vs/
+
+# IDE / 工具工程
+*.sln
+*.csproj
+.codely-cli/
+.com-unity-codely.json
+
+# 本机网络配置（与 .gitignore 一致）
+config/client_config.xml
+assets/StreamingAssets/config/client_config.xml
