@@ -1,11 +1,24 @@
 {
   "version": 1,
   "mapId": 1002,
+  "packageVersion": "20250624.1",
   "sceneName": "World_1002",
   "coordSystem": "unity_y_up",
+  "cdn": {
+    "baseUrl": "http://127.0.0.1:8765/rpg/map/",
+    "clientManifest": "client/1002/manifest.json",
+    "serverManifest": "server/1002/manifest.json",
+    "addressablesCatalog": "addressables/Map_1002/catalog_1.0.json"
+  },
   "assets": {
+    "scene": "Addressables/Map_1002/scene",
     "terrain": "Addressables/Map_1002/terrain",
     "buildings": "Addressables/Map_1002/buildings"
   },
-  "serverCollision": "collision/navmesh.bin"
+  "sharedLogic": {
+    "spawnPoints": "logic/spawn_points.json",
+    "npcSpawns": "logic/npc_spawns.json"
+  },
+  "serverCollision": "collision/navmesh.bin",
+  "contentHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 }

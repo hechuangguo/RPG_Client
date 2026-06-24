@@ -72,7 +72,7 @@ namespace Rpg.Client.World
             _moveAction = null;
         }
 
-        public void LoadMap(S2CEnterGame enter)
+        public void LoadMap(S2CEnterGame enter, uint modelId = 0)
         {
             _localUserId = enter.UserId;
             _active = true;
@@ -97,7 +97,8 @@ namespace Rpg.Client.World
 
             if (enter.Pos != null)
             {
-                _entities?.SpawnLocalPlayer(enter.UserId, enter.Name, enter.Pos.X, enter.Pos.Y, enter.Pos.Z);
+                var mid = modelId > 0 ? modelId : Rpg.Client.Net.CharacterDef.ModelDefault;
+                _entities?.SpawnLocalPlayer(enter.UserId, enter.Name, mid, enter.Pos.X, enter.Pos.Y, enter.Pos.Z);
             }
 
             // 根据 meta.json 的 scenePath 附加加载 Unity 3D 场景

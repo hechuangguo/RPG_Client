@@ -1,6 +1,5 @@
 # Fetch latest RPG_Common main and update Common submodule pointer
 param(
-    [switch]$AllowCommonEdit,
     [switch]$Offline
 )
 
@@ -13,7 +12,10 @@ if (-not $repoRoot) {
 }
 
 Set-Location $repoRoot
-Assert-CommonProtoReadonly -AllowCommonEdit:$AllowCommonEdit -Root $repoRoot
+if (Test-CommonHasUncommittedChanges -Root $repoRoot) {
+    Write-Warning 'Common has local uncommitted changes; submodule update --remote may conflict. Commit or stash first.'
+}
+Write-CommonProtoDirtyNotice -Root $repoRoot
 
 Write-Host 'Updating Common from RPG_Common ...'
 git submodule update --init Common
@@ -25,16 +27,6 @@ if (-not $Offline) {
 }
 else {
     Write-Host 'Offline: skip submodule update --remote'
-}
-
-$status = git -C Common status --porcelain -- '*.proto'
-if ($status) {
-    if (-not $AllowCommonEdit) {
-        Assert-CommonProtoReadonly -Root $repoRoot
-    }
-    else {
-        Write-Warning 'Common/*.proto has local changes (-AllowCommonEdit).'
-    }
 }
 
 Write-Host 'Run from repo root to record new pointer:'

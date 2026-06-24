@@ -1,11 +1,11 @@
-# Commit and push RPG_Client (default: main repo only).
+# Commit and push RPG_Client + Common submodule (when dirty).
 # Usage: .\scripts\commit_push_all.ps1 -m "提交说明"
-# Common push requires -AllowCommonEdit (client should not edit Common/*.proto).
+# Order: Common (RPG_Common) first, then main repo pointer + client code.
 param(
     [Parameter(Mandatory = $true)]
     [Alias('m')]
     [string]$Message,
-    [switch]$AllowCommonEdit
+    [switch]$SkipCommon
 )
 
 $ErrorActionPreference = 'Stop'
@@ -279,18 +279,18 @@ if (-not $repoRoot) {
 Set-Location $repoRoot
 Write-Host "Repo root: $repoRoot"
 Write-Host "Commit message: $Message"
-if ($AllowCommonEdit) {
-    Write-Host 'AllowCommonEdit: will commit/push Common submodule if dirty.'
+if ($SkipCommon) {
+    Write-Host 'SkipCommon: Common submodule commit/push skipped.'
 }
 else {
-    Write-Host 'Default: main repo only (Common submodule commit/push skipped).'
+    Write-Host 'Will commit/push Common submodule first when dirty.'
 }
 Write-Host ''
 
-Assert-CommonProtoReadonly -AllowCommonEdit:$AllowCommonEdit -Root $repoRoot
+Write-CommonProtoDirtyNotice -Root $repoRoot
 
 $commonPath = Join-Path $repoRoot 'Common'
-if ($AllowCommonEdit -and (Test-Path (Join-Path $commonPath '.git'))) {
+if (-not $SkipCommon -and (Test-Path (Join-Path $commonPath '.git'))) {
     Write-Host '=== 1) Common submodule (RPG_Common) ==='
     Commit-And-Push -WorkDir $commonPath -Branch main
 }
@@ -300,7 +300,7 @@ else {
         Write-Host 'Common has uncommitted changes (not pushed). Bump pointer in main repo commit if needed.'
     }
     else {
-        Write-Host 'Skipped (use -AllowCommonEdit to commit/push Common).'
+        Write-Host 'Skipped (no changes, or -SkipCommon).'
     }
 }
 

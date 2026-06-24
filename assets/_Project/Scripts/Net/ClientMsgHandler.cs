@@ -88,13 +88,14 @@ namespace Rpg.Client.Net
             return PacketCodec.Encode(LoginModule, (byte)LoginMsgSub.C2SSelectUserReq, req);
         }
 
-        public static byte[] BuildCreateUserReq(string name, byte vocation, byte sex)
+        public static byte[] BuildCreateUserReq(string name, byte vocation, byte sex, uint modelId)
         {
             var req = new C2SCreateUserReq
             {
                 Name = name,
                 Vocation = vocation,
-                Sex = sex
+                Sex = sex,
+                ModelId = modelId
             };
             return PacketCodec.Encode(LoginModule, (byte)LoginMsgSub.C2SCreateUserReq, req);
         }
@@ -332,7 +333,8 @@ namespace Rpg.Client.Net
                     Name = e.Name ?? string.Empty,
                     Level = e.Level,
                     Vocation = (byte)e.Vocation,
-                    Sex = (byte)e.Sex
+                    Sex = (byte)e.Sex,
+                    ModelId = e.ModelId
                 });
             }
 

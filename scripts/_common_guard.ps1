@@ -1,5 +1,5 @@
-# Common submodule read-only guard for RPG_Client.
-# Client must not edit Common/*.proto without explicit -AllowCommonEdit.
+# Common submodule helpers for RPG_Client.
+# Client and Server both edit RPG_Common via the Common/ submodule.
 
 function Get-CommonPath {
     param([string]$Root = (git rev-parse --show-toplevel))
@@ -30,37 +30,24 @@ function Get-CommonProtoDirtyStatus {
     return @($lines | Where-Object { $_ -match '\S' })
 }
 
-function Assert-CommonProtoReadonly {
-    param(
-        [switch]$AllowCommonEdit,
-        [string]$Root = (git rev-parse --show-toplevel)
-    )
-
-    if (-not (Test-CommonInitialized -Root $Root)) {
-        return
-    }
+function Write-CommonProtoDirtyNotice {
+    param([string]$Root = (git rev-parse --show-toplevel))
 
     $dirty = Get-CommonProtoDirtyStatus -Root $Root
     if ($dirty.Count -eq 0) {
         return
     }
 
-    if ($AllowCommonEdit) {
-        Write-Host 'Warning: Common/*.proto has local changes (-AllowCommonEdit).' -ForegroundColor Yellow
-        return
-    }
-
     $commonPath = Get-CommonPath -Root $Root
     Write-Host ''
-    Write-Host 'Common/*.proto local changes detected:' -ForegroundColor Red
+    Write-Host 'Notice: Common/*.proto has local changes.' -ForegroundColor Yellow
     foreach ($line in $dirty) {
         Write-Host "  $line"
     }
     Write-Host ''
     Write-Host 'Diff summary:'
     git -C $commonPath diff --stat -- '*.proto' 2>$null
-
-    throw "Common/*.proto has local changes. Edit protocol in RPG_Common, not in client.`nIf you explicitly allow edits, pass -AllowCommonEdit."
+    Write-Host ''
 }
 
 function Test-CommonHasUncommittedChanges {
@@ -72,4 +59,14 @@ function Test-CommonHasUncommittedChanges {
 
     $commonPath = Get-CommonPath -Root $Root
     return [bool](git -C $commonPath status --porcelain)
+}
+
+# Backward-compatible alias; no longer blocks commits.
+function Assert-CommonProtoReadonly {
+    param(
+        [switch]$AllowCommonEdit,
+        [string]$Root = (git rev-parse --show-toplevel)
+    )
+
+    Write-CommonProtoDirtyNotice -Root $Root
 }

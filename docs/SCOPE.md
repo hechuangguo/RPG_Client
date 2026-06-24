@@ -11,14 +11,22 @@
 ## 本仓不包含
 
 - **RPG_Server** 代码与部署
-- **Common 内 `.proto` 修改**（Submodule 只读；服务端改 RPG_Common 后本仓 sync + bump 指针）
 
-## Common 更新约定
+## Common 子模块（RPG_Common）
 
-1. 服务端在 [RPG_Common](https://github.com/hechuangguo/RPG_Common) 提交 `.proto`
-2. 本仓：`.\sync_all.bat` 或 `.\scripts\sync_common.ps1`
-3. 本仓：`.\scripts\sync_protobuf.ps1` → `Protobuf/*.cs`
-4. Unity 侧联调 `assets/_Project/Scripts/Net/`（**不**改 Common 源文件）
+客户端**可以**在 `Common/` 内修改 `.proto`、`map/` 等共享数据，提交并推送到 RPG_Common，再在主仓 bump 指针。详见 [`docs/COMMON.md`](COMMON.md)。
+
+### 典型流程
+
+1. 编辑 `Common/*.proto` 或 `Common/map/{mapId}/`
+2. `.\scripts\sync_protobuf.ps1`（若改了 proto）
+3. 联调 `assets/_Project/Scripts/Net/` 等
+4. `.\scripts\commit_push_all.ps1 -m "..."`（先推 Common，再推主仓）
+
+### 拉取对方更新
+
+1. `.\sync_all.bat` 或 `.\scripts\sync_common.ps1`
+2. `.\scripts\sync_protobuf.ps1` → `Protobuf/*.cs`
 
 ## 引擎版本
 

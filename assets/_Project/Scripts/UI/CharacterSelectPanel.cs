@@ -28,9 +28,20 @@ namespace Rpg.Client.UI
         private readonly List<CharacterListItemView> _items = new List<CharacterListItemView>();
         private UiViewPool<CharacterListItemView> _itemPool;
         private ulong _selectedUserId;
+        private uint _selectedModelId = CharacterDef.ModelDefault;
         private Action<ulong> _onEnterWorld;
-        private Action<string, byte, byte> _onCreateCharacter;
+        private Action<string, byte, byte, uint> _onCreateCharacter;
         private ScrollRect _scrollRect;
+        private readonly List<Image> _modelButtons = new List<Image>();
+        private static readonly Color ModelSelectedColor = new Color(0.85f, 0.7f, 0.25f, 0.9f);
+        private static readonly Color ModelNormalColor = new Color(0.14f, 0.16f, 0.2f, 0.9f);
+        private static readonly string[] ModelNames = { "男·大人", "男·小人", "女·大人", "女·小人" };
+        private static readonly uint[] ModelIds = {
+            CharacterDef.ModelMaleAdult,
+            CharacterDef.ModelMaleChild,
+            CharacterDef.ModelFemaleAdult,
+            CharacterDef.ModelFemaleChild
+        };
 
         private void Awake()
         {
@@ -48,12 +59,13 @@ namespace Rpg.Client.UI
                 var vocation = (byte)(_vocationDropdown != null ? _vocationDropdown.value : CharacterDef.VocationWarrior);
                 var sex = (byte)(_sexDropdown != null ? _sexDropdown.value : CharacterDef.SexMale);
                 var name = _createNameInput != null ? _createNameInput.text : string.Empty;
-                _onCreateCharacter?.Invoke(name, vocation, sex);
+                _onCreateCharacter?.Invoke(name, vocation, sex, _selectedModelId);
             });
             InitDropdowns();
+            EnsureModelSelector();
         }
 
-        public void SetCallbacks(Action<ulong> onEnterWorld, Action<string, byte, byte> onCreateCharacter)
+        public void SetCallbacks(Action<ulong> onEnterWorld, Action<string, byte, byte, uint> onCreateCharacter)
         {
             _onEnterWorld = onEnterWorld;
             _onCreateCharacter = onCreateCharacter;
@@ -137,6 +149,15 @@ namespace Rpg.Client.UI
             if (_sexDropdown != null)
             {
                 _sexDropdown.interactable = !busy;
+            }
+
+            foreach (var btn in _modelButtons)
+            {
+                var button = btn.GetComponent<Button>();
+                if (button != null)
+                {
+                    button.interactable = !busy;
+                }
             }
         }
 
@@ -286,6 +307,99 @@ namespace Rpg.Client.UI
                 _sexDropdown.ClearOptions();
                 _sexDropdown.AddOptions(new List<string> { "男", "女" });
                 _sexDropdown.value = CharacterDef.SexMale;
+            }
+        }
+
+        /// <summary>创建模型选择按钮组（男大/男小/女大/女小），默认选中男大。</summary>
+        private void EnsureModelSelector()
+        {
+            // 已存在则跳过
+            if (transform.Find("ModelSelector") != null)
+            {
+                return;
+            }
+
+            var font = _hintText != null ? _hintText.font : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+
+            // 容器
+            var container = new GameObject("ModelSelector", typeof(RectTransform));
+            container.transform.SetParent(transform, false);
+            var containerRt = container.GetComponent<RectTransform>();
+            containerRt.anchorMin = new Vector2(0.5f, 0.46f);
+            containerRt.anchorMax = new Vector2(0.5f, 0.46f);
+            containerRt.pivot = new Vector2(0.5f, 0.5f);
+            containerRt.sizeDelta = new Vector2(420f, 36f);
+
+            // 标签
+            var labelGo = new GameObject("ModelLabel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+            labelGo.transform.SetParent(container.transform, false);
+            var labelRt = labelGo.GetComponent<RectTransform>();
+            labelRt.anchorMin = new Vector2(0, 0.5f);
+            labelRt.anchorMax = new Vector2(0, 0.5f);
+            labelRt.pivot = new Vector2(0, 0.5f);
+            labelRt.sizeDelta = new Vector2(60f, 30f);
+            var labelText = labelGo.GetComponent<Text>();
+            labelText.font = font;
+            labelText.fontSize = 14;
+            labelText.alignment = TextAnchor.MiddleRight;
+            labelText.color = new Color(0.7f, 0.7f, 0.7f, 1f);
+            labelText.text = "模型:";
+
+            // 4个模型按钮
+            for (var i = 0; i < 4; i++)
+            {
+                var btnGo = new GameObject($"ModelBtn_{i}", typeof(RectTransform), typeof(CanvasRenderer),
+                    typeof(Image), typeof(Button));
+                btnGo.transform.SetParent(container.transform, false);
+                var btnRt = btnGo.GetComponent<RectTransform>();
+                var btnWidth = 80f;
+                var gap = 4f;
+                var startX = 64f;
+                btnRt.anchorMin = new Vector2(0, 0.5f);
+                btnRt.anchorMax = new Vector2(0, 0.5f);
+                btnRt.pivot = new Vector2(0, 0.5f);
+                btnRt.anchoredPosition = new Vector2(startX + i * (btnWidth + gap), 0);
+                btnRt.sizeDelta = new Vector2(btnWidth, 28f);
+
+                var btnImage = btnGo.GetComponent<Image>();
+                btnImage.color = i == 0 ? ModelSelectedColor : ModelNormalColor;
+
+                var btnTextGo = new GameObject("Text", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+                btnTextGo.transform.SetParent(btnGo.transform, false);
+                var btnTextRt = btnTextGo.GetComponent<RectTransform>();
+                btnTextRt.anchorMin = Vector2.zero;
+                btnTextRt.anchorMax = Vector2.one;
+                btnTextRt.offsetMin = Vector2.zero;
+                btnTextRt.offsetMax = Vector2.zero;
+                var btnText = btnTextGo.GetComponent<Text>();
+                btnText.font = font;
+                btnText.fontSize = 12;
+                btnText.alignment = TextAnchor.MiddleCenter;
+                btnText.color = Color.white;
+                btnText.text = ModelNames[i];
+
+                var btn = btnGo.GetComponent<Button>();
+                btn.targetGraphic = btnImage;
+                var idx = i;
+                btn.onClick.AddListener(() => SelectModel(idx));
+
+                _modelButtons.Add(btnImage);
+            }
+
+            _selectedModelId = CharacterDef.ModelDefault;
+        }
+
+        private void SelectModel(int index)
+        {
+            if (index < 0 || index >= ModelIds.Length)
+            {
+                return;
+            }
+
+            _selectedModelId = ModelIds[index];
+            for (var i = 0; i < _modelButtons.Count; i++)
+            {
+                _modelButtons[i].color = i == index ? ModelSelectedColor : ModelNormalColor;
             }
         }
 

@@ -70,7 +70,7 @@ namespace Rpg.Client.UI
         public event Action<string, string, bool> OnLoginClicked;
         public event Action<string, string, string> OnRegisterClicked;
         public event Action<ulong> OnSelectCharacter;
-        public event Action<string, byte, byte> OnCreateCharacter;
+        public event Action<string, byte, byte, uint> OnCreateCharacter;
         public event Action<LogoutAction> OnExitGameAction;
 
         private bool _registerBusy;
@@ -106,7 +106,7 @@ namespace Rpg.Client.UI
                 () => OnCancelServerList?.Invoke());
             _characterSelect?.SetCallbacks(
                 userId => OnSelectCharacter?.Invoke(userId),
-                (name, voc, sex) => OnCreateCharacter?.Invoke(name, voc, sex));
+                (name, voc, sex, modelId) => OnCreateCharacter?.Invoke(name, voc, sex, modelId));
             _exitReturnCharBtn?.onClick.AddListener(() =>
             {
                 ShowExitDialog(false);

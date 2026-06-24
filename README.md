@@ -10,7 +10,7 @@ Hub 打开本仓**根目录**（非子目录）。
 
 ```
 RPG_Client/
-  Common/              # Submodule → RPG_Common（*.proto 只读真源）
+  Common/              # Submodule → RPG_Common（协议与共享 map JSON，客户端可改可推）
   Protobuf/            # protoc 生成 *.cs（gitignore，clone 后 sync_protobuf.ps1）
   3Party/              # protoc、Google.Protobuf（离线 bundle）
   assets/_Project/     # Unity 脚本、场景、Editor
@@ -87,16 +87,19 @@ Hub 打开工程 → 等待 Package Manager 解析 URP / Addressables / InputSys
 
 ## 共享协议（Common Submodule）
 
-[`Common/`](Common/) 指向 [RPG_Common](https://github.com/hechuangguo/RPG_Common)。**客户端不修改** `Common/*.proto`；变更在服务端仓库评审后：
+[`Common/`](Common/) 指向 [RPG_Common](https://github.com/hechuangguo/RPG_Common)。**客户端与服务端均可**在 `Common/` 内修改 `.proto`、`map/` 等，提交到 RPG_Common 后，主仓 bump submodule 指针。
+
+完整流程见 [`docs/COMMON.md`](docs/COMMON.md)。
 
 ```powershell
+# 一键：先推 Common，再推主仓
+.\scripts\commit_push_all.ps1 -m "feat: 协议与客户端联调"
+
+# 仅拉取对方更新
 .\sync_all.bat
-# 或 -Offline 仅本地
-git add Common
-git commit -m "chore: bump Common submodule"
 ```
 
-**客户端仅使用 Protobuf wire**：线上帧为 4 字节 `MsgHeader` + Protobuf body；**不再使用**旧定长 struct（如已归档的 `LoginMsg.h`）。更新协议：`git submodule update` → `.\scripts\sync_protobuf.ps1` → 在 `ClientMsgHandler` 增加 Build/TryParse（见 [`Protobuf/README.md`](Protobuf/README.md) checklist）。
+**客户端仅使用 Protobuf wire**：线上帧为 4 字节 `MsgHeader` + Protobuf body。更新协议：改 `Common/*.proto` → `.\scripts\sync_protobuf.ps1` → 在 `ClientMsgHandler` 增加 Build/TryParse（见 [`Protobuf/README.md`](Protobuf/README.md) checklist）。
 
 `Protobuf/` 为本地生成目录，**不提交**；clone 后须运行 `.\scripts\sync_protobuf.ps1`（或 `sync_all.bat`）。
 
@@ -104,7 +107,7 @@ git commit -m "chore: bump Common submodule"
 |------|------|
 | [`scripts/sync_all.ps1`](scripts/sync_all.ps1) | 完整同步（git + 3Party + Protobuf + StreamingAssets） |
 | [`scripts/sync_protobuf.ps1`](scripts/sync_protobuf.ps1) | `Common/*.proto` → `Protobuf/*.cs` |
-| [`scripts/commit_push_all.ps1`](scripts/commit_push_all.ps1) | 默认只提交主仓；Common 推送需 `-AllowCommonEdit` |
+| [`scripts/commit_push_all.ps1`](scripts/commit_push_all.ps1) | 默认先提交/推送 Common，再提交/推送主仓；`-SkipCommon` 可跳过 |
 
 ## 联调
 

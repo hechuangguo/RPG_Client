@@ -187,7 +187,7 @@ namespace Rpg.Client.App
                 _game.Start(tcp, enter);
                 _scriptHost.OnEnterGame(enter.UserId, enter.MapId);
                 _world.BindSession(_game);
-                _world.LoadMap(enter);
+                _world.LoadMap(enter, enter.ModelId);
                 _ui.GameHud?.BindModels(_scriptHost.Quests, _scriptHost.Bag);
                 SetState(AppState.Game);
             };
@@ -421,7 +421,7 @@ namespace Rpg.Client.App
                 _ui.SetCharacterBusy(true);
                 _login.SelectCharacter(userId);
             };
-            _ui.OnCreateCharacter += (name, voc, sex) =>
+            _ui.OnCreateCharacter += (name, voc, sex, modelId) =>
             {
                 if (!_login.IsCharSelectReady)
                 {
@@ -440,7 +440,7 @@ namespace Rpg.Client.App
 
                 _ui.SetCharacterBusy(true);
                 _ui.ShowError(string.Empty);
-                _login.CreateCharacter(name.Trim(), voc, sex);
+                _login.CreateCharacter(name.Trim(), voc, sex, modelId);
             };
             _ui.OnExitGameAction += action =>
             {

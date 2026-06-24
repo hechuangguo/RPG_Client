@@ -41,6 +41,7 @@ namespace Rpg.Client.Net
         private string _pendingCreateName = string.Empty;
         private byte _pendingCreateVocation;
         private byte _pendingCreateSex;
+        private uint _pendingCreateModelId = CharacterDef.ModelDefault;
         private long _connectStartMs;
         private long _waitStartMs;
         private bool _gatewayConnected;
@@ -142,7 +143,7 @@ namespace Rpg.Client.Net
             NotifyStatus("正在进入游戏...");
         }
 
-        public void CreateCharacter(string name, byte vocation, byte sex)
+        public void CreateCharacter(string name, byte vocation, byte sex, uint modelId)
         {
             if (!CanSendUserAction())
             {
@@ -155,7 +156,8 @@ namespace Rpg.Client.Net
             _pendingCreateName = name;
             _pendingCreateVocation = vocation;
             _pendingCreateSex = sex;
-            _tcp.SendRaw(ClientMsgHandler.BuildCreateUserReq(name, vocation, sex));
+            _pendingCreateModelId = modelId;
+            _tcp.SendRaw(ClientMsgHandler.BuildCreateUserReq(name, vocation, sex, modelId));
             _state = State.WaitCreateUserRsp;
             _waitStartMs = TimeUtil.NowMs();
         }
@@ -669,7 +671,8 @@ namespace Rpg.Client.Net
                     Name = _pendingCreateName,
                     Level = 1,
                     Vocation = _pendingCreateVocation,
-                    Sex = _pendingCreateSex
+                    Sex = _pendingCreateSex,
+                    ModelId = _pendingCreateModelId
                 });
                 OnUserList?.Invoke(new List<CharacterEntry>(_cachedCharacters), userId);
             }

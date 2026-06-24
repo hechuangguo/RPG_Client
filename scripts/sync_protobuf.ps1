@@ -4,7 +4,7 @@
 
 .DESCRIPTION
   Uses 3Party/protoc/bin/protoc.exe only (via fetch_3party.ps1).
-  Does not modify Common submodule (read-only).
+  Reads Common/*.proto only; does not modify Common submodule contents.
 
 .PARAMETER SkipJunction
   Skip creating assets/_Project/Protobuf junction to root Protobuf/.

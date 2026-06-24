@@ -1,6 +1,5 @@
 param(
     [switch]$AllowDirty,
-    [switch]$AllowCommonEdit,
     [switch]$Offline
 )
 
@@ -30,7 +29,10 @@ if ($Offline) {
     Write-Host 'Offline mode: skip fetch/pull and submodule --remote.'
 }
 
-Assert-CommonProtoReadonly -AllowCommonEdit:$AllowCommonEdit -Root $repoRoot
+if (Test-CommonHasUncommittedChanges -Root $repoRoot) {
+    Write-Warning 'Common has local uncommitted changes; remote submodule update may conflict. Commit or stash first.'
+}
+Write-CommonProtoDirtyNotice -Root $repoRoot
 
 $dirty = git status --porcelain
 if ($dirty -and -not $AllowDirty) {

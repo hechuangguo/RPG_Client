@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "maps": [
+    {
+      "mapId": 1002,
+      "packageVersion": "20250624.1",
+      "contentHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "clientManifest": "client/1002/manifest.json",
+      "serverManifest": "server/1002/manifest.json"
+    }
+  ]
+}
